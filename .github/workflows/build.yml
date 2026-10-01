@@ -1,3 +1,5 @@
+# SonarCloud analyzes code for potential bugs, security issues, and maintainability problems.
+# Codecov shows how much code is exercised by tests and how coverage changes in each pull request.
 name: Build
 
 on:
