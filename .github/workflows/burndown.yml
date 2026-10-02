@@ -7,19 +7,13 @@
 # - Optional variable BURNDOWN_SPRINT_END_DATE: YYYY-MM-DD, to override the
 #   end date read from the project's iteration for the ideal line.
 # Scheduled runs are skipped until BURNDOWN_SPRINT_NAME is configured.
-# Pull requests changing this file generate preview artifacts without committing.
-# Manual runs also preview by default; only scheduled runs or explicit non-preview
-# manual runs on the default branch commit the generated files.
+# Manual runs commit to the selected branch; daily runs commit to the default branch.
 # Every counted issue/sub-issue must be in this project and have its own matching
 # Iteration value and a numeric story point estimate. Milestones are not used.
 # Leave epic estimates empty/zero when their subtasks already carry the points.
 name: Burndown (Project v2)
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
-    paths:
-      - ".github/workflows/burndown.yml"
   workflow_dispatch:
     inputs:
       sprint_name:
@@ -34,11 +28,6 @@ on:
         description: "Override iteration end date, YYYY-MM-DD (optional)"
         required: false
         type: string
-      dry_run:
-        description: "Preview only: upload the chart and CSV without committing"
-        required: false
-        type: boolean
-        default: true
   schedule:
     # Daily at 03:00 UTC: 11 PM Toronto in EDT, 10 PM in EST.
     - cron: "0 3 * * *"
@@ -52,7 +41,7 @@ concurrency:
 
 jobs:
   burndown:
-    if: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (github.event_name != 'schedule' || vars.BURNDOWN_SPRINT_NAME != '') }}
+    if: ${{ github.event_name == 'workflow_dispatch' || vars.BURNDOWN_SPRINT_NAME != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -70,7 +59,7 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref }}
+          ref: ${{ github.ref }}
 
       - uses: actions/setup-python@v5
         with:
@@ -141,7 +130,14 @@ jobs:
               """
               query($owner: String!, $number: Int!) {
                 organization(login: $owner) {
-                  projectV2(number: $number) { id }
+                  projectV2(number: $number) {
+                    id
+                    fields(first: 100) {
+                      nodes {
+                        ... on ProjectV2FieldCommon { name dataType }
+                      }
+                    }
+                  }
                 }
               }
               """,
@@ -150,6 +146,28 @@ jobs:
           project = (project_data.get("organization") or {}).get("projectV2")
           if not project:
               raise SystemExit("Organization project not found; check owner, project number, and token access.")
+          fields = [field for field in project["fields"]["nodes"] if field]
+          requested_points_field = os.environ["POINTS_FIELD_NAME"]
+          points_fields = [
+              field for field in fields
+              if normalize_title(field["name"]) == normalize_title(requested_points_field)
+          ]
+          if not points_fields:
+              available = ", ".join(field["name"] for field in fields)
+              raise SystemExit(
+                  f"Story point field {requested_points_field!r} not found. "
+                  f"Available project fields: {available}"
+              )
+          if len(points_fields) != 1:
+              raise SystemExit("Multiple story point fields match; give the estimate column a distinct name.")
+          points_field = points_fields[0]
+          points_field_name = points_field["name"]
+          if points_field["dataType"] != "NUMBER":
+              raise SystemExit(
+                  f"Field {points_field_name!r} has type {points_field['dataType']}; "
+                  "use a Number field with numeric story point estimates."
+              )
+          print(f"Using numeric estimate field {points_field_name!r}.")
 
           query = """
           query($id: ID!, $after: String) {
@@ -214,7 +232,7 @@ jobs:
                   status = None
                   for value in values:
                       field_name = (value.get("field") or {}).get("name")
-                      if field_name == os.environ["POINTS_FIELD_NAME"] and value.get("number") is not None:
+                      if field_name == points_field_name and value.get("number") is not None:
                           points = float(value["number"])
                           if not math.isfinite(points) or points < 0:
                               raise SystemExit("Story point estimates must be finite, non-negative numbers.")
@@ -233,7 +251,12 @@ jobs:
           if not matched:
               raise SystemExit(f"No project issues match iteration {iteration_filter!r}; check their Iteration assignments.")
           if not estimates:
-              raise SystemExit("No numeric estimates found; check the exact story point field name.")
+              raise SystemExit(
+                  f"Found {matched} issues in iteration {iteration_filter!r}, "
+                  f"but all their {points_field_name!r} values are empty. "
+                  "Enter numeric estimates on the issues/subtasks assigned to this iteration, "
+                  "or select the iteration that contains your estimated work."
+              )
           print(f"Iteration {iteration_filter!r}: {matched} items, {estimates} estimates, {remaining:g} points remaining.")
           sprint_end = sprint_end or iteration_end
 
@@ -303,18 +326,7 @@ jobs:
           print(f"Updated {csv_path} and {png_path}.")
           PY
 
-      - name: Upload burndown preview
-        uses: actions/upload-artifact@v7
-        with:
-          name: burndown-${{ env.SPRINT_NAME }}
-          path: |
-            data/burndown_${{ env.SPRINT_NAME }}.csv
-            data/burndown_${{ env.SPRINT_NAME }}.png
-          if-no-files-found: error
-          retention-days: 7
-
       - name: Commit updated burndown files
-        if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.dry_run == false && github.ref_name == github.event.repository.default_branch) }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
