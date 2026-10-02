@@ -52,7 +52,7 @@ concurrency:
 
 jobs:
   burndown:
-    if: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (github.event_name == 'workflow_dispatch' || vars.BURNDOWN_SPRINT_NAME != '') }}
+    if: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (github.event_name != 'schedule' || vars.BURNDOWN_SPRINT_NAME != '') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -89,13 +89,18 @@ jobs:
           from pathlib import Path
           from urllib.request import Request, urlopen
 
+          sprint = os.environ["SPRINT_NAME"]
+          if not sprint.strip():
+              raise SystemExit(
+                  "Set BURNDOWN_SPRINT_NAME (for example, iteration1) under repository "
+                  "Settings > Secrets and variables > Actions > Variables, "
+                  "or provide sprint_name for a manual run."
+              )
+          if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", sprint):
+              raise SystemExit("Sprint name must contain only letters, numbers, underscores, or hyphens.")
           token = os.environ.get("GH_TOKEN", "")
           if not token:
               raise SystemExit("Set the BURNDOWN_TOKEN repository secret before running.")
-
-          sprint = os.environ["SPRINT_NAME"]
-          if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", sprint):
-              raise SystemExit("Sprint name must contain only letters, numbers, underscores, or hyphens.")
           iteration_filter = os.environ["ITERATION_FILTER"]
           def normalize_title(title):
               return "".join(title.split()).casefold()
