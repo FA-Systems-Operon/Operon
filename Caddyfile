@@ -1,0 +1,64 @@
+# Caddyfile for Operon production deployment
+# Configure your domain in the environment or replace {$DOMAIN} with your actual domain
+
+(common) {
+  encode gzip
+  header / {
+    # Security headers
+    X-Content-Type-Options "nosniff"
+    X-Frame-Options "SAMEORIGIN"
+    X-XSS-Protection "1; mode=block"
+    Referrer-Policy "strict-origin-when-cross-origin"
+  }
+}
+
+# Development/staging (no domain, localhost only)
+:443 {
+  import common
+
+  # Frontend
+  handle /app* {
+    reverse_proxy frontend:3000
+  }
+
+  # API routes
+  handle /api* {
+    reverse_proxy backend:8080
+  }
+
+  # Health checks
+  handle /health {
+    reverse_proxy backend:8080
+  }
+
+  # Default to frontend
+  reverse_proxy frontend:3000
+}
+
+# HTTP to HTTPS redirect
+:80 {
+  redir https://{host}{uri} permanent
+}
+
+# Uncomment and configure for production with a real domain
+# yourdomain.com, www.yourdomain.com {
+#   import common
+# 
+#   # Frontend
+#   handle /app* {
+#     reverse_proxy frontend:3000
+#   }
+# 
+#   # API routes
+#   handle /api* {
+#     reverse_proxy backend:8080
+#   }
+# 
+#   # Health checks
+#   handle /health {
+#     reverse_proxy backend:8080
+#   }
+# 
+#   # Default to frontend
+#   reverse_proxy frontend:3000
+# }

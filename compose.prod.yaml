@@ -1,0 +1,138 @@
+version: '3.8'
+
+services:
+  # Caddy reverse proxy for HTTPS and routing
+  caddy:
+    image: caddy:2-alpine
+    container_name: operon_caddy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      ACME_AGREE: "true"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - operon_network
+    depends_on:
+      - backend
+      - frontend
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:2019/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Frontend: React + TypeScript application
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: operon_frontend
+    environment:
+      VITE_API_BASE_URL: /api
+    depends_on:
+      - backend
+    networks:
+      - operon_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Backend: FastAPI Python application
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: operon_backend
+    environment:
+      PYTHONUNBUFFERED: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+      DEBUG: "false"
+      LOG_LEVEL: "WARNING"
+      ENV: "production"
+      
+      # AI Provider Configuration
+      AI_PROVIDER: ${AI_PROVIDER:-ollama}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      OLLAMA_MODEL_NAME: ${OLLAMA_MODEL_NAME:-llama2}
+      
+      # Cloud Provider Fallback
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      
+      # Database (prod)
+      DATABASE_URL: postgresql://operon_user:${DB_PASSWORD}@postgres:5432/operon_prod
+      
+      # Background Job Configuration
+      BACKGROUND_WORKER_ENABLED: "true"
+      MAX_CONCURRENT_JOBS: "5"
+      JOB_TIMEOUT_SECONDS: "600"
+      JOB_RETRY_ATTEMPTS: "3"
+      
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+    networks:
+      - operon_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # PostgreSQL Database (prod)
+  postgres:
+    image: postgres:17-alpine
+    container_name: operon_postgres
+    environment:
+      POSTGRES_DB: operon_prod
+      POSTGRES_USER: operon_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups
+    networks:
+      - operon_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U operon_user -d operon_prod"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Ollama - Local AI Model Service
+  ollama:
+    image: ollama/ollama:latest
+    container_name: operon_ollama
+    environment:
+      OLLAMA_HOST: "0.0.0.0:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - operon_network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+  ollama_data:
+    driver: local
+  caddy_data:
+    driver: local
+  caddy_config:
+    driver: local
+
+networks:
+  operon_network:
+    driver: bridge
