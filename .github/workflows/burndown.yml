@@ -1,0 +1,339 @@
+# Setup under repository Settings > Secrets and variables > Actions:
+# - Secret BURNDOWN_TOKEN: a token with read access to the organization project
+#   and its issues (classic PAT: read:project, plus repo for private repositories).
+# - Variable BURNDOWN_SPRINT_NAME: filename-safe sprint name, e.g. iteration1.
+#   iteration4 also matches Iteration 4 - Release 1; iteration8 and iteration13
+#   likewise match their release titles. Matching ignores whitespace and case.
+# - Optional variable BURNDOWN_SPRINT_END_DATE: YYYY-MM-DD, to override the
+#   end date read from the project's iteration for the ideal line.
+# Scheduled runs are skipped until BURNDOWN_SPRINT_NAME is configured.
+# Manual runs commit to the selected branch; daily runs commit to the default branch.
+# Every counted issue/sub-issue must be in this project and have its own matching
+# Iteration value and a numeric story point estimate. Milestones are not used.
+# Leave epic estimates empty/zero when their subtasks already carry the points.
+name: Burndown (Project v2)
+
+on:
+  workflow_dispatch:
+    inputs:
+      sprint_name:
+        description: "Sprint name for filenames (letters, numbers, underscores, hyphens)"
+        required: true
+        type: string
+      iteration_name:
+        description: "Optional full iteration title; sprint_name handles iteration1 through iteration13"
+        required: false
+        type: string
+      sprint_end_date:
+        description: "Override iteration end date, YYYY-MM-DD (optional)"
+        required: false
+        type: string
+  schedule:
+    # Daily at 03:00 UTC: 11 PM Toronto in EDT, 10 PM in EST.
+    - cron: "0 3 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: burndown-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  burndown:
+    if: ${{ github.event_name != 'schedule' || vars.BURNDOWN_SPRINT_NAME != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ secrets.BURNDOWN_TOKEN }}
+      OWNER: Nony-s
+      PROJECT_NUMBER: "1"
+      POINTS_FIELD_NAME: "story point estimate"
+      STATUS_FIELD_NAME: "Status"
+      DONE_STATUS_NAME: "Done"
+      ITERATION_FIELD_NAME: "Iteration"
+      SPRINT_NAME: ${{ inputs.sprint_name || vars.BURNDOWN_SPRINT_NAME }}
+      ITERATION_FILTER: ${{ inputs.iteration_name || inputs.sprint_name || vars.BURNDOWN_SPRINT_NAME }}
+      SPRINT_END_DATE: ${{ inputs.sprint_end_date || (github.event_name == 'schedule' && vars.BURNDOWN_SPRINT_END_DATE) || '' }}
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ github.ref }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Generate burndown snapshot and chart
+        run: |
+          python - <<'PY'
+          import csv
+          import io
+          import json
+          import math
+          import os
+          import re
+          from datetime import date, datetime, timedelta, timezone
+          from pathlib import Path
+          from urllib.request import Request, urlopen
+
+          sprint = os.environ["SPRINT_NAME"]
+          if not sprint.strip():
+              raise SystemExit(
+                  "Set BURNDOWN_SPRINT_NAME (for example, iteration1) under repository "
+                  "Settings > Secrets and variables > Actions > Variables, "
+                  "or provide sprint_name for a manual run."
+              )
+          if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", sprint):
+              raise SystemExit("Sprint name must contain only letters, numbers, underscores, or hyphens.")
+          token = os.environ.get("GH_TOKEN", "")
+          if not token:
+              raise SystemExit("Set the BURNDOWN_TOKEN repository secret before running.")
+          iteration_filter = os.environ["ITERATION_FILTER"]
+          def normalize_title(title):
+              return "".join(title.split()).casefold()
+
+          def iteration_matches(title, requested_title):
+              title = normalize_title(title)
+              requested_title = normalize_title(requested_title)
+              if title == requested_title:
+                  return True
+              # Match the complete iteration number, so iteration1 cannot match
+              # iteration10, while iteration4 can match its release title.
+              requested = re.fullmatch(r"iteration([0-9]+)", requested_title)
+              candidate = re.match(r"iteration([0-9]+)(?:[-\u2013\u2014]|$)", title)
+              return bool(requested and candidate and int(requested[1]) == int(candidate[1]))
+
+          if not normalize_title(iteration_filter):
+              raise SystemExit("Set an iteration name before running.")
+          end_text = os.environ.get("SPRINT_END_DATE", "")
+          sprint_end = date.fromisoformat(end_text) if end_text else None
+
+          def gql(query, variables):
+              request = Request(
+                  "https://api.github.com/graphql",
+                  data=json.dumps({"query": query, "variables": variables}).encode(),
+                  headers={
+                      "Authorization": f"Bearer {token}",
+                      "Content-Type": "application/json",
+                      "User-Agent": "Operon-burndown",
+                  },
+              )
+              with urlopen(request, timeout=60) as response:
+                  result = json.load(response)
+              if result.get("errors"):
+                  raise SystemExit("GitHub GraphQL errors: " + json.dumps(result["errors"]))
+              return result["data"]
+
+          project_data = gql(
+              """
+              query($owner: String!, $number: Int!) {
+                organization(login: $owner) {
+                  projectV2(number: $number) {
+                    id
+                    fields(first: 100) {
+                      nodes {
+                        ... on ProjectV2FieldCommon { name dataType }
+                      }
+                    }
+                  }
+                }
+              }
+              """,
+              {"owner": os.environ["OWNER"], "number": int(os.environ["PROJECT_NUMBER"])},
+          )
+          project = (project_data.get("organization") or {}).get("projectV2")
+          if not project:
+              raise SystemExit("Organization project not found; check owner, project number, and token access.")
+          fields = [field for field in project["fields"]["nodes"] if field]
+          requested_points_field = os.environ["POINTS_FIELD_NAME"]
+          points_fields = [
+              field for field in fields
+              if normalize_title(field["name"]) == normalize_title(requested_points_field)
+          ]
+          if not points_fields:
+              available = ", ".join(field["name"] for field in fields)
+              raise SystemExit(
+                  f"Story point field {requested_points_field!r} not found. "
+                  f"Available project fields: {available}"
+              )
+          if len(points_fields) != 1:
+              raise SystemExit("Multiple story point fields match; give the estimate column a distinct name.")
+          points_field = points_fields[0]
+          points_field_name = points_field["name"]
+          if points_field["dataType"] != "NUMBER":
+              raise SystemExit(
+                  f"Field {points_field_name!r} has type {points_field['dataType']}; "
+                  "use a Number field with numeric story point estimates."
+              )
+          print(f"Using numeric estimate field {points_field_name!r}.")
+
+          query = """
+          query($id: ID!, $after: String) {
+            node(id: $id) {
+              ... on ProjectV2 {
+                items(first: 100, after: $after) {
+                  pageInfo { hasNextPage endCursor }
+                  nodes {
+                    content { __typename }
+                    fieldValues(first: 100) {
+                      nodes {
+                        ... on ProjectV2ItemFieldNumberValue {
+                          number
+                          field { ... on ProjectV2FieldCommon { name } }
+                        }
+                        ... on ProjectV2ItemFieldSingleSelectValue {
+                          name
+                          field { ... on ProjectV2FieldCommon { name } }
+                        }
+                        ... on ProjectV2ItemFieldIterationValue {
+                          title
+                          iterationId
+                          startDate
+                          duration
+                          field { ... on ProjectV2FieldCommon { name } }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+          """
+          after = None
+          remaining = 0.0
+          matched = 0
+          estimates = 0
+          iteration_id = None
+          iteration_end = None
+          while True:
+              data = gql(query, {"id": project["id"], "after": after})
+              items = data["node"]["items"]
+              for item in items["nodes"]:
+                  content = item.get("content") or {}
+                  if content.get("__typename") not in {"Issue", "PullRequest"}:
+                      continue
+                  values = item["fieldValues"]["nodes"]
+                  iteration = next((
+                      value for value in values
+                      if (value.get("field") or {}).get("name") == os.environ["ITERATION_FIELD_NAME"]
+                      and iteration_matches(value.get("title", ""), iteration_filter)
+                  ), None)
+                  if iteration is None:
+                      continue
+                  if iteration_id is not None and iteration_id != iteration["iterationId"]:
+                      raise SystemExit("Multiple iterations match; set the manual iteration_name input to the full title.")
+                  iteration_id = iteration["iterationId"]
+                  iteration_end = date.fromisoformat(iteration["startDate"]) + timedelta(days=iteration["duration"] - 1)
+                  matched += 1
+                  points = 0.0
+                  status = None
+                  for value in values:
+                      field_name = (value.get("field") or {}).get("name")
+                      if field_name == points_field_name and value.get("number") is not None:
+                          points = float(value["number"])
+                          if not math.isfinite(points) or points < 0:
+                              raise SystemExit("Story point estimates must be finite, non-negative numbers.")
+                          estimates += 1
+                      if field_name == os.environ["STATUS_FIELD_NAME"]:
+                          status = value.get("name")
+                  if status != os.environ["DONE_STATUS_NAME"]:
+                      remaining += points
+              page = items["pageInfo"]
+              if not page["hasNextPage"]:
+                  break
+              after = page["endCursor"]
+              if not after:
+                  raise SystemExit("GitHub returned a missing pagination cursor.")
+
+          if not matched:
+              raise SystemExit(f"No project issues match iteration {iteration_filter!r}; check their Iteration assignments.")
+          if not estimates:
+              raise SystemExit(
+                  f"Found {matched} issues in iteration {iteration_filter!r}, "
+                  f"but all their {points_field_name!r} values are empty. "
+                  "Enter numeric estimates on the issues/subtasks assigned to this iteration, "
+                  "or select the iteration that contains your estimated work."
+              )
+          print(f"Iteration {iteration_filter!r}: {matched} items, {estimates} estimates, {remaining:g} points remaining.")
+          sprint_end = sprint_end or iteration_end
+
+          output_dir = Path("data")
+          csv_path = output_dir / f"burndown_{sprint}.csv"
+          png_path = output_dir / f"burndown_{sprint}.png"
+          today = datetime.now(timezone.utc).date()
+          history = {}
+          if csv_path.exists():
+              with csv_path.open(newline="") as handle:
+                  for row in csv.DictReader(handle):
+                      history[date.fromisoformat(row["date"])] = float(row["remaining_points"])
+          history[today] = remaining
+          start = min(history)
+          if end_text and sprint_end <= start:
+              raise SystemExit("Sprint end date must be after the first recorded snapshot date.")
+          last = max(max(history), sprint_end or today)
+          days = [start + timedelta(days=i) for i in range((last - start).days + 1)]
+          datasets = [{
+              "label": "Actual Remaining",
+              "data": [history.get(day) for day in days],
+              "borderColor": "#2563eb",
+              "spanGaps": True,
+              "fill": False,
+          }]
+          if sprint_end and sprint_end > start:
+              duration = (sprint_end - start).days
+              datasets.append({
+                  "label": "Ideal Burndown",
+                  "data": [max(0.0, history[start] * (1 - (day - start).days / duration)) for day in days],
+                  "borderColor": "#94a3b8",
+                  "borderDash": [6, 4],
+                  "pointRadius": 0,
+                  "fill": False,
+              })
+          else:
+              print("Ideal line omitted: the first snapshot is on or after the iteration's end date.")
+
+          # Like the supplied workflow, QuickChart receives the chart's dates
+          # and point totals. No token, issue titles, or issue descriptions are sent.
+          chart = {
+              "type": "line",
+              "data": {"labels": [day.isoformat() for day in days], "datasets": datasets},
+              "options": {
+                  "plugins": {"title": {"display": True, "text": f"{sprint} Burndown"}},
+                  "scales": {"y": {"beginAtZero": True, "title": {"display": True, "text": "Remaining story points"}}},
+              },
+          }
+          request = Request(
+              "https://quickchart.io/chart",
+              data=json.dumps({"chart": chart, "version": "4", "format": "png", "width": 1000, "height": 500, "backgroundColor": "white"}).encode(),
+              headers={"Content-Type": "application/json"},
+          )
+          with urlopen(request, timeout=60) as response:
+              png = response.read()
+          if not png.startswith(b"\x89PNG\r\n\x1a\n"):
+              raise SystemExit("QuickChart did not return a PNG image.")
+
+          csv_buffer = io.StringIO(newline="")
+          writer = csv.writer(csv_buffer)
+          writer.writerow(["date", "remaining_points"])
+          for day in sorted(history):
+              writer.writerow([day.isoformat(), f"{history[day]:g}"])
+          output_dir.mkdir(exist_ok=True)
+          csv_path.write_text(csv_buffer.getvalue())
+          png_path.write_bytes(png)
+          print(f"Updated {csv_path} and {png_path}.")
+          PY
+
+      - name: Commit updated burndown files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "data/burndown_${SPRINT_NAME}.csv" "data/burndown_${SPRINT_NAME}.png"
+          if git diff --cached --quiet; then
+            echo "No burndown changes to commit."
+          else
+            git commit -m "Update burndown (${SPRINT_NAME})"
+            git push
+          fi
