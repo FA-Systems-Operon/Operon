@@ -1,14 +1,10 @@
 """
 Example: Using the AI Provider abstraction in FastAPI endpoints.
 """
-from fastapi import APIRouter, Depends, HTTPException
 
 import httpx
-
+from fastapi import APIRouter, Depends, HTTPException
 from src.ai import ModelRequest, get_active_provider
-
-
-
 
 router = APIRouter(prefix="/api/agents", tags=["agents"])
 
