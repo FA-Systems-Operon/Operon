@@ -6,25 +6,34 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci
+# Install dependencies with security flags
+# --ignore-scripts: prevent malicious lifecycle scripts
+# ci uses lockfile for reproducible builds
+RUN npm ci --ignore-scripts
 
 # Copy source code
 COPY . .
 
 # Build the application
-RUN npm run build
+RUN npm run build --ignore-scripts
 
 # Production stage: serve the built app
 FROM node:20-alpine
 
 WORKDIR /app
 
-# Install serve to run the production build
-RUN npm install -g serve
+# Create non-root user for security
+RUN addgroup -g 1000 appgroup && \
+    adduser -u 1000 -G appgroup -s /sbin/nologin appuser
+
+# Install serve with security flags
+RUN npm install -g serve --ignore-scripts
 
 # Copy built app from builder
-COPY --from=builder /app/dist ./dist
+COPY --from=builder --chown=appuser:appgroup /app/dist ./dist
+
+# Switch to non-root user
+USER appuser
 
 EXPOSE 3000
 

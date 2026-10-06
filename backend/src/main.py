@@ -57,4 +57,9 @@ app = create_app()
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8080)
+    import os
+    # Only bind to all interfaces in production (via environment variable)
+    # Development defaults to localhost for security
+    host = os.getenv("SERVER_HOST", "127.0.0.1")
+    port = int(os.getenv("SERVER_PORT", 8080))
+    uvicorn.run(app, host=host, port=port)

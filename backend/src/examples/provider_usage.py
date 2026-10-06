@@ -8,7 +8,7 @@ from src.ai import get_active_provider, ModelRequest
 router = APIRouter(prefix="/api/agents", tags=["agents"])
 
 
-async def get_provider():
+def get_provider():
     """Dependency for getting the active AI provider."""
     return get_active_provider()
 
