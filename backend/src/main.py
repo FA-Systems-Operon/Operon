@@ -3,11 +3,11 @@ FastAPI application main entry point.
 """
 
 import logging
+import os
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
-from src.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ def create_app() -> FastAPI:
     # Configure CORS
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=["*"],  # TODO: Restrict in production
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -57,9 +57,9 @@ app = create_app()
 
 if __name__ == "__main__":
     import uvicorn
-    import os
+
     # Only bind to all interfaces in production (via environment variable)
     # Development defaults to localhost for security
     host = os.getenv("SERVER_HOST", "127.0.0.1")
-    port = int(os.getenv("SERVER_PORT", 8080))
+    port = int(os.getenv("SERVER_PORT", "8080"))
     uvicorn.run(app, host=host, port=port)
