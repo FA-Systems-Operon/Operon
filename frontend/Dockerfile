@@ -22,12 +22,12 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Create non-root user for security
+# Create non-root user and install serve in a single RUN to reduce layers
+# Lock serve to specific version (8.0.0) for reproducible builds
 RUN addgroup -g 1000 appgroup && \
-    adduser -u 1000 -G appgroup -s /sbin/nologin appuser
-
-# Install serve with security flags
-RUN npm install -g serve --ignore-scripts
+    adduser -u 1000 -G appgroup -s /sbin/nologin appuser && \
+    npm install -g serve@8.0.0 --ignore-scripts && \
+    npm cache clean --force
 
 # Copy built app from builder
 COPY --from=builder --chown=appuser:appgroup /app/dist ./dist
