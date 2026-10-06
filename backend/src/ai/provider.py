@@ -76,9 +76,7 @@ class OllamaProvider(AIProvider):
                 # Ollama supports JSON schema constraints (experimental)
                 payload["format"] = "json"
 
-            response = await client.post(
-                f"{self.base_url}/api/generate", json=payload
-            )
+            response = await client.post(f"{self.base_url}/api/generate", json=payload)
             response.raise_for_status()
 
             data = response.json()
@@ -95,9 +93,7 @@ class OllamaProvider(AIProvider):
 class AnthropicProvider(AIProvider):
     """Anthropic Claude provider adapter."""
 
-    def __init__(
-        self, api_key: str, model: str = "claude-3-sonnet-20240229"
-    ):
+    def __init__(self, api_key: str, model: str = "claude-3-sonnet-20240229"):
         self.api_key = api_key
         self.model = model
         self.base_url = "https://api.anthropic.com/v1"
@@ -123,9 +119,7 @@ class AnthropicProvider(AIProvider):
 
             if request.schema:
                 # Claude supports structured outputs via system prompt
-                system_prompt = (
-                    f"Return valid JSON matching this schema: {json.dumps(request.schema)}"
-                )
+                system_prompt = f"Return valid JSON matching this schema: {json.dumps(request.schema)}"
                 payload["system"] = system_prompt
 
             response = await client.post(
