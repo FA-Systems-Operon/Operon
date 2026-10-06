@@ -3,7 +3,7 @@ FROM python:3.11-slim AS builder
 
 WORKDIR /app
 
-# Install system dependencies needed for building
+# Install system dependencies needed for building and copy requirements
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     && rm -rf /var/lib/apt/lists/*
@@ -18,14 +18,12 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install only runtime dependencies
+# Install runtime dependencies and create non-root user in a single RUN
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     postgresql-client \
-    && rm -rf /var/lib/apt/lists/*
-
-# Create non-root user for security
-RUN useradd -m -u 1000 appuser
+    && rm -rf /var/lib/apt/lists/* && \
+    useradd -m -u 1000 appuser
 
 # Copy venv from builder
 COPY --from=builder /opt/venv /opt/venv
