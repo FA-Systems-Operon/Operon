@@ -9,10 +9,8 @@ from src.ai import ModelRequest, get_active_provider
 
 router = APIRouter(prefix="/api/agents", tags=["agents"])
 
-
-def get_provider_dependency():
-    """Dependency for getting the active AI provider."""
-    return get_active_provider()
+# Module-level singleton to avoid B008 issue
+_provider_dependency = Depends(lambda: get_active_provider())
 
 
 @router.post(
@@ -30,7 +28,7 @@ def get_provider_dependency():
 )
 async def extract_client_profile(
     transcript: str,
-    provider=Depends(get_provider_dependency),
+    provider=_provider_dependency,
 ):
     """
     Example endpoint: Extract client profile from transcript.
@@ -100,7 +98,7 @@ async def extract_client_profile(
         }
     },
 )
-async def health_check(provider=Depends(get_provider_dependency)):
+async def health_check(provider=_provider_dependency):
     """
     Health check: Verify provider connectivity.
 
@@ -141,7 +139,7 @@ async def health_check(provider=Depends(get_provider_dependency)):
 )
 async def generate_launch_brief(
     client_profile: dict,
-    provider=Depends(get_provider_dependency),
+    provider=_provider_dependency,
 ):
     """
     Example endpoint: Generate launch brief using approved client context.
