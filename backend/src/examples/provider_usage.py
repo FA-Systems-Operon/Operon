@@ -1,9 +1,9 @@
 """
 Example: Using the AI Provider abstraction in FastAPI endpoints.
 """
-
-import httpx
 from fastapi import APIRouter, Depends, HTTPException
+import httpx
+
 
 from src.ai import ModelRequest, get_active_provider
 
