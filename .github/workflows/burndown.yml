@@ -50,7 +50,7 @@ jobs:
     timeout-minutes: 10
     env:
       GH_TOKEN: ${{ secrets.BURNDOWN_TOKEN }}
-      OWNER: Nony-s
+      OWNER: ${{ github.repository_owner }}
       PROJECT_NUMBER: "1"
       POINTS_FIELD_NAME: "story point estimate"
       STATUS_FIELD_NAME: "Status"

@@ -30,7 +30,9 @@ For automated PRs, choose either:
 
 ## Burndown Setup
 
-The workflow reads **Nony-s Project #1** using these fields:
+The workflow reads **Project #1 under the repository's organization** (currently `FA-Systems-Operon`). It uses `github.repository_owner` so organization renames do not require editing the owner in the workflow.
+
+Required project fields:
 
 - **Story point estimate:** Number field.
 - **Iteration:** The item's assigned iteration.
