@@ -59,7 +59,6 @@ jobs:
       SPRINT_NAME: ${{ inputs.sprint_name || vars.BURNDOWN_SPRINT_NAME }}
       ITERATION_FILTER: ${{ inputs.iteration_name || inputs.sprint_name || vars.BURNDOWN_SPRINT_NAME }}
       SPRINT_END_DATE: ${{ inputs.sprint_end_date || (github.event_name == 'schedule' && vars.BURNDOWN_SPRINT_END_DATE) || '' }}
-      PENDING_HISTORY_PATH: ${{ runner.temp }}/burndown_pending_history.csv
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -73,6 +72,8 @@ jobs:
           python-version: "3.13"
 
       - name: Restore history from the burndown PR branch
+        env:
+          PENDING_HISTORY_PATH: ${{ runner.temp }}/burndown_pending_history.csv
         run: |
           python - <<'PY'
           import os
@@ -104,6 +105,8 @@ jobs:
           PY
 
       - name: Generate burndown snapshot and chart
+        env:
+          PENDING_HISTORY_PATH: ${{ runner.temp }}/burndown_pending_history.csv
         run: |
           python - <<'PY'
           import csv
