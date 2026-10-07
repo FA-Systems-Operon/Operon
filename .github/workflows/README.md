@@ -53,7 +53,7 @@ Iteration names ignore case and whitespace. Release titles also work: `iteration
 
 ## Automated Chart Updates
 
-Both manual and scheduled runs open or update one PR per sprint from `codex/burndown-<sprint_name>` into the default branch (`main`). Only these generated files are included:
+Both manual and scheduled runs open or update one PR per sprint from `burndown-<sprint_name>` into the default branch (`main`). Only these generated files are included:
 
 ```text
 data/burndown_<sprint_name>.csv

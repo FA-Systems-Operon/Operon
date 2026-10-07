@@ -88,18 +88,24 @@ jobs:
               raise SystemExit("Sprint name must contain only letters, numbers, underscores, or hyphens.")
           pending_path = Path(os.environ["PENDING_HISTORY_PATH"])
           pending_path.unlink(missing_ok=True)
-          branch_ref = f"refs/heads/codex/burndown-{sprint}"
-          refs = subprocess.run(
-              ["git", "ls-remote", "--heads", "origin", branch_ref],
-              check=True, capture_output=True, text=True,
-          )
-          if refs.stdout.strip():
+          # Read the old branch only when the renamed branch does not exist yet.
+          for branch_ref in (
+              f"refs/heads/burndown-{sprint}",
+              f"refs/heads/codex/burndown-{sprint}",
+          ):
+              refs = subprocess.run(
+                  ["git", "ls-remote", "--heads", "origin", branch_ref],
+                  check=True, capture_output=True, text=True,
+              )
+              if not refs.stdout.strip():
+                  continue
               subprocess.run(["git", "fetch", "--no-tags", "origin", branch_ref], check=True)
               csv_ref = f"FETCH_HEAD:data/burndown_{sprint}.csv"
               subprocess.run(["git", "cat-file", "-e", csv_ref], check=True)
               history = subprocess.run(["git", "show", csv_ref], check=True, capture_output=True)
               pending_path.write_bytes(history.stdout)
               print(f"Restored pending snapshot history from {branch_ref}.")
+              break
           else:
               print("No existing burndown PR branch; using history from the default branch.")
           PY
@@ -378,7 +384,7 @@ jobs:
         with:
           token: ${{ secrets.BURNDOWN_PR_TOKEN || github.token }}
           base: ${{ github.event.repository.default_branch }}
-          branch: codex/burndown-${{ env.SPRINT_NAME }}
+          branch: burndown-${{ env.SPRINT_NAME }}
           add-paths: |
             data/burndown_${{ env.SPRINT_NAME }}.csv
             data/burndown_${{ env.SPRINT_NAME }}.png
