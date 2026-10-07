@@ -3,37 +3,34 @@ FROM python:3.11-slim AS builder
 
 WORKDIR /app
 
-# Install system dependencies needed for building and copy requirements
+# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy only requirements first (for layer caching)
+# Copy and install requirements
 COPY requirements.txt .
 RUN python -m venv /opt/venv && \
     /opt/venv/bin/pip install --no-cache-dir -r requirements.txt
 
-# Runtime stage: minimal final image
+# Runtime stage
 FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install runtime dependencies and create non-root user in a single RUN
+# Install runtime dependencies and create non-root user
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
-    postgresql-client \
     && rm -rf /var/lib/apt/lists/* && \
-    useradd -m -u 1000 appuser
+    useradd -m -u 1001 appuser
 
 # Copy venv from builder
 COPY --from=builder /opt/venv /opt/venv
 
-# Copy only necessary application files (not entire directory)
-COPY --chown=appuser:appuser alembic/ ./alembic/
+# Copy application code
 COPY --chown=appuser:appuser src/ ./src/
-COPY --chown=appuser:appuser alembic.ini .
 
-# Set PATH to use venv
+# Set environment
 ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
@@ -47,5 +44,5 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
     CMD curl -f http://localhost:8080/health || exit 1
 
-# Run migrations and start application
-CMD ["/bin/bash", "-c", "alembic upgrade head && uvicorn src.main:app --host 127.0.0.1 --port 8080"]
+# Run application
+CMD ["uvicorn", "src.main:app", "--host", "127.0.0.1", "--port", "8080"]

@@ -8,8 +8,7 @@ COPY package*.json ./
 
 # Install dependencies with security flags
 # --ignore-scripts: prevent malicious lifecycle scripts
-# ci uses lockfile for reproducible builds
-RUN npm ci --ignore-scripts
+RUN npm install --ignore-scripts
 
 # Copy source code
 COPY . .
@@ -23,9 +22,10 @@ FROM node:20-alpine
 WORKDIR /app
 
 # Create non-root user and install serve in a single RUN to reduce layers
+# Use UID/GID 1001 with -D (no password) and -H (no home dir)
 # Lock serve to specific version (8.0.0) for reproducible builds
-RUN addgroup -g 1000 appgroup && \
-    adduser -u 1000 -G appgroup -s /sbin/nologin appuser && \
+RUN addgroup -g 1001 appgroup && \
+    adduser -D -u 1001 -G appgroup -s /sbin/nologin appuser && \
     npm install -g serve@8.0.0 --ignore-scripts && \
     npm cache clean --force
 
