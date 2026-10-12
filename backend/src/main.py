@@ -8,6 +8,7 @@ from fastapi import FastAPI
 
 import src.models  # noqa: F401  (importing registers the tables on Base.metadata)
 from src.db import Base, engine
+from src.routers import documents
 
 
 @asynccontextmanager
@@ -27,6 +28,8 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+app.include_router(documents.router)
 
 
 @app.get("/health")
