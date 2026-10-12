@@ -18,11 +18,13 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install runtime dependencies and create non-root user
+# Install runtime dependencies, create non-root user, and create the document
+# storage dir owned by that user (a volume mounted here inherits the ownership)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/* && \
-    useradd -m -u 1001 appuser
+    useradd -m -u 1001 appuser && \
+    mkdir -p /app/storage && chown appuser:appuser /app/storage
 
 # Copy venv from builder
 COPY --from=builder /opt/venv /opt/venv

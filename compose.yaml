@@ -4,6 +4,9 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: operon_backend
+    # Dev only: the Dockerfile binds to 127.0.0.1, which is unreachable from
+    # outside the container. 0.0.0.0 lets the "8080:8080" port mapping work.
+    command: ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8080"]
     ports:
       - "8080:8080"
     environment:
@@ -11,6 +14,11 @@ services:
       AI_PROVIDER: "ollama"
       OLLAMA_BASE_URL: "http://ollama:11434"
       DATABASE_URL: "postgresql://operon_user:${POSTGRES_PASSWORD:-operon_dev_password}@postgres:5432/operon_dev"
+      STORAGE_DIR: "/app/storage"
+      MAX_UPLOAD_BYTES: "20971520"
+    volumes:
+      # Keeps uploaded documents when the container is rebuilt or restarted.
+      - document_storage:/app/storage
     depends_on:
       # Wait until Postgres accepts connections; the app creates tables at startup.
       postgres:
@@ -73,6 +81,8 @@ services:
 
 volumes:
   postgres_data:
+    driver: local
+  document_storage:
     driver: local
   ollama_data:
     driver: local
