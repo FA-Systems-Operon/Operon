@@ -28,7 +28,7 @@ jobs:
     name: Codecov
     runs-on: ubuntu-latest
 
-    # Throwaway Postgres for the tests, same version as compose.yaml.
+    # Throwaway Postgres for the tests, same version as compose.yaml.vscode-webview://0gf0k2o1pgdp39or2mm3a884l3m7vhhvjbidoftr741bia33us6k/.github/workflows/build.yml
     services:
       postgres:
         image: postgres:17.11-alpine
@@ -53,7 +53,11 @@ jobs:
           python-version: "3.13"
 
       - name: Install test dependencies
-        run: pip install -r backend/requirements.txt -r backend/requirements-dev.txt
+        # Wheels only (no source builds), so no package setup scripts run in CI.
+        # "run: |" keeps YAML from reading the ":all: " as a key/value pair.
+        run: |
+          python -m pip install --only-binary=:all: \
+            -r backend/requirements.txt -r backend/requirements-dev.txt
 
       - name: Run tests with coverage
         env:
