@@ -10,6 +10,11 @@ services:
       DEBUG: "true"
       AI_PROVIDER: "ollama"
       OLLAMA_BASE_URL: "http://ollama:11434"
+      DATABASE_URL: "postgresql://operon_user:${POSTGRES_PASSWORD:-operon_dev_password}@postgres:5432/operon_dev"
+    depends_on:
+      # Wait until Postgres accepts connections; the app creates tables at startup.
+      postgres:
+        condition: service_healthy
     networks:
       - operon_network
     healthcheck:
@@ -33,6 +38,27 @@ services:
       timeout: 5s
       retries: 3
 
+  postgres:
+    image: postgres:17.11-alpine
+    container_name: operon_postgres
+    environment:
+      POSTGRES_DB: operon_dev
+      POSTGRES_USER: operon_user
+      # Local dev only. Override it in .env; prod uses DB_PASSWORD (compose.prod.yaml).
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-operon_dev_password}
+    # Published so pytest and DB tools on your machine can reach it at localhost:5432.
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - operon_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U operon_user -d operon_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   ollama:
     image: ollama/ollama:latest
     container_name: operon_ollama
@@ -46,6 +72,8 @@ services:
       - operon_network
 
 volumes:
+  postgres_data:
+    driver: local
   ollama_data:
     driver: local
 

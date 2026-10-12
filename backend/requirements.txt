@@ -1,5 +1,7 @@
-fastapi==0.104.1
+fastapi==0.141.1
 uvicorn[standard]==0.24.0
-pydantic==2.5.0
-pydantic-settings==2.1.0
+pydantic==2.13.5
+pydantic-settings==2.15.0
 httpx==0.25.2
+psycopg[binary]==3.3.6
+sqlalchemy==2.1.1

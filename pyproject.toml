@@ -1,0 +1,4 @@
+[tool.ruff]
+# Our Python package lives at backend/src, so imports like "from src.db import ..."
+# are first-party. Without this, ruff sorts them in with third-party libraries.
+src = ["backend"]
