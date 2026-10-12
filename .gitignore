@@ -223,3 +223,6 @@ __marimo__/
 # IDE - VCS Configuration
 vcs.xml
 .vcs.xml
+
+# Uploaded documents saved by LocalFileStorage when running the backend locally
+backend/storage/
