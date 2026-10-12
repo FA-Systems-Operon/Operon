@@ -88,10 +88,13 @@ def test_upload_deletes_file_if_db_commit_fails(
 
     # The app uses this same session (see conftest), so its commit() will fail.
     monkeypatch.setattr(db_session, "commit", failing_commit)
+    url = documents_url(demo_client.id)
+    files = {"file": ("a.txt", b"hi")}
 
     # TestClient re-raises errors from the app instead of returning a 500.
+    # Only the request is inside the block, so we know it's what raised.
     with pytest.raises(RuntimeError, match="simulated database failure"):
-        client.post(documents_url(demo_client.id), files={"file": ("a.txt", b"hi")})
+        client.post(url, files=files)
 
     # The file was saved before the commit, then cleaned up: no orphans.
     assert stored_files(tmp_path) == []
