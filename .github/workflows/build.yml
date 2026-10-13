@@ -12,12 +12,19 @@ on:
 jobs:
   sonarqube:
     name: SonarQube
+    needs: codecov
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0
+
+      - name: Download coverage report
+        uses: actions/download-artifact@v5
+        with:
+          name: python-coverage
+          path: .
 
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@7006c4492b2e0ee0f816d36501671557c97f5995 # v8.1.0
@@ -63,6 +70,13 @@ jobs:
         env:
           TEST_DATABASE_URL: postgresql://operon_user:operon_test_password@localhost:5432/operon_test
         run: pytest --cov --cov-branch --cov-report=xml
+
+      - name: Save coverage report for SonarQube
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-coverage
+          path: coverage.xml
+          if-no-files-found: error
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
