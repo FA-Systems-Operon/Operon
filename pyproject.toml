@@ -4,6 +4,6 @@
 src = ["backend"]
 
 [tool.pytest.ini_options]
-# Lets tests import the app as "src...", since the package lives in backend/src.
-pythonpath = ["backend"]
+# Lets tests import the app as "src..." and shared helpers as "tests...".
+pythonpath = ["backend", "."]
 testpaths = ["tests"]
