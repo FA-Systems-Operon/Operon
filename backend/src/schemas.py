@@ -22,3 +22,13 @@ class SourceDocumentOut(BaseModel):
     size_bytes: int
     sha256: str
     uploaded_at: datetime
+
+
+class ExtractedTextOut(BaseModel):
+    """Saved plain text returned after extraction or a text lookup."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    document_id: uuid.UUID
+    text: str
+    extracted_at: datetime
