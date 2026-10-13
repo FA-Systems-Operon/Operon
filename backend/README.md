@@ -18,7 +18,11 @@ Tables are created when the app starts, using `Base.metadata.create_all()` in
 `src/main.py`. This only creates tables that don't exist yet. It never changes
 existing ones.
 
-So after changing a model in `src/models.py`, reset your local database:
+Adding a new table only requires rebuilding and restarting the backend. Startup
+creates missing tables without changing existing ones or deleting uploaded files.
+
+After changing columns or constraints on an existing table in `src/models.py`,
+reset your local development database:
 
 ```bash
 docker compose down -v   # -v deletes the postgres_data and document_storage volumes
@@ -27,3 +31,72 @@ docker compose up --build backend postgres
 
 Alembic was removed on purpose for now. It should come back before we have any
 data we can't wipe (shared staging, prod, or real client data).
+
+## Extracted document text
+
+The `extracted_texts` table stores derived plain text separately from the original
+uploaded file. Its primary key, `document_id`, also references `source_documents`,
+so each document has at most one extracted-text record. The record contains a
+PostgreSQL `TEXT` value and a database-generated, timezone-aware `extracted_at`.
+
+A document can exist before extraction. Deleting its extracted-text record keeps
+the source document; deleting the source document removes its derived text.
+
+## Document extraction API
+
+Upload the original file first, then request extraction separately. TXT, Markdown
+(`.md`/`.markdown`), and unencrypted text-based PDF are supported. OCR and audio
+transcription are outside this feature. TXT and Markdown support UTF-8 and
+BOM-marked UTF-16.
+
+| Request | Behavior |
+| --- | --- |
+| `POST /clients/{client_id}/documents` | Saves the original file and returns its metadata (`201`). |
+| `POST /clients/{client_id}/documents/{document_id}/extract` | Extracts and saves text, or returns the existing result (`200`). No request body is needed. |
+| `GET /clients/{client_id}/documents/{document_id}/text` | Returns saved text (`200`); does not perform extraction. |
+
+The extraction and text responses contain `document_id`, `text`, and
+`extracted_at`. Repeated extraction keeps the saved result and timestamp. The
+original upload and metadata stay unchanged. A filename's extension selects the
+extractor; files without extensions use their recorded MIME type.
+
+Both text endpoints return `404` for another client's document or an unknown ID.
+Text retrieval also returns `404` before successful extraction. Extraction returns
+`415` for unsupported formats, `422` for invalid or unreadable content (including
+encrypted/no-text PDFs), `409` if the original file is missing, and `503` for other
+storage access failures.
+
+### Try the complete flow
+
+Rebuild the backend so it loads the new routes and creates any missing tables:
+
+```bash
+docker compose up --build -d backend postgres
+```
+
+For a local demonstration, create a synthetic client:
+
+```bash
+docker compose exec -T postgres psql -U operon_user -d operon_dev \
+  -c "INSERT INTO clients (id, name) VALUES \
+  ('11111111-1111-1111-1111-111111111111', 'Demo Client') \
+  ON CONFLICT (id) DO NOTHING;"
+```
+
+Upload a sample Markdown transcript:
+
+```bash
+printf '%s\n' '# Client meeting' '' '**Alice:** Hello.' > /tmp/operon-transcript.md
+curl -X POST http://localhost:8080/clients/11111111-1111-1111-1111-111111111111/documents \
+  -F 'file=@/tmp/operon-transcript.md;type=text/markdown'
+```
+
+Copy the returned `id` and replace `DOCUMENT_ID` in both requests:
+
+```bash
+curl -X POST http://localhost:8080/clients/11111111-1111-1111-1111-111111111111/documents/DOCUMENT_ID/extract
+curl http://localhost:8080/clients/11111111-1111-1111-1111-111111111111/documents/DOCUMENT_ID/text
+```
+
+Both responses should contain `Client meeting\n\nAlice: Hello.` as their `text`.
+The same routes are available interactively at `http://localhost:8080/docs`.
