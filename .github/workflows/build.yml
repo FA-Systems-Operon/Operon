@@ -1,3 +1,4 @@
+# Runs the tests against Postgres, then sends the coverage report to Codecov and SonarCloud.
 # SonarCloud analyzes code for potential bugs, security issues, and maintainability problems.
 # Codecov shows how much code is exercised by tests and how coverage changes in each pull request.
 name: Build
@@ -10,22 +11,9 @@ on:
     types: [opened, synchronize, reopened]
 
 jobs:
-  sonarqube:
-    name: SonarQube
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          fetch-depth: 0
-
-      - name: SonarQube Scan
-        uses: SonarSource/sonarqube-scan-action@7006c4492b2e0ee0f816d36501671557c97f5995 # v8.1.0
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-
-  codecov:
-    name: Codecov
+  # One job, so the Sonar scan can read the coverage.xml the tests just produced.
+  test-and-analyze:
+    name: Tests, Codecov, and SonarQube
     runs-on: ubuntu-latest
 
     # Throwaway Postgres for the tests, same version as compose.yaml.
@@ -46,7 +34,10 @@ jobs:
           --health-retries 10
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          # Full history, so Sonar can tell which code is new in this PR.
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -68,3 +59,9 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+
+      # Runs last: reads coverage.xml (path set in sonar-project.properties).
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@7006c4492b2e0ee0f816d36501671557c97f5995 # v8.1.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

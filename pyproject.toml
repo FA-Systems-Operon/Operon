@@ -7,3 +7,9 @@ src = ["backend"]
 # Lets tests import the app as "src...", since the package lives in backend/src.
 pythonpath = ["backend"]
 testpaths = ["tests"]
+
+[tool.coverage.run]
+# Measure only the app code, and write paths relative to the repo root
+# (backend/src/...) so SonarCloud can match them to its source files.
+source = ["backend/src"]
+relative_files = true
