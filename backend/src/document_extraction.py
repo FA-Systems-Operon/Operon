@@ -46,6 +46,11 @@ def _extractor_for(document: SourceDocument) -> Callable[[bytes], str]:
     return extractor
 
 
+def validate_document(document: SourceDocument, data: bytes) -> None:
+    """Check supported format and readable content without saving extracted text."""
+    _extractor_for(document)(data)
+
+
 def extract_document(
     client_id: uuid.UUID,
     document_id: uuid.UUID,

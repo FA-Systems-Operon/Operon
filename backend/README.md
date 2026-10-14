@@ -44,6 +44,12 @@ the source document; deleting the source document removes its derived text.
 
 ## Document extraction API
 
+Uploads are validated before any file or metadata is saved: unsupported formats
+return `415`, and corrupt or unreadable content returns `422`. Empty files still
+return `400`, and oversized files return `413`. Validation reuses the extractors
+but does not save extracted text; request extraction separately to persist it.
+Previously stored files retain extraction-time error handling.
+
 Upload the original file first, then request extraction separately. TXT, Markdown
 (`.md`/`.markdown`), and unencrypted text-based PDF are supported. OCR and audio
 transcription are outside this feature. TXT and Markdown support UTF-8 and

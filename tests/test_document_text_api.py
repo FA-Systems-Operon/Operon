@@ -1,5 +1,6 @@
 """HTTP checks for upload, extraction, persisted text, and client scoping."""
 
+import hashlib
 import uuid
 from datetime import datetime
 
@@ -29,6 +30,24 @@ def upload_document(
     )
     assert response.status_code == 201
     return response.json()
+
+
+def store_legacy_document(db, storage, client_id, data, filename):
+    """Represent files saved before upload validation was introduced."""
+    document_id = uuid.uuid4()
+    document = SourceDocument(
+        id=document_id,
+        client_id=client_id,
+        original_filename=filename,
+        content_type="application/octet-stream",
+        size_bytes=len(data),
+        sha256=hashlib.sha256(data).hexdigest(),
+        storage_key=f"{client_id}/{document_id}",
+    )
+    storage.save(document.storage_key, data)
+    db.add(document)
+    db.commit()
+    return document_id
 
 
 @pytest.mark.parametrize(
@@ -145,9 +164,11 @@ def test_invalid_document_id_returns_422(client, demo_client, method, suffix):
     assert client.request(method, f"{url}/{suffix}").status_code == 422
 
 
-def test_unsupported_format_returns_415(client, db_session, demo_client):
-    uploaded = upload_document(client, demo_client.id, filename="transcript.docx")
-    url = document_url(demo_client.id, uploaded["id"])
+def test_unsupported_format_returns_415(client, db_session, storage, demo_client):
+    document_id = store_legacy_document(
+        db_session, storage, demo_client.id, b"hello", "transcript.docx"
+    )
+    url = document_url(demo_client.id, document_id)
 
     response = client.post(f"{url}/extract")
 
@@ -155,7 +176,7 @@ def test_unsupported_format_returns_415(client, db_session, demo_client):
     assert response.json() == {
         "detail": "Supported document formats are TXT, Markdown, and PDF"
     }
-    assert db_session.get(ExtractedText, uuid.UUID(uploaded["id"])) is None
+    assert db_session.get(ExtractedText, document_id) is None
 
 
 @pytest.mark.parametrize(
@@ -172,8 +193,11 @@ def test_unsupported_format_returns_415(client, db_session, demo_client):
 def test_invalid_content_returns_422_and_preserves_upload(
     client, db_session, storage, demo_client, filename, data
 ):
-    uploaded = upload_document(client, demo_client.id, data, filename)
-    url = document_url(demo_client.id, uploaded["id"])
+    document_id = store_legacy_document(
+        db_session, storage, demo_client.id, data, filename
+    )
+    url = document_url(demo_client.id, document_id)
+    uploaded = client.get(url).json()
 
     response = client.post(f"{url}/extract")
 
@@ -181,7 +205,7 @@ def test_invalid_content_returns_422_and_preserves_upload(
     assert response.json()["detail"]
     assert client.get(f"{url}/text").status_code == 404
     assert client.get(url).json() == uploaded
-    document = db_session.get(SourceDocument, uuid.UUID(uploaded["id"]))
+    document = db_session.get(SourceDocument, document_id)
     assert storage.read(document.storage_key) == data
 
 

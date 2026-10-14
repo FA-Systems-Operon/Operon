@@ -14,6 +14,7 @@ from src.document_extraction import (
     DocumentNotFoundError,
     UnsupportedDocumentTypeError,
     extract_document,
+    validate_document,
 )
 from src.models import Client, ExtractedText, SourceDocument
 from src.schemas import ExtractedTextOut, SourceDocumentOut
@@ -59,7 +60,6 @@ def upload_document(
     # stored as metadata and never used as a path.
     document_id = uuid.uuid4()
     storage_key = f"{client_id}/{document_id}"
-    storage.save(storage_key, data)
 
     document = SourceDocument(
         id=document_id,
@@ -70,6 +70,14 @@ def upload_document(
         sha256=hashlib.sha256(data).hexdigest(),
         storage_key=storage_key,
     )
+    try:
+        validate_document(document, data)
+    except UnsupportedDocumentTypeError as exc:
+        raise HTTPException(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+
+    storage.save(storage_key, data)
     db.add(document)
     try:
         db.commit()
