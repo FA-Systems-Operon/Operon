@@ -1,5 +1,6 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, test, vi } from 'vitest'
+import { fireEvent, render, screen, waitFor, cleanup } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach, afterEach, test } from 'vitest'
+import userEvent from '@testing-library/user-event'
 import App from './App'
 
 afterEach(() => {
