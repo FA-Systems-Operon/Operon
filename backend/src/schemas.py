@@ -5,17 +5,21 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-"""What the API user sends"""
+# What the API user sends
+
+
 class ClientIn(BaseModel):
     """Request body for creating a client."""
 
     name: str = Field(min_length=1, max_length=255)
 
-"""Returned —> includes the server-generated id and timestamp"""
+
+# Returned — includes the server-generated id and timestamp
+
+
 class ClientOut(BaseModel):
     """A client record returned by the API."""
 
-    """A configuration tool used to change how the Pydantic model behaves (e.g. telling it how to read database objects)."""
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
