@@ -22,4 +22,4 @@ export default defineConfig({
       include: ['src/**/*.{ts,tsx}'],
       exclude: ['src/main.tsx', 'src/**/*.test.tsx', 'src/setupTests.ts'],
     },
-})
+});
