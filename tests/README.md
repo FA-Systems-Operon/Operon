@@ -18,3 +18,16 @@ existing isolated `*_test` database and file storage uses `tmp_path`.
 
 Existing extraction, upload-rejection, and client-isolation tests exercise these
 helpers. Run the suite from the repository root with `pytest`.
+
+
+## Ingestion regression tests (#55)
+
+Run `python -m pytest tests/test_documents.py -q` for upload, storage integrity,
+client association/isolation, retrieval, and rejection checks. Supported TXT,
+Markdown, and PDF uploads must retain their original bytes and metadata.
+Rejected uploads must provide a clear error, leave no new record or file, and
+preserve existing documents, including when an invalid upload reuses a filename.
+
+The existing `.github/workflows/build.yml` runs these tests as part of the full
+`pytest --cov --cov-branch --cov-report=xml` suite on PR creation and updates,
+using a disposable PostgreSQL service. No separate CI job is needed.
