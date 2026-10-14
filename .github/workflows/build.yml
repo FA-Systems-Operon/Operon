@@ -28,7 +28,7 @@ jobs:
     name: Codecov
     runs-on: ubuntu-latest
 
-    # Throwaway Postgres for the tests, same version as compose.yaml.vscode-webview://0gf0k2o1pgdp39or2mm3a884l3m7vhhvjbidoftr741bia33us6k/.github/workflows/build.yml
+    # Throwaway Postgres for the tests, same version as compose.yaml.
     services:
       postgres:
         image: postgres:17.11-alpine
