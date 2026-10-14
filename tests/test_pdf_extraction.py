@@ -11,7 +11,6 @@ from pypdf.generic import (
     NameObject,
     NumberObject,
 )
-
 from tests.sample_data import make_pdf
 
 from src.pdf_extraction import extract_pdf
