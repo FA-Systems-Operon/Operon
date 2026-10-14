@@ -1,4 +1,5 @@
-version: '3.8'
+# Production sketch. Hosting is not decided yet.
+# Ollama is expected on the host (or another reachable URL), not as a Compose service.
 
 services:
   # Caddy reverse proxy for HTTPS and routing
@@ -41,7 +42,7 @@ services:
       - operon_network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:5173"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -59,10 +60,9 @@ services:
       LOG_LEVEL: "WARNING"
       ENV: "production"
       
-      # AI Provider Configuration
       AI_PROVIDER: ${AI_PROVIDER:-ollama}
-      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
-      OLLAMA_MODEL_NAME: ${OLLAMA_MODEL_NAME:-llama2}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL}
       
       # Cloud Provider Fallback
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
@@ -77,16 +77,16 @@ services:
       JOB_TIMEOUT_SECONDS: "600"
       JOB_RETRY_ATTEMPTS: "3"
       
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       postgres:
         condition: service_healthy
-      ollama:
-        condition: service_started
     networks:
       - operon_network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -111,22 +111,8 @@ services:
       retries: 5
     restart: unless-stopped
 
-  # Ollama - Local AI Model Service
-  ollama:
-    image: ollama/ollama:latest
-    container_name: operon_ollama
-    environment:
-      OLLAMA_HOST: "0.0.0.0:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-    networks:
-      - operon_network
-    restart: unless-stopped
-
 volumes:
   postgres_data:
-    driver: local
-  ollama_data:
     driver: local
   caddy_data:
     driver: local

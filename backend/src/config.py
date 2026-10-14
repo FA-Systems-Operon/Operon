@@ -12,7 +12,8 @@ class Settings:
         "postgresql://operon_user:[REDACTED]@postgres:5432/operon_dev",
     )
     AI_PROVIDER = os.getenv("AI_PROVIDER", "ollama")
-    OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://ollama:11434")
+    OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "").strip()
 
 
 settings = Settings()
