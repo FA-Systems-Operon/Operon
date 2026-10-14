@@ -3,10 +3,11 @@ import os
 import httpx
 from fastapi import FastAPI, HTTPException
 from sqlalchemy import create_engine, text
+from sqlalchemy.exc import SQLAlchemyError
 
-DATABASE_URL = os.environ.get(
-    "DATABASE_URL", "postgresql+psycopg://operon:operon@localhost:5432/operon"
-)
+DATABASE_URL = os.environ.get("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL is not set")
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434").rstrip(
     "/"
 )
@@ -34,7 +35,7 @@ def check_db():
         with engine.connect() as connection:
             connection.execute(text("SELECT 1"))
         return "ok"
-    except Exception as error: # noqa: BLE001
+    except SQLAlchemyError as error:
         return f"error: {type(error).__name__}"
 
 
@@ -57,7 +58,7 @@ def check_ollama():
             }
         )
         return info
-    except Exception as error: # noqa: BLE001
+    except httpx.HTTPError as error:
         info["status"] = f"error: {type(error).__name__}"
         return info
 
@@ -69,7 +70,7 @@ def status():
 
 
 @app.get("/api/v1/ollama/test")
-def ollama_test(prompt: str = "Say hello in five words."):
+def ollama_test(prompt: str = "Say hello."):
     """Sends one prompt to the model to prove Ollama is usable."""
     if not OLLAMA_MODEL:
         raise HTTPException(
