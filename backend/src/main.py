@@ -8,7 +8,7 @@ from fastapi import FastAPI
 
 import src.models  # noqa: F401  (importing registers the tables on Base.metadata)
 from src.db import Base, engine
-from src.routers import documents
+from src.routers import clients, documents
 
 
 @asynccontextmanager
@@ -29,6 +29,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.include_router(clients.router)
 app.include_router(documents.router)
 
 
