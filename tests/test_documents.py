@@ -150,7 +150,8 @@ def test_list_dofor_client(client, db_session, demo_client):
     assert response.status_code == 200
     assert len(response.json()) == 2
 
-#no docs yet
+
+# no docs yet
 def test_list_documents_empty_for_new_client(client, demo_client):
     response = client.get(documents_url(demo_client.id))
 
@@ -163,7 +164,8 @@ def test_list_documents_unknown_client(client):
 
     assert response.status_code == 404
 
-#docs from other clients are not returned
+
+# docs from other clients are not returned
 def test_list_documents_excludes_other_clients(client, db_session, demo_client):
     upload(client, demo_client.id)
     other_client = Client(name="Other Client")
