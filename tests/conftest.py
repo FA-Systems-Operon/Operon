@@ -4,7 +4,9 @@ Tests never touch the dev database (operon_dev). They use TEST_DATABASE_URL,
 which defaults to an operon_test database on the local compose Postgres.
 """
 
+import hashlib
 import os
+import uuid
 
 from sqlalchemy import create_engine, make_url, text
 
@@ -28,7 +30,7 @@ from fastapi.testclient import TestClient
 
 from src.db import Base, SessionLocal, engine, get_db
 from src.main import app
-from src.models import Client
+from src.models import Client, SourceDocument
 from src.storage import LocalFileStorage, get_storage
 
 
@@ -86,9 +88,55 @@ def client(db_session, storage):
 
 
 @pytest.fixture
-def demo_client(db_session):
+def client_factory(db_session):
+    """Create independent synthetic clients in the isolated test database."""
+
+    def create(name="Demo Client"):
+        demo = Client(name=name)
+        db_session.add(demo)
+        db_session.commit()
+        return demo
+
+    return create
+
+
+@pytest.fixture
+def demo_client(client_factory):
     """A client row that documents can be uploaded for."""
-    demo = Client(name="Demo Client")
-    db_session.add(demo)
-    db_session.commit()
-    return demo
+    return client_factory()
+
+
+@pytest.fixture
+def stored_document(db_session, storage, demo_client):
+    def create(
+        data=b"Alice: Hello.  \r\n",
+        filename="transcript.txt",
+        content_type="application/octet-stream",
+    ):
+        document_id = uuid.uuid4()
+        key = f"{demo_client.id}/{document_id}"
+        storage.save(key, data)
+        document = SourceDocument(
+            id=document_id,
+            client_id=demo_client.id,
+            original_filename=filename,
+            content_type=content_type,
+            size_bytes=len(data),
+            sha256=hashlib.sha256(data).hexdigest(),
+            storage_key=key,
+        )
+        db_session.add(document)
+        db_session.commit()
+        return document
+
+    return create
+
+
+@pytest.fixture
+def sample_profile():
+    """Fresh illustrative profile data, not a production schema or persisted row."""
+    return {
+        "business_name": "Demo Client",
+        "industry": "Consulting",
+        "goals": ["Reduce manual onboarding"],
+    }

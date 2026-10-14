@@ -5,7 +5,7 @@ import uuid
 
 import pytest
 from sqlalchemy import func, select
-from tests.test_pdf_extraction import make_pdf
+from tests.sample_data import make_pdf
 
 from src.document_extraction import (
     DocumentNotFoundError,
@@ -13,32 +13,6 @@ from src.document_extraction import (
     extract_document,
 )
 from src.models import Client, ExtractedText, SourceDocument
-
-
-@pytest.fixture
-def stored_document(db_session, storage, demo_client):
-    def create(
-        data=b"Alice: Hello.  \r\n",
-        filename="transcript.txt",
-        content_type="application/octet-stream",
-    ):
-        document_id = uuid.uuid4()
-        key = f"{demo_client.id}/{document_id}"
-        storage.save(key, data)
-        document = SourceDocument(
-            id=document_id,
-            client_id=demo_client.id,
-            original_filename=filename,
-            content_type=content_type,
-            size_bytes=len(data),
-            sha256=hashlib.sha256(data).hexdigest(),
-            storage_key=key,
-        )
-        db_session.add(document)
-        db_session.commit()
-        return document
-
-    return create
 
 
 @pytest.mark.parametrize(

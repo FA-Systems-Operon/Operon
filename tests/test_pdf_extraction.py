@@ -12,45 +12,9 @@ from pypdf.generic import (
     NumberObject,
 )
 
+from tests.sample_data import make_pdf
+
 from src.pdf_extraction import extract_pdf
-
-
-def make_pdf(pages: list[str | None], *, password: str | None = None) -> bytes:
-    """Build real PDF bytes with a standard font and one line per text item."""
-    writer = PdfWriter()
-    for text in pages:
-        page = writer.add_blank_page(width=612, height=792)
-        if text is None:
-            continue
-        font = DictionaryObject(
-            {
-                NameObject("/Type"): NameObject("/Font"),
-                NameObject("/Subtype"): NameObject("/Type1"),
-                NameObject("/BaseFont"): NameObject("/Helvetica"),
-                NameObject("/Encoding"): NameObject("/WinAnsiEncoding"),
-            }
-        )
-        page[NameObject("/Resources")] = DictionaryObject(
-            {NameObject("/Font"): DictionaryObject({NameObject("/F1"): font})}
-        )
-        commands = [b"BT /F1 12 Tf 16 TL 72 720 Td"]
-        for line in text.split("\n"):
-            escaped = (
-                line.encode("cp1252")
-                .replace(b"\\", b"\\\\")
-                .replace(b"(", b"\\(")
-                .replace(b")", b"\\)")
-            )
-            commands.append(b"(" + escaped + b") Tj T*")
-        commands.append(b"ET")
-        content = DecodedStreamObject()
-        content.set_data(b"\n".join(commands))
-        page[NameObject("/Contents")] = writer._add_object(content)
-    if password is not None:
-        writer.encrypt(password)
-    output = BytesIO()
-    writer.write(output)
-    return output.getvalue()
 
 
 def test_extracts_normalized_transcript():

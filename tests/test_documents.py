@@ -5,10 +5,10 @@ import uuid
 
 import pytest
 from sqlalchemy import func, select
-from tests.test_pdf_extraction import make_pdf
+from tests.sample_data import invalid_upload_samples, make_pdf
 
 from src.config import settings
-from src.models import Client, SourceDocument
+from src.models import SourceDocument
 
 
 def documents_url(client_id) -> str:
@@ -121,11 +121,11 @@ def test_get_document_returns_metadata(client, demo_client):
     assert response.json() == uploaded
 
 
-def test_get_document_of_another_client_returns_404(client, db_session, demo_client):
+def test_get_document_of_another_client_returns_404(
+    client, client_factory, demo_client
+):
     uploaded = upload(client, demo_client.id)
-    other_client = Client(name="Other Client")
-    db_session.add(other_client)
-    db_session.commit()
+    other_client = client_factory("Other Client")
 
     # Client isolation: asking for demo_client's document under another client's
     # URL must look exactly like the document doesn't exist.
@@ -168,11 +168,9 @@ def test_list_documents_unknown_client(client):
 
 
 # docs from other clients are not returned
-def test_list_documents_excludes_other_clients(client, db_session, demo_client):
+def test_list_documents_excludes_other_clients(client, client_factory, demo_client):
     upload(client, demo_client.id)
-    other_client = Client(name="Other Client")
-    db_session.add(other_client)
-    db_session.commit()
+    other_client = client_factory("Other Client")
     upload(client, other_client.id)
 
     response = client.get(documents_url(demo_client.id))
@@ -183,16 +181,7 @@ def test_list_documents_excludes_other_clients(client, db_session, demo_client):
 
 @pytest.mark.parametrize(
     ("filename", "content", "content_type", "expected_status"),
-    [
-        ("brief.docx", b"hello", "text/plain", 415),
-        ("brief", b"hello", "application/octet-stream", 415),
-        ("brief.txt", b"\xff", "text/plain", 422),
-        ("brief.txt", b" \t\n", "text/plain", 422),
-        ("brief.md", b"---", "text/markdown", 422),
-        ("brief.pdf", b"not a PDF", "application/pdf", 422),
-        ("brief.pdf", make_pdf([None]), "application/pdf", 422),
-        ("brief.pdf", make_pdf(["hello"], password="secret"), "application/pdf", 422),
-    ],
+    invalid_upload_samples(),
 )
 def test_invalid_upload_leaves_no_document_or_file(
     client,

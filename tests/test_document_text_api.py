@@ -7,7 +7,7 @@ from datetime import datetime
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
-from tests.test_pdf_extraction import make_pdf
+from tests.sample_data import make_pdf
 
 from src.main import app
 from src.models import Client, ExtractedText, SourceDocument
