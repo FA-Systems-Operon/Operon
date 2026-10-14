@@ -8,7 +8,7 @@ from fastapi import FastAPI
 
 import src.models  # noqa: F401  (importing registers the tables on Base.metadata)
 from src.db import Base, engine
-from src.routers import clients, documents
+from src.routers import client_profiles, clients, documents, playbooks
 
 
 @asynccontextmanager
@@ -31,6 +31,8 @@ app = FastAPI(
 
 app.include_router(clients.router)
 app.include_router(documents.router)
+app.include_router(client_profiles.router)
+app.include_router(playbooks.router)
 
 
 @app.get("/health")
