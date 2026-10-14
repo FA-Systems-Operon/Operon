@@ -65,7 +65,11 @@ def db_session(database):
     session.close()
     # Empty every table so each test starts from a clean database.
     with engine.begin() as conn:
-        conn.execute(text("TRUNCATE extracted_texts, source_documents, clients"))
+        conn.execute(text(
+            "TRUNCATE client_profile_versions, client_profiles, "
+            "playbook_versions, playbooks, "
+            "extracted_texts, source_documents, clients"
+        ))
 
 
 @pytest.fixture
