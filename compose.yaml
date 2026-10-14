@@ -1,54 +1,46 @@
 services:
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: operon_backend
-    ports:
-      - "8080:8080"
+  db:
+    image: postgres:17
     environment:
-      DEBUG: "true"
-      AI_PROVIDER: "ollama"
-      OLLAMA_BASE_URL: "http://ollama:11434"
-    networks:
-      - operon_network
+      POSTGRES_USER: operon
+      POSTGRES_PASSWORD: operon
+      POSTGRES_DB: operon
+    volumes:
+      - db_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
+      test: ["CMD-SHELL", "pg_isready -U operon -d operon"]
+      interval: 5s
       timeout: 5s
-      retries: 3
+      retries: 10
+
+  api:
+    build: ./backend
+    command: ["fastapi", "dev", "src/main.py", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://operon:operon@db:5432/operon
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./backend/src:/code/src
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
 
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: operon_frontend
-    ports:
-      - "3000:3000"
-    networks:
-      - operon_network
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-
-  ollama:
-    image: ollama/ollama:latest
-    container_name: operon_ollama
-    ports:
-      - "11434:11434"
+    build: ./frontend
     environment:
-      OLLAMA_HOST: "0.0.0.0:11434"
+      API_URL: http://api:8000
     volumes:
-      - ollama_data:/root/.ollama
-    networks:
-      - operon_network
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    depends_on:
+      - api
 
 volumes:
-  ollama_data:
-    driver: local
-
-networks:
-  operon_network:
-    driver: bridge
+  db_data:
