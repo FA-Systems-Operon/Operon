@@ -1,4 +1,5 @@
-version: '3.8'
+# Production sketch. Hosting is not decided yet.
+# Ollama is expected on the host (or another reachable URL), not as a Compose service.
 
 services:
   # Caddy reverse proxy for HTTPS and routing
@@ -7,10 +8,6 @@ services:
     container_name: operon_caddy
     ports:
       - "80:80"
-      - "443:443"
-      - "443:443/udp"
-    environment:
-      ACME_AGREE: "true"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
@@ -22,7 +19,7 @@ services:
       - frontend
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:2019/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:2019/config/"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -31,17 +28,15 @@ services:
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.prod
     container_name: operon_frontend
-    environment:
-      VITE_API_BASE_URL: /api
     depends_on:
       - backend
     networks:
       - operon_network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:5173"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -59,17 +54,16 @@ services:
       LOG_LEVEL: "WARNING"
       ENV: "production"
       
-      # AI Provider Configuration
       AI_PROVIDER: ${AI_PROVIDER:-ollama}
-      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
-      OLLAMA_MODEL_NAME: ${OLLAMA_MODEL_NAME:-llama2}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL}
       
       # Cloud Provider Fallback
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       
       # Database (prod)
-      DATABASE_URL: postgresql://operon_user:${DB_PASSWORD}@postgres:5432/operon_prod
+      DATABASE_URL: postgresql://operon_user:${POSTGRES_PASSWORD}@postgres:5432/operon_prod
       
       # Background Job Configuration
       BACKGROUND_WORKER_ENABLED: "true"
@@ -77,16 +71,16 @@ services:
       JOB_TIMEOUT_SECONDS: "600"
       JOB_RETRY_ATTEMPTS: "3"
       
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       postgres:
         condition: service_healthy
-      ollama:
-        condition: service_started
     networks:
       - operon_network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -98,7 +92,7 @@ services:
     environment:
       POSTGRES_DB: operon_prod
       POSTGRES_USER: operon_user
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./backups:/backups
@@ -111,22 +105,8 @@ services:
       retries: 5
     restart: unless-stopped
 
-  # Ollama - Local AI Model Service
-  ollama:
-    image: ollama/ollama:latest
-    container_name: operon_ollama
-    environment:
-      OLLAMA_HOST: "0.0.0.0:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-    networks:
-      - operon_network
-    restart: unless-stopped
-
 volumes:
   postgres_data:
-    driver: local
-  ollama_data:
     driver: local
   caddy_data:
     driver: local

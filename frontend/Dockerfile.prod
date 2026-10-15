@@ -1,0 +1,11 @@
+FROM node:24-alpine AS build
+  WORKDIR /app
+  COPY package.json package-lock.json ./
+  RUN npm ci --ignore-scripts
+  COPY index.html vite.config.ts tsconfig.json tsconfig.node.json ./
+  COPY src ./src
+  RUN npm run build
+
+  FROM caddy:2-alpine
+  COPY --from=build /app/dist /srv
+  CMD ["caddy", "file-server", "--root", "/srv", "--listen", ":5173"]
