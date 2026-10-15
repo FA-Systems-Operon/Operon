@@ -5,7 +5,7 @@ import uuid
 
 import pytest
 from sqlalchemy import func, select
-from tests.test_pdf_extraction import make_pdf
+from tests.sample_data import make_pdf
 
 from src.document_extraction import (
     DocumentNotFoundError,
@@ -13,32 +13,6 @@ from src.document_extraction import (
     extract_document,
 )
 from src.models import Client, ExtractedText, SourceDocument
-
-
-@pytest.fixture
-def stored_document(db_session, storage, demo_client):
-    def create(
-        data=b"Alice: Hello.  \r\n",
-        filename="transcript.txt",
-        content_type="application/octet-stream",
-    ):
-        document_id = uuid.uuid4()
-        key = f"{demo_client.id}/{document_id}"
-        storage.save(key, data)
-        document = SourceDocument(
-            id=document_id,
-            client_id=demo_client.id,
-            original_filename=filename,
-            content_type=content_type,
-            size_bytes=len(data),
-            sha256=hashlib.sha256(data).hexdigest(),
-            storage_key=key,
-        )
-        db_session.add(document)
-        db_session.commit()
-        return document
-
-    return create
 
 
 @pytest.mark.parametrize(
@@ -139,18 +113,19 @@ def test_unknown_or_other_clients_document_is_not_found(
 
 
 def test_other_client_cannot_access_saved_result(
-    db_session, storage, demo_client, stored_document
+    db_session, storage, demo_client, stored_document, client_factory
 ):
-    document = stored_document()
+    owner = client_factory("Other client")
+    document = stored_document(owner=owner)
     document_id = document.id
-    saved = extract_document(demo_client.id, document_id, db_session, storage)
+    assert document.client_id == owner.id
+    assert document.storage_key == f"{owner.id}/{document_id}"
+    assert storage.read(document.storage_key) == b"Alice: Hello.  \r\n"
+    saved = extract_document(owner.id, document_id, db_session, storage)
     saved_text = saved.text
-    other = Client(name="Other client")
-    db_session.add(other)
-    db_session.commit()
 
     with pytest.raises(DocumentNotFoundError, match="Document not found"):
-        extract_document(other.id, document_id, db_session, storage)
+        extract_document(demo_client.id, document_id, db_session, storage)
 
     assert db_session.get(ExtractedText, document_id).text == saved_text
 
