@@ -1,0 +1,156 @@
+"""Checks using synthetic PDFs for text extraction, exclusion, and failures."""
+
+from io import BytesIO
+
+import pytest
+from pypdf import PdfReader, PdfWriter
+from pypdf.errors import DependencyError
+from pypdf.generic import (
+    DecodedStreamObject,
+    DictionaryObject,
+    NameObject,
+    NumberObject,
+)
+
+from src.pdf_extraction import extract_pdf
+
+
+def make_pdf(pages: list[str | None], *, password: str | None = None) -> bytes:
+    """Build real PDF bytes with a standard font and one line per text item."""
+    writer = PdfWriter()
+    for text in pages:
+        page = writer.add_blank_page(width=612, height=792)
+        if text is None:
+            continue
+        font = DictionaryObject(
+            {
+                NameObject("/Type"): NameObject("/Font"),
+                NameObject("/Subtype"): NameObject("/Type1"),
+                NameObject("/BaseFont"): NameObject("/Helvetica"),
+                NameObject("/Encoding"): NameObject("/WinAnsiEncoding"),
+            }
+        )
+        page[NameObject("/Resources")] = DictionaryObject(
+            {NameObject("/Font"): DictionaryObject({NameObject("/F1"): font})}
+        )
+        commands = [b"BT /F1 12 Tf 16 TL 72 720 Td"]
+        for line in text.split("\n"):
+            escaped = (
+                line.encode("cp1252")
+                .replace(b"\\", b"\\\\")
+                .replace(b"(", b"\\(")
+                .replace(b")", b"\\)")
+            )
+            commands.append(b"(" + escaped + b") Tj T*")
+        commands.append(b"ET")
+        content = DecodedStreamObject()
+        content.set_data(b"\n".join(commands))
+        page[NameObject("/Contents")] = writer._add_object(content)
+    if password is not None:
+        writer.encrypt(password)
+    output = BytesIO()
+    writer.write(output)
+    return output.getvalue()
+
+
+def test_extracts_normalized_transcript():
+    data = make_pdf(["Alice: Café.  \nBob: Keep  two spaces.\t"])
+
+    assert extract_pdf(data) == "Alice: Café.\nBob: Keep  two spaces."
+
+
+def test_preserves_page_order_and_skips_blank_pages():
+    data = make_pdf(
+        [None, "[00:01] Alice: First page.", None, "[00:02] Bob: Second page.", None]
+    )
+
+    assert extract_pdf(data) == (
+        "[00:01] Alice: First page.\n\n[00:02] Bob: Second page."
+    )
+
+
+@pytest.mark.parametrize("pages", [[], [None], [" \t"], [None, None]])
+def test_rejects_pdf_without_readable_text(pages: list[str | None]):
+    with pytest.raises(ValueError, match="no readable text; OCR is not supported"):
+        extract_pdf(make_pdf(pages))
+
+
+def test_rejects_image_only_pdf():
+    writer = PdfWriter()
+    page = writer.add_blank_page(width=612, height=792)
+    image = DecodedStreamObject()
+    image.set_data(b"\xff\xff\xff")
+    image.update(
+        {
+            NameObject("/Type"): NameObject("/XObject"),
+            NameObject("/Subtype"): NameObject("/Image"),
+            NameObject("/Width"): NumberObject(1),
+            NameObject("/Height"): NumberObject(1),
+            NameObject("/ColorSpace"): NameObject("/DeviceRGB"),
+            NameObject("/BitsPerComponent"): NumberObject(8),
+        }
+    )
+    page[NameObject("/Resources")] = DictionaryObject(
+        {
+            NameObject("/XObject"): DictionaryObject(
+                {NameObject("/Im1"): writer._add_object(image)}
+            )
+        }
+    )
+    content = DecodedStreamObject()
+    content.set_data(b"q 100 0 0 100 72 600 cm /Im1 Do Q")
+    page[NameObject("/Contents")] = writer._add_object(content)
+    output = BytesIO()
+    writer.write(output)
+
+    with pytest.raises(ValueError, match="no readable text; OCR is not supported"):
+        extract_pdf(output.getvalue())
+
+
+@pytest.mark.parametrize("password", ["secret", ""])
+def test_rejects_encrypted_pdf(password: str):
+    with pytest.raises(ValueError, match="Encrypted PDFs are not supported"):
+        extract_pdf(make_pdf(["Alice: Hello."], password=password))
+
+
+@pytest.mark.parametrize("data", [b"", b"not a PDF", b"%PDF-1.7\n%%EOF"])
+def test_rejects_invalid_pdf(data: bytes):
+    with pytest.raises(ValueError, match="invalid or malformed"):
+        extract_pdf(data)
+
+
+def test_rejects_truncated_pdf():
+    data = make_pdf(["Alice: Hello."])
+    truncated = data.split(b"startxref")[0]
+
+    with pytest.raises(ValueError, match="invalid or malformed"):
+        extract_pdf(truncated)
+
+
+def test_rejects_malformed_page_content():
+    reader = PdfReader(BytesIO(make_pdf(["Alice: Hello."])))
+    writer = PdfWriter()
+    page = writer.add_page(reader.pages[0])
+    content = DecodedStreamObject()
+    content.set_data(b"BT /F1 12 Tf (unterminated")
+    page[NameObject("/Contents")] = writer._add_object(content)
+    output = BytesIO()
+    writer.write(output)
+
+    with pytest.raises(ValueError, match="malformed or unsupported content"):
+        extract_pdf(output.getvalue())
+
+
+def test_rejects_nul_characters():
+    with pytest.raises(ValueError, match="NUL characters"):
+        extract_pdf(make_pdf(["Alice\x00Bob"]))
+
+
+def test_translates_missing_encryption_dependency(monkeypatch):
+    def reader_without_crypto(*args, **kwargs):
+        raise DependencyError("Cryptography dependency required")
+
+    monkeypatch.setattr("src.pdf_extraction.PdfReader", reader_without_crypto)
+
+    with pytest.raises(ValueError, match="Encrypted PDFs are not supported"):
+        extract_pdf(b"encrypted PDF")

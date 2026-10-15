@@ -7,3 +7,4 @@ psycopg[binary]==3.3.6
 sqlalchemy==2.1.1
 python-multipart==0.0.32
 markdown-it-py==4.2.0
+pypdf==6.20.1
