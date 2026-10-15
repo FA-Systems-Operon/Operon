@@ -4,6 +4,8 @@ import hashlib
 import uuid
 
 import pytest
+from sqlalchemy import func, select
+from tests.test_pdf_extraction import make_pdf
 
 from src.config import settings
 from src.models import Client, SourceDocument
@@ -22,7 +24,7 @@ def stored_files(tmp_path) -> list:
 
 
 def test_upload_succeeds(client, db_session, storage, demo_client):
-    content = b"%PDF-1.4 demo onboarding brief"
+    content = make_pdf(["Demo onboarding brief"])
     response = client.post(
         documents_url(demo_client.id),
         files={"file": ("brief.pdf", content, "application/pdf")},
@@ -138,7 +140,7 @@ def test_get_unknown_document_returns_404(client, demo_client):
     assert response.status_code == 404
 
 
-# --- GET /clients/{client_id}/documents ---
+# --- GET /api/v1/clients/{client_id}/documents ---
 
 
 def test_list_documents_for_client(client, demo_client):
@@ -177,3 +179,37 @@ def test_list_documents_excludes_other_clients(client, db_session, demo_client):
 
     assert len(response.json()) == 1
     assert response.json()[0]["client_id"] == str(demo_client.id)
+
+
+@pytest.mark.parametrize(
+    ("filename", "content", "content_type", "expected_status"),
+    [
+        ("brief.docx", b"hello", "text/plain", 415),
+        ("brief", b"hello", "application/octet-stream", 415),
+        ("brief.txt", b"\xff", "text/plain", 422),
+        ("brief.txt", b" \t\n", "text/plain", 422),
+        ("brief.md", b"---", "text/markdown", 422),
+        ("brief.pdf", b"not a PDF", "application/pdf", 422),
+        ("brief.pdf", make_pdf([None]), "application/pdf", 422),
+        ("brief.pdf", make_pdf(["hello"], password="secret"), "application/pdf", 422),
+    ],
+)
+def test_invalid_upload_leaves_no_document_or_file(
+    client,
+    db_session,
+    demo_client,
+    tmp_path,
+    filename,
+    content,
+    content_type,
+    expected_status,
+):
+    response = client.post(
+        documents_url(demo_client.id),
+        files={"file": (filename, content, content_type)},
+    )
+
+    assert response.status_code == expected_status
+    assert response.json()["detail"]
+    assert db_session.scalar(select(func.count()).select_from(SourceDocument)) == 0
+    assert stored_files(tmp_path) == []
