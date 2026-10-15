@@ -51,9 +51,9 @@ BOM-marked UTF-16.
 
 | Request | Behavior |
 | --- | --- |
-| `POST /clients/{client_id}/documents` | Saves the original file and returns its metadata (`201`). |
-| `POST /clients/{client_id}/documents/{document_id}/extract` | Extracts and saves text, or returns the existing result (`200`). No request body is needed. |
-| `GET /clients/{client_id}/documents/{document_id}/text` | Returns saved text (`200`); does not perform extraction. |
+| `POST /api/v1/clients/{client_id}/documents` | Saves the original file and returns its metadata (`201`). |
+| `POST /api/v1/clients/{client_id}/documents/{document_id}/extract` | Extracts and saves text, or returns the existing result (`200`). No request body is needed. |
+| `GET /api/v1/clients/{client_id}/documents/{document_id}/text` | Returns saved text (`200`); does not perform extraction. |
 
 The extraction and text responses contain `document_id`, `text`, and
 `extracted_at`. Repeated extraction keeps the saved result and timestamp. The
@@ -71,13 +71,13 @@ storage access failures.
 Rebuild the backend so it loads the new routes and creates any missing tables:
 
 ```bash
-docker compose up --build -d backend postgres
+docker compose up --build -d api db
 ```
 
 For a local demonstration, create a synthetic client:
 
 ```bash
-docker compose exec -T postgres psql -U operon_user -d operon_dev \
+docker compose exec -T db psql -U operon -d operon \
   -c "INSERT INTO clients (id, name) VALUES \
   ('11111111-1111-1111-1111-111111111111', 'Demo Client') \
   ON CONFLICT (id) DO NOTHING;"
@@ -87,16 +87,16 @@ Upload a sample Markdown transcript:
 
 ```bash
 printf '%s\n' '# Client meeting' '' '**Alice:** Hello.' > /tmp/operon-transcript.md
-curl -X POST http://localhost:8080/clients/11111111-1111-1111-1111-111111111111/documents \
+curl -X POST http://localhost:8000/api/v1/clients/11111111-1111-1111-1111-111111111111/documents \
   -F 'file=@/tmp/operon-transcript.md;type=text/markdown'
 ```
 
 Copy the returned `id` and replace `DOCUMENT_ID` in both requests:
 
 ```bash
-curl -X POST http://localhost:8080/clients/11111111-1111-1111-1111-111111111111/documents/DOCUMENT_ID/extract
-curl http://localhost:8080/clients/11111111-1111-1111-1111-111111111111/documents/DOCUMENT_ID/text
+curl -X POST http://localhost:8000/api/v1/clients/11111111-1111-1111-1111-111111111111/documents/DOCUMENT_ID/extract
+curl http://localhost:8000/api/v1/clients/11111111-1111-1111-1111-111111111111/documents/DOCUMENT_ID/text
 ```
 
 Both responses should contain `Client meeting\n\nAlice: Hello.` as their `text`.
-The same routes are available interactively at `http://localhost:8080/docs`.
+The same routes are available interactively at `http://localhost:8000/api/v1/docs`.

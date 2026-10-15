@@ -13,7 +13,7 @@ from src.models import Client, ExtractedText, SourceDocument
 
 
 def document_url(client_id, document_id) -> str:
-    return f"/clients/{client_id}/documents/{document_id}"
+    return f"/api/v1/clients/{client_id}/documents/{document_id}"
 
 
 def upload_document(
@@ -24,7 +24,7 @@ def upload_document(
     content_type="application/octet-stream",
 ) -> dict:
     response = client.post(
-        f"/clients/{client_id}/documents",
+        f"/api/v1/clients/{client_id}/documents",
         files={"file": (filename, data, content_type)},
     )
     assert response.status_code == 201

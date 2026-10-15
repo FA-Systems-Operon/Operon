@@ -19,7 +19,7 @@ from src.models import Client, ExtractedText, SourceDocument
 from src.schemas import ExtractedTextOut, SourceDocumentOut
 from src.storage import DocumentStorage, get_storage
 
-router = APIRouter(prefix="/clients/{client_id}/documents", tags=["documents"])
+router = APIRouter(prefix="/api/v1/clients/{client_id}/documents", tags=["documents"])
 
 # Shorthands so each endpoint can just say "db: DbSession" and "storage: Storage".
 DbSession = Annotated[Session, Depends(get_db)]
