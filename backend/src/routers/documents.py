@@ -26,6 +26,21 @@ DbSession = Annotated[Session, Depends(get_db)]
 Storage = Annotated[DocumentStorage, Depends(get_storage)]
 
 
+@router.get("", response_model=list[SourceDocumentOut])
+def list_documents(client_id: uuid.UUID, db: DbSession) -> list[SourceDocument]:
+    """Return all documents belonging to a client."""
+    if db.get(Client, client_id) is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Client not found")
+    return list(
+        # method used to execute a query and return a specialized iterator that yields database ORM objects or single values directly instead of needing to manually extract them
+        db.scalars(
+            select(SourceDocument)
+            .where(SourceDocument.client_id == client_id)
+            .order_by(SourceDocument.uploaded_at)
+        )
+    )
+
+
 @router.post("", response_model=SourceDocumentOut, status_code=status.HTTP_201_CREATED)
 def upload_document(
     client_id: uuid.UUID, file: UploadFile, db: DbSession, storage: Storage

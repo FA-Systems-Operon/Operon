@@ -136,3 +136,44 @@ def test_get_unknown_document_returns_404(client, demo_client):
     response = client.get(f"{documents_url(demo_client.id)}/{uuid.uuid4()}")
 
     assert response.status_code == 404
+
+
+# --- GET /clients/{client_id}/documents ---
+
+
+def test_list_documents_for_client(client, demo_client):
+    upload(client, demo_client.id)
+    upload(client, demo_client.id)
+
+    response = client.get(documents_url(demo_client.id))
+
+    assert response.status_code == 200
+    assert len(response.json()) == 2
+
+
+# no docs yet
+def test_list_documents_empty_for_new_client(client, demo_client):
+    response = client.get(documents_url(demo_client.id))
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_list_documents_unknown_client(client):
+    response = client.get(documents_url(uuid.uuid4()))
+
+    assert response.status_code == 404
+
+
+# docs from other clients are not returned
+def test_list_documents_excludes_other_clients(client, db_session, demo_client):
+    upload(client, demo_client.id)
+    other_client = Client(name="Other Client")
+    db_session.add(other_client)
+    db_session.commit()
+    upload(client, other_client.id)
+
+    response = client.get(documents_url(demo_client.id))
+
+    assert len(response.json()) == 1
+    assert response.json()[0]["client_id"] == str(demo_client.id)
