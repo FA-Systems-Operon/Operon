@@ -1,7 +1,9 @@
-uvicorn[standard]
-pydantic
-pydantic-settings
-fastapi[standard]
-httpx
-sqlalchemy
-psycopg[binary]
+fastapi==0.141.1
+uvicorn[standard]==0.24.0
+pydantic==2.13.5
+pydantic-settings==2.15.0
+httpx==0.25.2
+psycopg[binary]==3.3.6
+sqlalchemy==2.1.1
+python-multipart==0.0.32
+markdown-it-py==4.2.0
