@@ -33,7 +33,11 @@ def list_documents(client_id: uuid.UUID, db: DbSession) -> list[SourceDocument]:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Client not found")
     return list(
         # method used to execute a query and return a specialized iterator that yields database ORM objects or single values directly instead of needing to manually extract them
-        db.scalars(select(SourceDocument).where(SourceDocument.client_id == client_id))
+        db.scalars(
+            select(SourceDocument)
+            .where(SourceDocument.client_id == client_id)
+            .order_by(SourceDocument.uploaded_at)
+        )
     )
 
 

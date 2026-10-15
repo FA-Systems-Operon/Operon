@@ -141,7 +141,7 @@ def test_get_unknown_document_returns_404(client, demo_client):
 # --- GET /clients/{client_id}/documents ---
 
 
-def test_list_dofor_client(client, db_session, demo_client):
+def test_list_documents_for_client(client, demo_client):
     upload(client, demo_client.id)
     upload(client, demo_client.id)
 
