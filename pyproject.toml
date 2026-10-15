@@ -2,3 +2,8 @@
 # Our Python package lives at backend/src, so imports like "from src.db import ..."
 # are first-party. Without this, ruff sorts them in with third-party libraries.
 src = ["backend"]
+
+[tool.pytest.ini_options]
+# Lets tests import the app as "src..." and shared helpers as "tests...".
+pythonpath = ["backend", "."]
+testpaths = ["tests"]
