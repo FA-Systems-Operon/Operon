@@ -26,6 +26,5 @@ docs/
 README.md
 *.md
 cypress/
-public/
 src/**/*.test.ts
 src/**/*.test.tsx
