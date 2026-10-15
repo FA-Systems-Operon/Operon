@@ -112,13 +112,16 @@ def stored_document(db_session, storage, demo_client):
         data=b"Alice: Hello.  \r\n",
         filename="transcript.txt",
         content_type="application/octet-stream",
+        *,
+        owner=None,
     ):
+        owner = demo_client if owner is None else owner
         document_id = uuid.uuid4()
-        key = f"{demo_client.id}/{document_id}"
+        key = f"{owner.id}/{document_id}"
         storage.save(key, data)
         document = SourceDocument(
             id=document_id,
-            client_id=demo_client.id,
+            client_id=owner.id,
             original_filename=filename,
             content_type=content_type,
             size_bytes=len(data),

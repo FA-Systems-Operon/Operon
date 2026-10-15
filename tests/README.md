@@ -7,6 +7,8 @@ existing isolated `*_test` database and file storage uses `tmp_path`.
 - `client_factory(name="Demo Client")`: create additional independent clients.
 - `stored_document(data=..., filename=..., content_type=...)`: create a document
   for `demo_client` and save its bytes in temporary storage. Returns the model.
+  Pass `owner=client_factory("Other Client")` to create one for another client;
+  both the database association and storage key use that client.
   This deliberately bypasses upload validation for service and legacy-file tests.
 - `sample_profile`: a fresh dictionary with business name, industry, and goals.
   It is illustrative data only; this branch has no production profile model.
