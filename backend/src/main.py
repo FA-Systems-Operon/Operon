@@ -1,24 +1,37 @@
 import os
+from contextlib import asynccontextmanager
 
 import httpx
 from fastapi import FastAPI, HTTPException
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
-DATABASE_URL = os.environ.get("DATABASE_URL")
-if not DATABASE_URL:
-    raise RuntimeError("DATABASE_URL is not set")
+import src.models  # noqa: F401  (importing registers the tables on Base.metadata)
+from src.db import Base, engine  # db.py raises if DATABASE_URL is not set
+
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434").rstrip(
     "/"
 )
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "").strip()
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Runs once at startup: create any tables that don't exist yet.
+
+    create_all never alters existing tables, so schema changes need a DB reset
+    until Alembic is added back (see backend/README.md).
+    """
+    Base.metadata.create_all(bind=engine)
+    yield
+
+
 app = FastAPI(
     title="Operon API",
     docs_url="/api/v1/docs",
     openapi_url="/api/v1/openapi.json",
+    lifespan=lifespan,
 )
-engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 print(
     f"Ollama URL: {OLLAMA_BASE_URL} | model: {OLLAMA_MODEL or '(OLLAMA_MODEL not set)'}",
     flush=True,

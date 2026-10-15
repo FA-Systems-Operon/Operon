@@ -3,6 +3,7 @@ from unittest.mock import Mock, patch
 import httpx
 from fastapi.testclient import TestClient
 from sqlalchemy.exc import SQLAlchemyError
+
 from src.main import app, check_db, check_ollama
 
 client = TestClient(app)
