@@ -21,7 +21,7 @@ existing ones.
 So after changing a model in `src/models.py`, reset your local database:
 
 ```bash
-docker compose down -v   # -v deletes the db_data volume (all local data)
+docker compose down -v   # -v deletes the db_data and document_storage volumes
 docker compose up --build api db
 ```
 

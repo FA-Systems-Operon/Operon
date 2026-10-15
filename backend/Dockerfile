@@ -1,6 +1,9 @@
 FROM python:3.13-slim
 
-RUN useradd --create-home --uid 1000 appuser
+# Create the non-root user and the document storage dir it owns
+# (a volume mounted at /code/storage inherits this ownership)
+RUN useradd --create-home --uid 1000 appuser && \
+    mkdir -p /code/storage && chown appuser:appuser /code/storage
 
 WORKDIR /code
 
