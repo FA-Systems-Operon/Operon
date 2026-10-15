@@ -1,48 +1,15 @@
-# Builder stage: install dependencies
-FROM python:3.11-slim AS builder
+FROM python:3.13-slim
 
-WORKDIR /app
+RUN useradd --create-home --uid 1000 appuser
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    && rm -rf /var/lib/apt/lists/*
+WORKDIR /code
 
-# Copy and install requirements
-COPY requirements.txt .
-RUN python -m venv /opt/venv && \
-    /opt/venv/bin/pip install --no-cache-dir -r requirements.txt
+COPY ./requirements.txt /code/requirements.txt
 
-# Runtime stage
-FROM python:3.11-slim
+RUN pip install --no-cache-dir --upgrade --only-binary=:all: -r /code/requirements.txt
 
-WORKDIR /app
+COPY --chown=appuser:appuser ./src /code/src
 
-# Install runtime dependencies and create non-root user
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    && rm -rf /var/lib/apt/lists/* && \
-    useradd -m -u 1001 appuser
-
-# Copy venv from builder
-COPY --from=builder /opt/venv /opt/venv
-
-# Copy application code
-COPY --chown=appuser:appuser src/ ./src/
-
-# Set environment
-ENV PATH="/opt/venv/bin:$PATH" \
-    PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
-
-# Switch to non-root user
 USER appuser
 
-EXPOSE 8080
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-    CMD curl -f http://localhost:8080/health || exit 1
-
-# Run application
-CMD ["uvicorn", "src.main:app", "--host", "127.0.0.1", "--port", "8080"]
+CMD ["fastapi", "run", "src/main.py", "--port", "8000"]

@@ -5,12 +5,12 @@ FastAPI service backed by PostgreSQL (SQLAlchemy 2 + psycopg 3).
 ## Running locally
 
 ```bash
-docker compose up --build backend postgres
+cp .env.example .env     # then set POSTGRES_PASSWORD (required)
+docker compose up --build api db
 ```
 
-The API is served on port 8080 and Postgres on `localhost:5432`
-(database `operon_dev`, user `operon_user`, password from `POSTGRES_PASSWORD` in `.env`,
-default `operon_dev_password`).
+The API is served on port 8000 (docs at `/api/v1/docs`). Postgres runs in the
+`db` service (database `operon`, user `operon`, password from `POSTGRES_PASSWORD`).
 
 ## Database schema (no migrations yet)
 
@@ -21,8 +21,8 @@ existing ones.
 So after changing a model in `src/models.py`, reset your local database:
 
 ```bash
-docker compose down -v   # -v deletes the postgres_data volume (all local data)
-docker compose up --build backend postgres
+docker compose down -v   # -v deletes the db_data volume (all local data)
+docker compose up --build api db
 ```
 
 Alembic was removed on purpose for now. It should come back before we have any
