@@ -1,18 +1,23 @@
 """Shared test setup: a separate Postgres test database and temporary file storage.
 
-Tests never touch the dev database (operon_dev). They use TEST_DATABASE_URL,
-which defaults to an operon_test database on the local compose Postgres.
+Tests never touch the dev database (operon). They use TEST_DATABASE_URL, which
+defaults to an operon_test database on the compose "db" service (see .env.example).
 """
 
 import hashlib
 import os
+import sys
 import uuid
+from pathlib import Path
 
 from sqlalchemy import create_engine, make_url, text
 
+# Lets tests import the app as "src...", since the package lives in backend/src.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
+
 TEST_DATABASE_URL = os.getenv(
     "TEST_DATABASE_URL",
-    "postgresql://operon_user:operon_dev_password@localhost:5432/operon_test",
+    "postgresql://operon:change-me@localhost:5432/operon_test",
 )
 
 # Safety check: refuse to run (and wipe tables) against a non-test database.
@@ -22,7 +27,8 @@ if not (make_url(TEST_DATABASE_URL).database or "").endswith("_test"):
     )
 
 # Must be set before importing src: src.config reads DATABASE_URL at import time,
-# so this makes the app's own engine point at the test database.
+# so this makes the app's own engine point at the test database. This applies to
+# every test, including test_api.py and test_config.py.
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 
 import pytest
