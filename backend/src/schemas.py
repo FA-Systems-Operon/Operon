@@ -1,9 +1,30 @@
-"""Pydantic models that define the JSON shape of API responses."""
+"""Pydantic models that define the JSON shape of API requests and responses."""
 
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
+
+# What the API user sends
+
+
+class ClientIn(BaseModel):
+    """Request body for creating a client."""
+
+    name: str = Field(min_length=1, max_length=255)
+
+
+# Returned — includes the server-generated id and timestamp
+
+
+class ClientOut(BaseModel):
+    """A client record returned by the API."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    created_at: datetime
 
 
 class SourceDocumentOut(BaseModel):
