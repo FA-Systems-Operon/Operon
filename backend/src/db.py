@@ -17,6 +17,10 @@ def _psycopg_url(url: str) -> str:
     return url.replace("postgresql://", "postgresql+psycopg://", 1)
 
 
+# Fail fast with a clear message instead of a confusing error from SQLAlchemy.
+if not settings.DATABASE_URL:
+    raise RuntimeError("DATABASE_URL is not set")
+
 # pool_pre_ping tests each connection before use, so a Postgres restart
 # doesn't cause errors on the next request.
 engine = create_engine(_psycopg_url(settings.DATABASE_URL), pool_pre_ping=True)

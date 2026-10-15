@@ -12,7 +12,7 @@ from src.models import Client, SourceDocument
 
 
 def documents_url(client_id) -> str:
-    return f"/clients/{client_id}/documents"
+    return f"/api/v1/clients/{client_id}/documents"
 
 
 def stored_files(tmp_path) -> list:
@@ -20,7 +20,7 @@ def stored_files(tmp_path) -> list:
     return [path for path in tmp_path.rglob("*") if path.is_file()]
 
 
-# --- POST /clients/{client_id}/documents ---
+# --- POST /api/v1/clients/{client_id}/documents ---
 
 
 def test_upload_succeeds(client, db_session, storage, demo_client):
@@ -102,7 +102,7 @@ def test_upload_deletes_file_if_db_commit_fails(
     assert stored_files(tmp_path) == []
 
 
-# --- GET /clients/{client_id}/documents/{document_id} ---
+# --- GET /api/v1/clients/{client_id}/documents/{document_id} ---
 
 
 def upload(client, client_id) -> dict:
@@ -140,10 +140,10 @@ def test_get_unknown_document_returns_404(client, demo_client):
     assert response.status_code == 404
 
 
-# --- GET /clients/{client_id}/documents ---
+# --- GET /api/v1/clients/{client_id}/documents ---
 
 
-def test_list_dofor_client(client, db_session, demo_client):
+def test_list_documents_for_client(client, demo_client):
     upload(client, demo_client.id)
     upload(client, demo_client.id)
 

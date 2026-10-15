@@ -2,6 +2,7 @@
 
 import hashlib
 import uuid
+from datetime import datetime, timezone
 
 import pytest
 from sqlalchemy import delete, insert
@@ -42,6 +43,25 @@ def test_stores_unicode_text_and_extraction_timestamp(db_session, source_documen
     assert stored.document.original_filename == "transcript.txt"
     assert stored.document.sha256 == hashlib.sha256(b"Alice: Hello.").hexdigest()
     assert stored.document.extracted_text is stored
+
+
+def test_updating_text_refreshes_extraction_timestamp(db_session, source_document):
+    original_timestamp = datetime(2000, 1, 1, tzinfo=timezone.utc)
+    result = ExtractedText(
+        document=source_document,
+        text="First result",
+        extracted_at=original_timestamp,
+    )
+    db_session.add(result)
+    db_session.commit()
+
+    result.text = "Updated result"
+    db_session.commit()
+    db_session.refresh(result)
+
+    assert result.text == "Updated result"
+    assert result.extracted_at > original_timestamp
+    assert result.extracted_at.tzinfo is not None
 
 
 def test_document_can_exist_without_extracted_text(db_session, source_document):
