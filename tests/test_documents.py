@@ -5,14 +5,14 @@ import uuid
 
 import pytest
 from sqlalchemy import func, select
-from tests.test_pdf_extraction import make_pdf
+from tests.sample_data import invalid_upload_samples, make_pdf
 
 from src.config import settings
-from src.models import Client, SourceDocument
+from src.models import SourceDocument
 
 
 def documents_url(client_id) -> str:
-    return f"/clients/{client_id}/documents"
+    return f"/api/v1/clients/{client_id}/documents"
 
 
 def stored_files(tmp_path) -> list:
@@ -20,21 +20,31 @@ def stored_files(tmp_path) -> list:
     return [path for path in tmp_path.rglob("*") if path.is_file()]
 
 
-# --- POST /clients/{client_id}/documents ---
+# --- POST /api/v1/clients/{client_id}/documents ---
 
 
-def test_upload_succeeds(client, db_session, storage, demo_client):
-    content = make_pdf(["Demo onboarding brief"])
+@pytest.mark.parametrize(
+    ("filename", "content", "content_type"),
+    [
+        ("brief.txt", b"Demo onboarding brief", "text/plain"),
+        ("brief.md", b"# Demo onboarding brief", "text/markdown"),
+        ("brief.markdown", b"# Demo onboarding brief", "text/markdown"),
+        ("brief.pdf", make_pdf(["Demo onboarding brief"]), "application/pdf"),
+    ],
+)
+def test_upload_succeeds(
+    client, db_session, storage, demo_client, filename, content, content_type
+):
     response = client.post(
         documents_url(demo_client.id),
-        files={"file": ("brief.pdf", content, "application/pdf")},
+        files={"file": (filename, content, content_type)},
     )
 
     assert response.status_code == 201
     body = response.json()
     assert body["client_id"] == str(demo_client.id)
-    assert body["original_filename"] == "brief.pdf"
-    assert body["content_type"] == "application/pdf"
+    assert body["original_filename"] == filename
+    assert body["content_type"] == content_type
     assert body["size_bytes"] == len(content)
     assert body["sha256"] == hashlib.sha256(content).hexdigest()
 
@@ -44,6 +54,13 @@ def test_upload_succeeds(client, db_session, storage, demo_client):
     assert document.client_id == demo_client.id
     # ...and the file is on disk (in tmp_path) with the same contents.
     assert storage.read(document.storage_key) == content
+
+    retrieved = client.get(f"{documents_url(demo_client.id)}/{body['id']}")
+    assert retrieved.status_code == 200
+    assert retrieved.json() == body
+    listed = client.get(documents_url(demo_client.id))
+    assert listed.status_code == 200
+    assert listed.json() == [body]
 
 
 def test_upload_unknown_client_returns_404(client, tmp_path):
@@ -102,7 +119,7 @@ def test_upload_deletes_file_if_db_commit_fails(
     assert stored_files(tmp_path) == []
 
 
-# --- GET /clients/{client_id}/documents/{document_id} ---
+# --- GET /api/v1/clients/{client_id}/documents/{document_id} ---
 
 
 def upload(client, client_id) -> dict:
@@ -121,11 +138,11 @@ def test_get_document_returns_metadata(client, demo_client):
     assert response.json() == uploaded
 
 
-def test_get_document_of_another_client_returns_404(client, db_session, demo_client):
+def test_get_document_of_another_client_returns_404(
+    client, client_factory, demo_client
+):
     uploaded = upload(client, demo_client.id)
-    other_client = Client(name="Other Client")
-    db_session.add(other_client)
-    db_session.commit()
+    other_client = client_factory("Other Client")
 
     # Client isolation: asking for demo_client's document under another client's
     # URL must look exactly like the document doesn't exist.
@@ -140,10 +157,10 @@ def test_get_unknown_document_returns_404(client, demo_client):
     assert response.status_code == 404
 
 
-# --- GET /clients/{client_id}/documents ---
+# --- GET /api/v1/clients/{client_id}/documents ---
 
 
-def test_list_dofor_client(client, db_session, demo_client):
+def test_list_documents_for_client(client, demo_client):
     upload(client, demo_client.id)
     upload(client, demo_client.id)
 
@@ -168,11 +185,9 @@ def test_list_documents_unknown_client(client):
 
 
 # docs from other clients are not returned
-def test_list_documents_excludes_other_clients(client, db_session, demo_client):
+def test_list_documents_excludes_other_clients(client, client_factory, demo_client):
     upload(client, demo_client.id)
-    other_client = Client(name="Other Client")
-    db_session.add(other_client)
-    db_session.commit()
+    other_client = client_factory("Other Client")
     upload(client, other_client.id)
 
     response = client.get(documents_url(demo_client.id))
@@ -183,16 +198,7 @@ def test_list_documents_excludes_other_clients(client, db_session, demo_client):
 
 @pytest.mark.parametrize(
     ("filename", "content", "content_type", "expected_status"),
-    [
-        ("brief.docx", b"hello", "text/plain", 415),
-        ("brief", b"hello", "application/octet-stream", 415),
-        ("brief.txt", b"\xff", "text/plain", 422),
-        ("brief.txt", b" \t\n", "text/plain", 422),
-        ("brief.md", b"---", "text/markdown", 422),
-        ("brief.pdf", b"not a PDF", "application/pdf", 422),
-        ("brief.pdf", make_pdf([None]), "application/pdf", 422),
-        ("brief.pdf", make_pdf(["hello"], password="secret"), "application/pdf", 422),
-    ],
+    invalid_upload_samples(),
 )
 def test_invalid_upload_leaves_no_document_or_file(
     client,
@@ -213,3 +219,49 @@ def test_invalid_upload_leaves_no_document_or_file(
     assert response.json()["detail"]
     assert db_session.scalar(select(func.count()).select_from(SourceDocument)) == 0
     assert stored_files(tmp_path) == []
+
+
+@pytest.mark.parametrize(
+    ("filename", "content", "content_type", "expected_status", "message"),
+    [
+        ("brief.docx", b"hello", "text/plain", 415, "Supported document formats"),
+        ("brief.txt", b"\xff", "text/plain", 422, "Invalid UTF-8"),
+        ("brief.pdf", b"not a PDF", "application/pdf", 422, "invalid or malformed"),
+    ],
+)
+def test_rejected_upload_preserves_existing_document(
+    client,
+    db_session,
+    storage,
+    demo_client,
+    tmp_path,
+    filename,
+    content,
+    content_type,
+    expected_status,
+    message,
+):
+    original = upload(client, demo_client.id)
+    document = db_session.get(SourceDocument, uuid.UUID(original["id"]))
+    original_bytes = storage.read(document.storage_key)
+    original_files = set(stored_files(tmp_path))
+
+    # Reuse the existing filename for the corrupt text case to catch overwrites.
+    if filename.endswith(".txt"):
+        filename = original["original_filename"]
+    rejected = client.post(
+        documents_url(demo_client.id),
+        files={"file": (filename, content, content_type)},
+    )
+
+    assert rejected.status_code == expected_status
+    assert message in rejected.json()["detail"]
+    assert db_session.scalar(select(func.count()).select_from(SourceDocument)) == 1
+    assert set(stored_files(tmp_path)) == original_files
+    assert storage.read(document.storage_key) == original_bytes
+    listed = client.get(documents_url(demo_client.id))
+    assert listed.status_code == 200
+    assert listed.json() == [original]
+    retrieved = client.get(f"{documents_url(demo_client.id)}/{original['id']}")
+    assert retrieved.status_code == 200
+    assert retrieved.json() == original
