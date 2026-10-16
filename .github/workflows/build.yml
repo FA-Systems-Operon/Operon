@@ -60,11 +60,12 @@ jobs:
           python-version: "3.13"
 
       - name: Install test dependencies
+        # Hashed lock of requirements.txt + requirements-dev.txt (see backend/README.md).
         # Wheels only (no source builds), so no package setup scripts run in CI.
         # "run: |" keeps YAML from reading the ":all: " as a key/value pair.
         run: |
-          python -m pip install --only-binary=:all: \
-            -r backend/requirements.txt -r backend/requirements-dev.txt
+          python -m pip install --require-hashes --only-binary=:all: \
+            -r backend/requirements-dev.lock
 
       - name: Run tests with coverage
         env:

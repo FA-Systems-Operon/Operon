@@ -1,5 +1,5 @@
 # Test-only dependencies. Not installed in the Docker image.
-# Install alongside the app's: pip install -r requirements.txt -r requirements-dev.txt
+# Installed via requirements-dev.lock (regenerate it after editing; see README.md).
 pytest==9.1.1
 pytest-cov==7.1.0
 # Starlette's TestClient uses httpx2 (plain httpx is deprecated for it).
