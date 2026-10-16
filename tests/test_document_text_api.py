@@ -2,7 +2,7 @@
 
 import hashlib
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pytest
 from fastapi.testclient import TestClient
@@ -109,6 +109,82 @@ def test_repeated_extraction_returns_same_result(client, db_session, demo_client
     assert first.status_code == second.status_code == 200
     assert second.json() == first.json()
     assert db_session.scalar(select(func.count()).select_from(ExtractedText)) == 1
+
+
+@pytest.mark.parametrize("already_extracted", [False, True])
+def test_force_extraction_refreshes_saved_result(
+    client, db_session, storage, demo_client, already_extracted
+):
+    uploaded = upload_document(client, demo_client.id)
+    document_id = uuid.UUID(uploaded["id"])
+    url = document_url(demo_client.id, document_id)
+    old_timestamp = datetime(2000, 1, 1, tzinfo=timezone.utc)
+    if already_extracted:
+        db_session.add(
+            ExtractedText(
+                document_id=document_id,
+                text="Outdated extractor output",
+                extracted_at=old_timestamp,
+            )
+        )
+        db_session.commit()
+
+    response = client.post(f"{url}/extract", params={"force": "true"})
+
+    assert response.status_code == 200
+    assert response.json()["text"] == "Alice: Hello."
+    assert datetime.fromisoformat(response.json()["extracted_at"]) > old_timestamp
+    assert client.get(f"{url}/text").json() == response.json()
+    assert client.post(f"{url}/extract").json() == response.json()
+    assert db_session.scalar(select(func.count()).select_from(ExtractedText)) == 1
+    assert client.get(url).json() == uploaded
+    document = db_session.get(SourceDocument, document_id)
+    assert storage.read(document.storage_key) == b"Alice: Hello.  \r\n"
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        pytest.param(b"invalid PDF", id="invalid-pdf"),
+        pytest.param(
+            make_pdf(["Readable page"] + [None] * MAX_PDF_PAGES),
+            id="pdf-over-page-limit",
+        ),
+    ],
+)
+def test_force_validation_failure_preserves_saved_result(
+    client, db_session, storage, demo_client, stored_document, data
+):
+    document = stored_document(data, "legacy.pdf", "application/pdf")
+    document_id = document.id
+    url = document_url(demo_client.id, document_id)
+    db_session.add(ExtractedText(document_id=document_id, text="Previous saved text"))
+    db_session.commit()
+    saved = client.get(f"{url}/text").json()
+
+    response = client.post(f"{url}/extract", params={"force": "true"})
+
+    assert response.status_code == 422
+    assert client.get(f"{url}/text").json() == saved
+    assert storage.read(document.storage_key) == data
+
+
+def test_force_extraction_cannot_access_another_clients_document(
+    client, db_session, demo_client, client_factory
+):
+    uploaded = upload_document(client, demo_client.id)
+    owner_url = document_url(demo_client.id, uploaded["id"])
+    saved = client.post(f"{owner_url}/extract").json()
+    other = client_factory("Other client")
+    other_url = document_url(other.id, uploaded["id"])
+    unknown_url = document_url(other.id, uuid.uuid4())
+
+    response = client.post(f"{other_url}/extract", params={"force": "true"})
+    missing = client.post(f"{unknown_url}/extract", params={"force": "true"})
+
+    assert response.status_code == missing.status_code == 404
+    assert response.json() == missing.json()
+    assert client.get(f"{owner_url}/text").json() == saved
 
 
 def test_get_before_extraction_returns_404(client, db_session, demo_client):

@@ -2,6 +2,7 @@
 
 import hashlib
 import uuid
+from datetime import datetime, timezone
 
 import pytest
 from sqlalchemy import func, select
@@ -87,6 +88,75 @@ def test_reuses_saved_result_without_reading_file_again(
     assert second.text == first.text
     assert second.extracted_at == timestamp
     assert db_session.scalar(select(func.count()).select_from(ExtractedText)) == 1
+
+
+@pytest.mark.parametrize("saved_text", ["Outdated extractor output", "Alice: Hello."])
+def test_force_reextracts_and_refreshes_timestamp(
+    db_session, storage, demo_client, stored_document, saved_text
+):
+    document = stored_document()
+    document_id = document.id
+    key = document.storage_key
+    old_timestamp = datetime(2000, 1, 1, tzinfo=timezone.utc)
+    db_session.add(
+        ExtractedText(
+            document_id=document_id, text=saved_text, extracted_at=old_timestamp
+        )
+    )
+    db_session.commit()
+
+    cached = extract_document(demo_client.id, document_id, db_session, storage)
+    assert cached.text == saved_text
+    assert cached.extracted_at == old_timestamp
+
+    result = extract_document(
+        demo_client.id, document_id, db_session, storage, force=True
+    )
+    assert result.text == "Alice: Hello."
+    assert result.extracted_at > old_timestamp
+    db_session.expunge_all()
+    assert db_session.get(ExtractedText, document_id).text == "Alice: Hello."
+    assert db_session.scalar(select(func.count()).select_from(ExtractedText)) == 1
+    assert storage.read(key) == b"Alice: Hello.  \r\n"
+
+
+@pytest.mark.parametrize("failure", ["extract", "read", "commit"])
+def test_force_failure_preserves_previous_text_and_timestamp(
+    db_session, storage, demo_client, stored_document, monkeypatch, failure
+):
+    document = stored_document()
+    document_id = document.id
+    key = document.storage_key
+    old_timestamp = datetime(2000, 1, 1, tzinfo=timezone.utc)
+    db_session.add(
+        ExtractedText(
+            document_id=document_id,
+            text="Previous saved text",
+            extracted_at=old_timestamp,
+        )
+    )
+    db_session.commit()
+
+    def fail(*args, **kwargs):
+        raise RuntimeError("simulated re-extraction failure")
+
+    with monkeypatch.context() as patch:
+        if failure == "extract":
+            patch.setattr("src.document_extraction.extract_txt", fail)
+        elif failure == "read":
+            patch.setattr(storage, "read", fail)
+        else:
+            patch.setattr(db_session, "commit", fail)
+        with pytest.raises(RuntimeError, match="simulated re-extraction failure"):
+            extract_document(
+                demo_client.id, document_id, db_session, storage, force=True
+            )
+
+    db_session.expunge_all()
+    saved = db_session.get(ExtractedText, document_id)
+    assert saved.text == "Previous saved text"
+    assert saved.extracted_at == old_timestamp
+    assert storage.read(key) == b"Alice: Hello.  \r\n"
 
 
 @pytest.mark.parametrize("other_client", [False, True])

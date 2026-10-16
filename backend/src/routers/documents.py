@@ -4,7 +4,7 @@ import hashlib
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -95,11 +95,20 @@ def upload_document(
 
 @router.post("/{document_id}/extract", response_model=ExtractedTextOut)
 def extract_document_text(
-    client_id: uuid.UUID, document_id: uuid.UUID, db: DbSession, storage: Storage
+    client_id: uuid.UUID,
+    document_id: uuid.UUID,
+    db: DbSession,
+    storage: Storage,
+    force: Annotated[
+        bool,
+        Query(
+            description="Re-extract with the current extractor, replacing saved text"
+        ),
+    ] = False,
 ) -> ExtractedText:
     """Extract and save a client's document text, or return its saved result."""
     try:
-        return extract_document(client_id, document_id, db, storage)
+        return extract_document(client_id, document_id, db, storage, force=force)
     except DocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Document not found") from exc
     except UnsupportedDocumentTypeError as exc:
