@@ -4,7 +4,7 @@ import uuid
 from collections.abc import Callable
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from src.markdown_extraction import extract_markdown
@@ -56,11 +56,15 @@ def extract_document(
     document_id: uuid.UUID,
     db: Session,
     storage: DocumentStorage,
+    *,
+    force: bool = False,
 ) -> ExtractedText:
     """Extract and commit text for a client's document, or reuse its saved result.
 
     Lock the source row until the transaction ends so repeated requests cannot
-    create competing results. Extraction failures leave the upload unchanged.
+    create competing results. With force=True, replace saved text using the
+    current extractor and refresh its timestamp, even if the text is unchanged.
+    Extraction failures preserve both the upload and any previously saved text.
     Commit on success and roll back the session on any failure. Missing files
     and extractor errors propagate for the API layer to handle later.
     """
@@ -76,11 +80,16 @@ def extract_document(
             raise DocumentNotFoundError("Document not found")
 
         result = db.get(ExtractedText, document_id)
-        if result is None:
+        if result is None or force:
             extractor = _extractor_for(document)
             data = storage.read(document.storage_key)
-            result = ExtractedText(document_id=document_id, text=extractor(data))
-            db.add(result)
+            text = extractor(data)
+            if result is None:
+                result = ExtractedText(document_id=document_id, text=text)
+                db.add(result)
+            else:
+                result.text = text
+                result.extracted_at = func.now()
             db.flush()
             db.refresh(result)
         db.commit()

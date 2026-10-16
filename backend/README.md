@@ -108,6 +108,15 @@ The extraction and text responses contain `document_id`, `text`, and
 original upload and metadata stay unchanged. A filename's extension selects the
 extractor; files without extensions use their recorded MIME type.
 
+After an extractor fix, use
+`POST /api/v1/clients/{client_id}/documents/{document_id}/extract?force=true`
+to re-extract the original with the current extractor. This replaces the saved
+text and refreshes `extracted_at`, even if the text is unchanged. The document
+lock still serializes extraction requests. If re-extraction fails, the previous
+text and timestamp remain available. Normal requests continue to reuse saved
+text; extractor updates do not automatically refresh existing results. The
+100-page PDF limit also applies to forced extraction.
+
 Both text endpoints return `404` for another client's document or an unknown ID.
 Text retrieval also returns `404` before successful extraction. Extraction returns
 `415` for unsupported formats, `422` for invalid or unreadable content (including
