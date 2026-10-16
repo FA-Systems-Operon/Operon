@@ -53,3 +53,48 @@ class ExtractedTextOut(BaseModel):
     document_id: uuid.UUID
     text: str
     extracted_at: datetime
+
+
+class ClientProfileOut(BaseModel):
+    """A client profile record returned by the API."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    client_id: uuid.UUID
+    created_at: datetime
+
+
+class ClientProfileVersionOut(BaseModel):
+    """A single immutable version of a client profile."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    client_profile_id: uuid.UUID
+    version_number: int
+    data: dict
+    created_at: datetime
+    approved_at: datetime | None = None
+
+
+class PlaybookOut(BaseModel):
+    """A playbook record returned by the API."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    created_at: datetime
+
+
+class PlaybookVersionOut(BaseModel):
+    """A single immutable version of a playbook."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    playbook_id: uuid.UUID
+    version_number: int
+    data: dict
+    created_at: datetime
+    approved_at: datetime | None = None

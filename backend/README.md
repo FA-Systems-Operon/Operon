@@ -157,3 +157,60 @@ curl http://localhost:8000/api/v1/clients/11111111-1111-1111-1111-111111111111/d
 
 Both responses should contain `Client meeting\n\nAlice: Hello.` as their `text`.
 The same routes are available interactively at `http://localhost:8000/api/v1/docs`.
+
+## Latest approved profile and playbook versions (#19)
+
+This backend feature builds on `feature/18-version-logic` plus current `main`.
+Each version has a nullable, timezone-aware `approved_at` timestamp. `NULL` means
+unapproved. Creation and editing always produce unapproved versions; approval is
+not inherited from the previous snapshot. Approval metadata is separate from the
+immutable snapshot data.
+
+| Request | Result |
+| --- | --- |
+| `GET /client-profiles/{profile_id}/latest-approved` | Highest numbered approved version of this profile. |
+| `GET /playbooks/{playbook_id}/latest-approved` | Highest numbered approved version of this playbook. |
+
+Both endpoints return `200` with the version ID, parent ID, `version_number`,
+`data`, `created_at`, and `approved_at`. Ordering uses **version number**, not
+approval time: approving version 2 after version 3 still returns version 3.
+A newer draft is excluded. UUID is a deterministic final tie-breaker for legacy
+duplicate version numbers; it does not represent chronology.
+
+An existing record with no approved versions returns `404` with
+`{"detail": "No approved version found"}`. An unknown parent returns `404` with
+`Client profile not found` or `Playbook not found`. Invalid UUIDs return `422`.
+The service functions in `src/versioning.py` return `None` when no approved
+version matches, including for an unknown parent.
+
+No frontend controls or approval-write endpoint are introduced. A future approval
+workflow must set `approved_at` after authorized review; sending an `approved_at`
+key in the existing update endpoint's JSON data does not approve a version.
+These routes inherit the existing backend's lack of authentication; authorization
+and approval actor/audit tracking remain separate work.
+
+### Existing development databases
+
+Fresh databases get the new columns through `create_all`. If you already ran
+#18's version tables, apply this additive script before starting the updated API:
+
+```bash
+docker compose exec -T db sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
+  < backend/migrations/001_add_version_approved_at.sql
+```
+
+The script can be rerun. It preserves existing data and leaves all existing
+versions unapproved. Do not infer approval from their age or version number.
+
+### Tests
+
+With the backend and test requirements installed and `TEST_DATABASE_URL` pointing
+to a dedicated database whose name ends in `_test`:
+
+```bash
+pytest tests/test_latest_approved.py -q
+```
+
+The existing CI `pytest --cov` command includes these tests automatically. Tests
+use PostgreSQL and create approval timestamps directly; they do not require an
+approval UI, Ollama, or a running frontend.
