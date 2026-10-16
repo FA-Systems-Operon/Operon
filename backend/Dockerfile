@@ -7,9 +7,11 @@ RUN useradd --create-home --uid 1000 appuser && \
 
 WORKDIR /code
 
-COPY ./requirements.txt /code/requirements.txt
+# Hashed lock file generated from requirements.txt (see README.md)
+COPY ./requirements.lock /code/requirements.lock
 
-RUN pip install --no-cache-dir --upgrade --only-binary=:all: -r /code/requirements.txt
+RUN pip install --no-cache-dir --upgrade --require-hashes --only-binary=:all: \
+    -r /code/requirements.lock
 
 COPY --chown=appuser:appuser ./src /code/src
 

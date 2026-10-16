@@ -12,6 +12,44 @@ docker compose up --build api db
 The API is served on port 8000 (docs at `/api/v1/docs`). Postgres runs in the
 `db` service (database `operon`, user `operon`, password from `POSTGRES_PASSWORD`).
 
+## Dependencies (hashed lock files)
+
+`requirements.txt` (app) and `requirements-dev.txt` (tests) list the direct
+dependencies. Installs use generated lock files that pin every package,
+including transitive ones, with SHA-256 hashes:
+
+- `requirements.lock`: installed by the Docker image.
+- `requirements-dev.lock`: app + test dependencies, installed by CI.
+
+Don't edit the `.lock` files by hand. **Rerun both commands whenever
+`requirements.txt` or `requirements-dev.txt` changes**, and commit the updated
+lock files with that change. Run them from the repo root (not `backend/`) with
+[uv](https://docs.astral.sh/uv/):
+
+```bash
+uv pip compile backend/requirements.txt \
+  --universal --python-version 3.13 --generate-hashes \
+  --exclude-newer "14 days" --exclude-newer-package pypdf=false \
+  -o backend/requirements.lock
+
+uv pip compile backend/requirements.txt backend/requirements-dev.txt \
+  --universal --python-version 3.13 --generate-hashes \
+  --exclude-newer "14 days" --exclude-newer-package pypdf=false \
+  -o backend/requirements-dev.lock
+```
+
+The locks target Python 3.13. `--universal` makes them work on both Linux x86
+(CI) and ARM (Docker on Macs). `--exclude-newer "14 days"` keeps transitive
+dependencies on releases at least two weeks old. `--exclude-newer-package`
+exempts `pypdf` because its pin in `requirements.txt` is newer than that. Remove
+the exemption once that pin is two weeks old.
+
+To run the tests locally, install the dev lock into a virtualenv:
+
+```bash
+pip install --require-hashes --only-binary=:all: -r backend/requirements-dev.lock
+```
+
 ## Database schema (no migrations yet)
 
 Tables are created when the app starts, using `Base.metadata.create_all()` in

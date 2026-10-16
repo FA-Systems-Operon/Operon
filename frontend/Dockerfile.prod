@@ -1,11 +1,16 @@
 FROM node:24-alpine AS build
-  WORKDIR /app
-  COPY package.json package-lock.json ./
-  RUN npm ci --ignore-scripts
-  COPY index.html vite.config.ts tsconfig.json tsconfig.node.json ./
-  COPY src ./src
-  RUN npm run build
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --ignore-scripts
+COPY index.html vite.config.ts tsconfig.json tsconfig.node.json ./
+COPY src ./src
+RUN npm run build
 
-  FROM caddy:2-alpine
-  COPY --from=build /app/dist /srv
-  CMD ["caddy", "file-server", "--root", "/srv", "--listen", ":5173"]
+FROM caddy:2-alpine
+# Run as a non-root user. Port 5173 needs no privileges, and Caddy only writes
+# to its data/config dirs, so give the user those.
+RUN addgroup -S -g 1000 caddy && adduser -S -D -H -u 1000 -G caddy caddy && \
+    chown -R caddy:caddy /data /config
+COPY --from=build /app/dist /srv
+USER caddy
+CMD ["caddy", "file-server", "--root", "/srv", "--listen", ":5173"]
