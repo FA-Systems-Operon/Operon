@@ -9,6 +9,7 @@ from tests.sample_data import invalid_upload_samples, make_pdf
 
 from src.config import settings
 from src.models import SourceDocument
+from src.pdf_extraction import MAX_PDF_PAGES
 
 
 def documents_url(client_id) -> str:
@@ -198,7 +199,16 @@ def test_list_documents_excludes_other_clients(client, client_factory, demo_clie
 
 @pytest.mark.parametrize(
     ("filename", "content", "content_type", "expected_status"),
-    invalid_upload_samples(),
+    invalid_upload_samples()
+    + [
+        pytest.param(
+            "brief.pdf",
+            make_pdf(["Readable page"] + [None] * MAX_PDF_PAGES),
+            "application/pdf",
+            422,
+            id="pdf-over-page-limit",
+        ),
+    ],
 )
 def test_invalid_upload_leaves_no_document_or_file(
     client,

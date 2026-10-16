@@ -11,6 +11,7 @@ from tests.sample_data import make_pdf
 
 from src.main import app
 from src.models import Client, ExtractedText, SourceDocument
+from src.pdf_extraction import MAX_PDF_PAGES
 
 
 def document_url(client_id, document_id) -> str:
@@ -188,6 +189,11 @@ def test_unsupported_format_returns_415(client, db_session, storage, demo_client
         ("transcript.pdf", b"not a PDF"),
         ("transcript.pdf", make_pdf(["Alice: Hello."], password="secret")),
         ("transcript.pdf", make_pdf([None])),
+        pytest.param(
+            "transcript.pdf",
+            make_pdf(["Readable page"] + [None] * MAX_PDF_PAGES),
+            id="pdf-over-page-limit",
+        ),
     ],
 )
 def test_invalid_content_returns_422_and_preserves_upload(

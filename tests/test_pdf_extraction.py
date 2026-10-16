@@ -3,7 +3,7 @@
 from io import BytesIO
 
 import pytest
-from pypdf import PdfReader, PdfWriter
+from pypdf import PageObject, PdfReader, PdfWriter
 from pypdf.errors import DependencyError
 from pypdf.generic import (
     DecodedStreamObject,
@@ -13,7 +13,7 @@ from pypdf.generic import (
 )
 from tests.sample_data import make_pdf
 
-from src.pdf_extraction import extract_pdf
+from src.pdf_extraction import MAX_PDF_PAGES, extract_pdf
 
 
 def test_extracts_normalized_transcript():
@@ -30,6 +30,38 @@ def test_preserves_page_order_and_skips_blank_pages():
     assert extract_pdf(data) == (
         "[00:01] Alice: First page.\n\n[00:02] Bob: Second page."
     )
+
+
+def test_extracts_pdf_at_page_limit():
+    pages = [f"Page {number}" for number in range(1, MAX_PDF_PAGES + 1)]
+
+    assert extract_pdf(make_pdf(pages)) == "\n\n".join(pages)
+
+
+@pytest.mark.parametrize("extra_page", [None, "Over the limit"])
+def test_rejects_pdf_over_page_limit_before_extracting_text(monkeypatch, extra_page):
+    data = make_pdf(["Readable page"] * MAX_PDF_PAGES + [extra_page])
+
+    def unexpected_extraction(*args, **kwargs):
+        pytest.fail("Oversized PDFs must be rejected before extracting any text")
+
+    monkeypatch.setattr(PageObject, "extract_text", unexpected_extraction)
+
+    with pytest.raises(
+        ValueError, match=f"^PDF exceeds the maximum of {MAX_PDF_PAGES} pages$"
+    ):
+        extract_pdf(data)
+
+
+def test_rejects_malformed_page_tree():
+    writer = PdfWriter()
+    writer.add_blank_page(width=612, height=792)
+    writer._pages.get_object()[NameObject("/Kids")] = NumberObject(1)
+    output = BytesIO()
+    writer.write(output)
+
+    with pytest.raises(ValueError, match="malformed or unsupported content"):
+        extract_pdf(output.getvalue())
 
 
 @pytest.mark.parametrize("pages", [[], [None], [" \t"], [None, None]])

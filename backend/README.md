@@ -55,6 +55,10 @@ Upload the original file first, then request extraction separately. TXT, Markdow
 transcription are outside this feature. TXT and Markdown support UTF-8 and
 BOM-marked UTF-16.
 
+PDFs are limited to 100 pages, including blank and image-only pages. Larger PDFs
+return `422` before any text is extracted, during both upload validation and
+extraction of previously stored files.
+
 | Request | Behavior |
 | --- | --- |
 | `POST /api/v1/clients/{client_id}/documents` | Saves the original file and returns its metadata (`201`). |
