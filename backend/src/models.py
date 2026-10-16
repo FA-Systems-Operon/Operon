@@ -87,7 +87,8 @@ class ClientProfile(Base):
 class ClientProfileVersion(Base):
     """An immutable snapshot of a ClientProfile at a point in time.
 
-    Never update an existing row — insert a new one with an incremented version_number.
+    Never overwrite snapshot data — insert a new row with an incremented version_number.
+    Approval metadata may be set separately by the approval workflow.
     The data column is a placeholder until the profile schema is defined.
     """
 
@@ -103,6 +104,9 @@ class ClientProfileVersion(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+
+    # NULL means unapproved. New versions never inherit approval.
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     profile: Mapped[ClientProfile] = relationship(back_populates="versions")
 
@@ -123,7 +127,8 @@ class Playbook(Base):
 class PlaybookVersion(Base):
     """An immutable snapshot of a Playbook at a point in time.
 
-    Never update an existing row — insert a new one with an incremented version_number.
+    Never overwrite snapshot data — insert a new row with an incremented version_number.
+    Approval metadata may be set separately by the approval workflow.
     The data column is a placeholder until the playbook schema is defined.
     """
 
@@ -139,5 +144,8 @@ class PlaybookVersion(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+
+    # NULL means unapproved. New versions never inherit approval.
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     playbook: Mapped[Playbook] = relationship(back_populates="versions")

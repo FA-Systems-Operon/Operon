@@ -8,8 +8,11 @@ from sqlalchemy.orm import Session
 
 from src.db import get_db
 from src.models import Playbook, PlaybookVersion
-from src.schemas import PlaybookOut, PlaybookVersionOut
-from src.versioning import next_playbook_version
+from src.schemas import PlaybookVersionOut
+from src.versioning import (
+    get_latest_approved_playbook_version,
+    next_playbook_version,
+)
 
 router = APIRouter(prefix="/playbooks", tags=["playbooks"])
 
@@ -65,3 +68,14 @@ def list_playbook_versions(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Playbook not found")
 
     return sorted(playbook.versions, key=lambda v: v.version_number)
+
+
+@router.get("/{playbook_id}/latest-approved", response_model=PlaybookVersionOut)
+def latest_approved_playbook(playbook_id: uuid.UUID, db: DbSession) -> PlaybookVersion:
+    """Return the highest approved version number, regardless of approval time."""
+    if db.get(Playbook, playbook_id) is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Playbook not found")
+    version = get_latest_approved_playbook_version(db, playbook_id)
+    if version is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No approved version found")
+    return version

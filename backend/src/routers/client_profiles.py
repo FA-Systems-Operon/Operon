@@ -8,15 +8,20 @@ from sqlalchemy.orm import Session
 
 from src.db import get_db
 from src.models import ClientProfile, ClientProfileVersion
-from src.schemas import ClientProfileOut, ClientProfileVersionOut
-from src.versioning import next_client_profile_version
+from src.schemas import ClientProfileVersionOut
+from src.versioning import (
+    get_latest_approved_client_profile_version,
+    next_client_profile_version,
+)
 
 router = APIRouter(prefix="/client-profiles", tags=["client-profiles"])
 
 DbSession = Annotated[Session, Depends(get_db)]
 
 
-@router.post("", response_model=ClientProfileVersionOut, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "", response_model=ClientProfileVersionOut, status_code=status.HTTP_201_CREATED
+)
 def create_client_profile(client_id: uuid.UUID, db: DbSession) -> ClientProfileVersion:
     """Create a new client profile and its first version."""
     profile = ClientProfile(client_id=client_id)
@@ -65,3 +70,16 @@ def list_client_profile_versions(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Client profile not found")
 
     return sorted(profile.versions, key=lambda v: v.version_number)
+
+
+@router.get("/{profile_id}/latest-approved", response_model=ClientProfileVersionOut)
+def latest_approved_client_profile(
+    profile_id: uuid.UUID, db: DbSession
+) -> ClientProfileVersion:
+    """Return the highest approved version number, regardless of approval time."""
+    if db.get(ClientProfile, profile_id) is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Client profile not found")
+    version = get_latest_approved_client_profile_version(db, profile_id)
+    if version is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No approved version found")
+    return version
