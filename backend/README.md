@@ -23,30 +23,31 @@ including transitive ones, with SHA-256 hashes:
 
 Don't edit the `.lock` files by hand. **Rerun both commands whenever
 `requirements.txt` or `requirements-dev.txt` changes**, and commit the updated
-lock files with that change. Run them from `backend/` with
+lock files with that change. Run them from the repo root (not `backend/`) with
 [uv](https://docs.astral.sh/uv/):
 
 ```bash
-uv pip compile --generate-hashes --python-version 3.13 \
-  --python-platform x86_64-unknown-linux-gnu \
+uv pip compile backend/requirements.txt \
+  --universal --python-version 3.13 --generate-hashes \
   --exclude-newer "14 days" --exclude-newer-package pypdf=false \
-  requirements.txt -o requirements.lock
-uv pip compile --generate-hashes --python-version 3.13 \
-  --python-platform x86_64-unknown-linux-gnu \
+  -o backend/requirements.lock
+
+uv pip compile backend/requirements.txt backend/requirements-dev.txt \
+  --universal --python-version 3.13 --generate-hashes \
   --exclude-newer "14 days" --exclude-newer-package pypdf=false \
-  requirements.txt requirements-dev.txt -o requirements-dev.lock
+  -o backend/requirements-dev.lock
 ```
 
-The locks target Linux and Python 3.13, which Docker and CI both use.
-`--exclude-newer "14 days"` keeps transitive dependencies on releases at least two
-weeks old. `--exclude-newer-package` exempts `pypdf` because its pin in
-`requirements.txt` is newer than that. Remove the exemption once that pin is
-two weeks old.
+The locks target Python 3.13. `--universal` makes them work on both Linux x86
+(CI) and ARM (Docker on Macs). `--exclude-newer "14 days"` keeps transitive
+dependencies on releases at least two weeks old. `--exclude-newer-package`
+exempts `pypdf` because its pin in `requirements.txt` is newer than that. Remove
+the exemption once that pin is two weeks old.
 
 To run the tests locally, install the dev lock into a virtualenv:
 
 ```bash
-pip install --require-hashes --only-binary=:all: -r requirements-dev.lock
+pip install --require-hashes --only-binary=:all: -r backend/requirements-dev.lock
 ```
 
 ## Database schema (no migrations yet)
