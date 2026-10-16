@@ -75,6 +75,7 @@ class ClientProfileVersionOut(BaseModel):
     version_number: int
     data: dict
     created_at: datetime
+    approved_at: datetime | None = None
 
 
 class PlaybookOut(BaseModel):
@@ -96,3 +97,4 @@ class PlaybookVersionOut(BaseModel):
     version_number: int
     data: dict
     created_at: datetime
+    approved_at: datetime | None = None

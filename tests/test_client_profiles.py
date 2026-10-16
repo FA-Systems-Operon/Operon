@@ -2,12 +2,13 @@
 
 import uuid
 
-
 # --- POST /client-profiles ---
 
 
 def test_create_client_profile(client, demo_client):
-    response = client.post("/client-profiles", params={"client_id": str(demo_client.id)})
+    response = client.post(
+        "/client-profiles", params={"client_id": str(demo_client.id)}
+    )
 
     assert response.status_code == 201
     body = response.json()

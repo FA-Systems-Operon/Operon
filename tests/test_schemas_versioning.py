@@ -7,6 +7,7 @@ import uuid
 from datetime import datetime, timezone
 
 import pytest
+from pydantic import ValidationError
 
 from src.schemas import (
     ClientProfileOut,
@@ -34,7 +35,7 @@ def test_client_profile_out_valid():
 
 
 def test_client_profile_out_missing_field():
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         ClientProfileOut(id=uuid.uuid4(), created_at=NOW)
 
 
@@ -67,7 +68,7 @@ def test_client_profile_version_out_empty_data():
 
 
 def test_client_profile_version_out_missing_version_number():
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         ClientProfileVersionOut(
             id=uuid.uuid4(),
             client_profile_id=uuid.uuid4(),
@@ -103,7 +104,7 @@ def test_playbook_out_valid():
 
 
 def test_playbook_out_missing_field():
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         PlaybookOut(created_at=NOW)
 
 
@@ -136,7 +137,7 @@ def test_playbook_version_out_empty_data():
 
 
 def test_playbook_version_out_missing_version_number():
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         PlaybookVersionOut(
             id=uuid.uuid4(),
             playbook_id=uuid.uuid4(),
