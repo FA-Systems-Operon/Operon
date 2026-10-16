@@ -7,12 +7,15 @@ from pypdf.errors import DependencyError, PyPdfError
 
 from src.text_normalization import normalize_text
 
+MAX_PDF_PAGES = 100
+
 
 def extract_pdf(data: bytes) -> str:
     """Read embedded text in page order, with a blank line between readable pages.
 
-    Skip pages without text. Reject encrypted PDFs, malformed or unsupported
-    content, NUL characters, and PDFs without readable text. Raises ValueError.
+    Skip pages without text. Reject PDFs exceeding MAX_PDF_PAGES, encrypted PDFs,
+    malformed or unsupported content, NUL characters, and PDFs without readable
+    text. Raises ValueError. The page limit includes blank and image-only pages.
     Image-only pages are not transcribed; this function does not perform OCR.
     """
     try:
@@ -26,6 +29,20 @@ def extract_pdf(data: bytes) -> str:
     try:
         if reader.is_encrypted:
             raise ValueError("Encrypted PDFs are not supported")
+
+        try:
+            page_count = len(reader.pages)
+        except (
+            PyPdfError,
+            ValueError,
+            TypeError,
+            KeyError,
+            IndexError,
+            NotImplementedError,
+        ) as exc:
+            raise ValueError("PDF contains malformed or unsupported content") from exc
+        if page_count > MAX_PDF_PAGES:
+            raise ValueError(f"PDF exceeds the maximum of {MAX_PDF_PAGES} pages")
 
         pages: list[str] = []
         try:
