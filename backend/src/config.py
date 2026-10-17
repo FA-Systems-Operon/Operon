@@ -12,6 +12,8 @@ class Settings:
         self.AI_PROVIDER = os.getenv("AI_PROVIDER", "ollama")
         self.OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
         self.OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "").strip()
+        # How long to wait for one model reply. Local models can be slow.
+        self.OLLAMA_TIMEOUT_SECONDS = float(os.getenv("OLLAMA_TIMEOUT_SECONDS", "120"))
         # Folder where uploaded documents are saved. Relative paths are resolved
         # from the working directory (/code in Docker, so the default is /code/storage).
         self.STORAGE_DIR = os.getenv("STORAGE_DIR", "storage")

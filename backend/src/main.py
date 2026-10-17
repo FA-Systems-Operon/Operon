@@ -1,19 +1,20 @@
-import os
 from contextlib import asynccontextmanager
 
-import httpx
 from fastapi import FastAPI, HTTPException
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 import src.models  # noqa: F401  (importing registers the tables on Base.metadata)
+from src.ai import (
+    ProviderConfigError,
+    ProviderError,
+    ProviderResponseError,
+    get_provider,
+)
+from src.ai.ollama import OllamaProvider
+from src.config import settings
 from src.db import Base, engine
 from src.routers import client_profiles, clients, documents, playbooks
-
-OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434").rstrip(
-    "/"
-)
-OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "").strip()
 
 
 @asynccontextmanager
@@ -34,7 +35,8 @@ app = FastAPI(
     lifespan=lifespan,
 )
 print(
-    f"Ollama URL: {OLLAMA_BASE_URL} | model: {OLLAMA_MODEL or '(OLLAMA_MODEL not set)'}",
+    f"Ollama URL: {settings.OLLAMA_BASE_URL} | "
+    f"model: {settings.OLLAMA_MODEL or '(OLLAMA_MODEL not set)'}",
     flush=True,
 )
 
@@ -60,26 +62,30 @@ def check_db():
 
 def check_ollama():
     info = {
-        "url": OLLAMA_BASE_URL,
-        "configured_model": OLLAMA_MODEL or None,
+        "url": settings.OLLAMA_BASE_URL,
+        "configured_model": settings.OLLAMA_MODEL or None,
         "models": [],
         "model_installed": False,
     }
+    # Built directly instead of via get_provider(), so the status page still
+    # works when OLLAMA_MODEL isn't set yet.
+    provider = OllamaProvider(
+        base_url=settings.OLLAMA_BASE_URL, model=settings.OLLAMA_MODEL
+    )
     try:
-        response = httpx.get(f"{OLLAMA_BASE_URL}/api/tags", timeout=3)
-        response.raise_for_status()
-        models = [model["name"] for model in response.json().get("models", [])]
-        info.update(
-            {
-                "status": "ok",
-                "models": models,
-                "model_installed": bool(OLLAMA_MODEL) and OLLAMA_MODEL in models,
-            }
-        )
-        return info
-    except httpx.HTTPError as error:
+        models = provider.list_models(timeout=3)
+    except ProviderError as error:
         info["status"] = f"error: {type(error).__name__}"
         return info
+    info.update(
+        {
+            "status": "ok",
+            "models": models,
+            "model_installed": bool(settings.OLLAMA_MODEL)
+            and settings.OLLAMA_MODEL in models,
+        }
+    )
+    return info
 
 
 @app.get("/api/v1/status")
@@ -91,32 +97,21 @@ def status():
 @app.get("/api/v1/ollama/test")
 def ollama_test(prompt: str = "Say hello."):
     """Sends one prompt to the model to prove Ollama is usable."""
-    if not OLLAMA_MODEL:
-        raise HTTPException(
-            status_code=503,
-            detail="OLLAMA_MODEL is not set. Add it to your .env (see .env.example).",
-        )
     try:
-        response = httpx.post(
-            f"{OLLAMA_BASE_URL}/api/generate",
-            json={"model": OLLAMA_MODEL, "prompt": prompt, "stream": False},
-            timeout=120,
-        )
-        response.raise_for_status()
-    except httpx.HTTPStatusError as error:
+        reply = get_provider().generate(prompt)
+    except ProviderConfigError as error:
+        raise HTTPException(status_code=503, detail=str(error))
+    except ProviderResponseError as error:
         raise HTTPException(
             status_code=503,
             detail={
-                "message": "Reached Ollama, but it rejected /api/generate",
-                "url": OLLAMA_BASE_URL,
-                "model": OLLAMA_MODEL,
-                "ollama_status": error.response.status_code,
-                "ollama_body": error.response.text,
+                "message": str(error),
+                "url": settings.OLLAMA_BASE_URL,
+                "model": settings.OLLAMA_MODEL,
+                "ollama_status": error.status_code,
+                "ollama_body": error.body,
             },
         )
-    except httpx.HTTPError as error:
-        raise HTTPException(
-            status_code=503,
-            detail=f"Cannot reach Ollama at {OLLAMA_BASE_URL}: {type(error).__name__}",
-        )
-    return {"model": OLLAMA_MODEL, "response": response.json()["response"]}
+    except ProviderError as error:
+        raise HTTPException(status_code=503, detail=str(error))
+    return {"model": reply.model, "response": reply.text}
