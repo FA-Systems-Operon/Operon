@@ -1,14 +1,17 @@
 """Endpoints for creating and versioning client profiles."""
 
 import uuid
+from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from src.db import get_db
-from src.models import ClientProfile, ClientProfileVersion
-from src.schemas import ClientProfileVersionOut
+from src.models import ClientProfile, ClientProfileVersion, ReviewStatus
+from src.schemas import ApproveIn, ClientProfileVersionOut, ProfileApprovalOut
+from src.staleness import mark_stale_for_client_profile
 from src.versioning import (
     get_latest_approved_client_profile_version,
     next_client_profile_version,
@@ -83,3 +86,43 @@ def latest_approved_client_profile(
     if version is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "No approved version found")
     return version
+
+
+@router.post(
+    "/{profile_id}/versions/{version_id}/approve", response_model=ProfileApprovalOut
+)
+def approve_client_profile_version(
+    profile_id: uuid.UUID, version_id: uuid.UUID, body: ApproveIn, db: DbSession
+) -> ProfileApprovalOut:
+    """Approve one version, then mark artifacts built from older versions stale.
+
+    Approval and staleness marking commit in ONE transaction, so there is never
+    a moment where a newer profile is approved but old outputs look current.
+    """
+    # Same lock the artifact endpoints take; serialises approve vs. create.
+    if db.get(ClientProfile, profile_id, with_for_update=True) is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Client profile not found")
+    version = db.scalar(
+        select(ClientProfileVersion)
+        .where(
+            ClientProfileVersion.id == version_id,
+            ClientProfileVersion.client_profile_id == profile_id,
+        )
+        .with_for_update()
+    )
+    if version is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Profile version not found")
+    if version.approved_at is not None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Version is already approved")
+
+    version.status = ReviewStatus.APPROVED
+    version.approved_by = body.approved_by
+    version.approved_at = datetime.now(timezone.utc)
+    db.flush()
+
+    stale = mark_stale_for_client_profile(db, profile_id)
+    db.commit()
+    return ProfileApprovalOut(
+        version=ClientProfileVersionOut.model_validate(version),
+        newly_stale_artifact_version_ids=[a.id for a in stale],
+    )

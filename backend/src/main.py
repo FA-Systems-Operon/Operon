@@ -8,7 +8,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 import src.models  # noqa: F401  (importing registers the tables on Base.metadata)
 from src.db import Base, engine
-from src.routers import client_profiles, clients, documents, playbooks
+from src.routers import artifacts, client_profiles, clients, documents, playbooks
 
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434").rstrip(
     "/"
@@ -38,6 +38,7 @@ print(
     flush=True,
 )
 
+app.include_router(artifacts.router)
 app.include_router(clients.router)
 app.include_router(documents.router)
 app.include_router(client_profiles.router)

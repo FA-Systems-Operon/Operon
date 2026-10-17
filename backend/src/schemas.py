@@ -5,6 +5,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from src.models import ReviewStatus
+
 # What the API user sends
 
 
@@ -73,8 +75,10 @@ class ClientProfileVersionOut(BaseModel):
     id: uuid.UUID
     client_profile_id: uuid.UUID
     version_number: int
+    status: ReviewStatus
     data: dict
     created_at: datetime
+    approved_by: uuid.UUID | None = None
     approved_at: datetime | None = None
 
 
@@ -95,6 +99,62 @@ class PlaybookVersionOut(BaseModel):
     id: uuid.UUID
     playbook_id: uuid.UUID
     version_number: int
+    status: ReviewStatus
     data: dict
     created_at: datetime
+    approved_by: uuid.UUID | None = None
     approved_at: datetime | None = None
+
+
+class ApproveIn(BaseModel):
+    """Who is approving. TODO: derive from the authenticated user once auth exists."""
+
+    approved_by: uuid.UUID
+
+
+class ProfileApprovalOut(BaseModel):
+    """Result of approving a profile version, including what it made stale."""
+
+    version: ClientProfileVersionOut
+    newly_stale_artifact_version_ids: list[uuid.UUID]
+
+
+class PlaybookApprovalOut(BaseModel):
+    """Result of approving a playbook version, including what it made stale."""
+
+    version: PlaybookVersionOut
+    newly_stale_artifact_version_ids: list[uuid.UUID]
+
+
+class ArtifactVersionCreate(BaseModel):
+    """Body for a new artifact version; inputs must be the current approved ones."""
+
+    client_profile_version_id: uuid.UUID
+    playbook_version_id: uuid.UUID | None = None
+    data: dict = Field(default_factory=dict)
+
+
+class ArtifactCreate(ArtifactVersionCreate):
+    """Body for creating a new artifact (and its first version)."""
+
+    client_id: uuid.UUID
+    kind: str = Field(min_length=1, max_length=50)
+
+
+class ArtifactVersionOut(BaseModel):
+    """One version of an artifact, with provenance and staleness info."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    artifact_id: uuid.UUID
+    version_number: int
+    status: ReviewStatus
+    data: dict
+    client_profile_version_id: uuid.UUID
+    playbook_version_id: uuid.UUID | None
+    created_at: datetime
+    approved_by: uuid.UUID | None = None
+    approved_at: datetime | None = None
+    stale_at: datetime | None = None
+    stale_reason: str | None = None
