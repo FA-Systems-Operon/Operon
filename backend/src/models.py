@@ -131,7 +131,7 @@ class ClientProfileVersion(Base):
     """
 
     __tablename__ = "client_profile_versions"
-
+    __table_args__ = (UniqueConstraint("client_profile_id", "version_number"),)
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     client_profile_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("client_profiles.id"), index=True

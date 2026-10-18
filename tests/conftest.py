@@ -13,14 +13,6 @@ from pathlib import Path
 
 from sqlalchemy import create_engine, make_url, text
 
-from src.models import (
-    Client,
-    ClientProfile,
-    ClientProfileVersion,
-    Playbook,
-    PlaybookVersion,
-    ReviewStatus,
-)
 
 # Lets tests import the app as "src...", since the package lives in backend/src.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
@@ -46,7 +38,16 @@ from fastapi.testclient import TestClient
 
 from src.db import Base, SessionLocal, engine, get_db
 from src.main import app
-from src.models import SourceDocument
+from src.models import (
+    Client,
+    ClientProfile,
+    ClientProfileVersion,
+    Playbook,
+    PlaybookVersion,
+    ReviewStatus,
+    SourceDocument,
+)
+
 from src.storage import LocalFileStorage, get_storage
 
 
@@ -69,6 +70,7 @@ def _create_test_database() -> None:
 def database():
     """Create all tables once for the whole test run, and drop them at the end."""
     _create_test_database()
+    Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
     yield
     Base.metadata.drop_all(engine)

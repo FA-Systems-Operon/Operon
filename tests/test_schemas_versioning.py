@@ -47,6 +47,7 @@ def test_client_profile_version_out_valid():
         id=uuid.uuid4(),
         client_profile_id=uuid.uuid4(),
         version_number=1,
+        status="draft",
         data={"key": "value"},
         created_at=NOW,
     )
@@ -58,6 +59,7 @@ def test_client_profile_version_out_valid():
 def test_client_profile_version_out_empty_data():
     version = ClientProfileVersionOut(
         id=uuid.uuid4(),
+        status="draft",
         client_profile_id=uuid.uuid4(),
         version_number=1,
         data={},
@@ -71,6 +73,7 @@ def test_client_profile_version_out_missing_version_number():
     with pytest.raises(ValidationError):
         ClientProfileVersionOut(
             id=uuid.uuid4(),
+            status="draft",
             client_profile_id=uuid.uuid4(),
             data={},
             created_at=NOW,
@@ -81,6 +84,7 @@ def test_client_profile_version_out_missing_version_number():
 def test_client_profile_version_number_values(version_number: int):
     version = ClientProfileVersionOut(
         id=uuid.uuid4(),
+        status="draft",
         client_profile_id=uuid.uuid4(),
         version_number=version_number,
         data={},
@@ -114,6 +118,7 @@ def test_playbook_out_missing_field():
 def test_playbook_version_out_valid():
     version = PlaybookVersionOut(
         id=uuid.uuid4(),
+        status="draft",
         playbook_id=uuid.uuid4(),
         version_number=1,
         data={"steps": ["step1", "step2"]},
@@ -127,6 +132,7 @@ def test_playbook_version_out_valid():
 def test_playbook_version_out_empty_data():
     version = PlaybookVersionOut(
         id=uuid.uuid4(),
+        status="draft",
         playbook_id=uuid.uuid4(),
         version_number=1,
         data={},
@@ -140,6 +146,7 @@ def test_playbook_version_out_missing_version_number():
     with pytest.raises(ValidationError):
         PlaybookVersionOut(
             id=uuid.uuid4(),
+            status="draft",
             playbook_id=uuid.uuid4(),
             data={},
             created_at=NOW,
@@ -150,6 +157,7 @@ def test_playbook_version_out_missing_version_number():
 def test_playbook_version_number_values(version_number: int):
     version = PlaybookVersionOut(
         id=uuid.uuid4(),
+        status="draft",
         playbook_id=uuid.uuid4(),
         version_number=version_number,
         data={},
