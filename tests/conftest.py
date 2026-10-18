@@ -13,7 +13,6 @@ from pathlib import Path
 
 from sqlalchemy import create_engine, make_url, text
 
-
 # Lets tests import the app as "src...", since the package lives in backend/src.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 
@@ -24,9 +23,7 @@ TEST_DATABASE_URL = os.getenv(
 
 # Safety check: refuse to run (and wipe tables) against a non-test database.
 if not (make_url(TEST_DATABASE_URL).database or "").endswith("_test"):
-    raise RuntimeError(
-        f"TEST_DATABASE_URL must point to a *_test database: {TEST_DATABASE_URL}"
-    )
+    raise RuntimeError("TEST_DATABASE_URL must point to a *_test database")
 
 # Must be set before importing src: src.config reads DATABASE_URL at import time,
 # so this makes the app's own engine point at the test database. This applies to
@@ -47,7 +44,6 @@ from src.models import (
     ReviewStatus,
     SourceDocument,
 )
-
 from src.storage import LocalFileStorage, get_storage
 
 
