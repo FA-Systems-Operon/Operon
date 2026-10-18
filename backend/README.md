@@ -174,8 +174,8 @@ immutable snapshot data.
 Both endpoints return `200` with the version ID, parent ID, `version_number`,
 `data`, `created_at`, and `approved_at`. Ordering uses **version number**, not
 approval time: approving version 2 after version 3 still returns version 3.
-A newer draft is excluded. UUID is a deterministic final tie-breaker for legacy
-duplicate version numbers; it does not represent chronology.
+A newer draft is excluded. UUID remains a deterministic final tie-breaker in
+the query, but the current schema rejects duplicate version numbers per parent.
 
 An existing record with no approved versions returns `404` with
 `{"detail": "No approved version found"}`. An unknown parent returns `404` with
@@ -183,11 +183,12 @@ An existing record with no approved versions returns `404` with
 The service functions in `src/versioning.py` return `None` when no approved
 version matches, including for an unknown parent.
 
-No frontend controls or approval-write endpoint are introduced. A future approval
-workflow must set `approved_at` after authorized review; sending an `approved_at`
-key in the existing update endpoint's JSON data does not approve a version.
-These routes inherit the existing backend's lack of authentication; authorization
-and approval actor/audit tracking remain separate work.
+#19 introduced retrieval only. The #20 branch now adds approval endpoints that
+set `approved_at` and mark dependent artifacts stale in the same transaction.
+Sending an `approved_at` key in an update endpoint's JSON data does not approve a
+version. No frontend approval controls are included. The current approval endpoints
+accept `approved_by` in the request; authenticated reviewer authorization and
+audit tracking remain separate work.
 
 ### Existing development databases
 
@@ -214,3 +215,33 @@ pytest tests/test_latest_approved.py -q
 The existing CI `pytest --cov` command includes these tests automatically. Tests
 use PostgreSQL and create approval timestamps directly; they do not require an
 approval UI, Ollama, or a running frontend.
+
+## Upgrade existing version tables for staleness (#20/#21)
+
+The staleness branch adds `status` and `approved_by` to profile/playbook versions,
+plus unique `(parent_id, version_number)` constraints. `create_all` does not alter
+existing tables. To preserve an existing #18/#19 development database, stop the API
+and apply the additive upgrade before starting the new code:
+
+```bash
+docker compose stop api
+docker compose exec -T db sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
+  < backend/migrations/002_version_review_and_uniqueness.sql
+docker compose up --build -d api
+```
+
+Run this only when both profile/playbook version tables already exist. Fresh
+databases receive the current schema at startup, including new artifact tables.
+The script adds `approved_at` too if the earlier upgrade was not applied.
+
+When adding `status`, only existing non-null approval timestamps are mapped to
+`approved`; other records become `draft`. Unknown historical reviewers stay NULL.
+Rerunning the script preserves existing statuses and approval metadata. It adds
+constraints for **both** profile and playbook version numbers. If duplicates exist,
+the whole transaction aborts without deleting or renumbering any history. Inspect
+and resolve those records explicitly before rerunning; do not discard history to
+make the constraint pass.
+
+Tests for preservation, reruns, and rollback on duplicates are in
+`tests/test_version_review_migration.py`. #21's requirement-to-test mapping and
+CI command are in `tests/README.md`.

@@ -180,5 +180,3 @@ def test_new_records_and_edits_are_unapproved_and_preserve_approved_history(
     history = client.get(f"{record_type.path}/{record_id}/versions").json()
     assert history[0]["approved_at"] is not None
     assert history[1]["approved_at"] is None
-
-
