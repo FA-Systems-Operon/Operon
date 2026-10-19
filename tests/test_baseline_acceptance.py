@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from src.ai import ModelResponse
+from src.ai import ModelResponse, baseline
 from src.ai.baseline import BaselineOutputError, parse_client_profile, run_baseline
 
 BASELINE_DIR = Path(__file__).parent / "fixtures" / "baseline"
@@ -110,6 +110,46 @@ def test_parse_client_profile_rejects_wrong_shape(reply):
 def test_parse_client_profile_allows_missing_name():
     profile = parse_client_profile('{"name": null, "needs": [], "goals": []}')
     assert profile["name"] is None
+
+
+def test_cli_runs_and_saves_output(tmp_path, monkeypatch, capsys):
+    raw_reply = (BASELINE_DIR / "transcript_1.raw.json").read_text("utf-8")
+    (tmp_path / "transcript_1.txt").write_text(
+        TRANSCRIPTS[0].read_text("utf-8"), encoding="utf-8"
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(baseline, "get_provider", lambda: FakeProvider(raw_reply))
+
+    exit_code = baseline.main(["transcript_1.txt", "--out-dir", "out"])
+
+    assert exit_code == 0
+    assert (tmp_path / "out" / "transcript_1.raw.json").read_text("utf-8") == raw_reply
+    assert "Maya Chen" in capsys.readouterr().out
+
+
+def test_cli_reports_malformed_reply(tmp_path, monkeypatch, capsys):
+    (tmp_path / "t.txt").write_text("Someone: hello", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(baseline, "get_provider", lambda: FakeProvider("not json"))
+
+    assert baseline.main(["t.txt"]) == 1
+    assert "FAILED" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "args", [["../outside.txt"], ["t.txt", "--out-dir", "../outside"]]
+)
+def test_cli_refuses_paths_outside_working_directory(tmp_path, monkeypatch, args):
+    work = tmp_path / "work"
+    work.mkdir()
+    (work / "t.txt").write_text("Someone: hello", encoding="utf-8")
+    monkeypatch.chdir(work)
+    monkeypatch.setattr(baseline, "get_provider", lambda: FakeProvider("{}"))
+
+    with pytest.raises(SystemExit):
+        baseline.main(args)
+
+    assert not (tmp_path / "outside").exists()
 
 
 @pytest.mark.skipif(

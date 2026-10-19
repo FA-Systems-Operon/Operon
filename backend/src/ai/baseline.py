@@ -1,8 +1,10 @@
 """Baseline agent script: transcript in, client profile out, raw reply saved.
 
-Run from backend/ (needs OLLAMA_MODEL, and OLLAMA_BASE_URL if not localhost):
+Run from the repo root (needs OLLAMA_MODEL, and OLLAMA_BASE_URL if not localhost).
+Paths must stay inside the directory you run it from:
 
-    python -m src.ai.baseline ../tests/fixtures/baseline/transcript_1.txt --out-dir out
+    PYTHONPATH=backend python -m src.ai.baseline \
+        tests/fixtures/baseline/transcript_1.txt --out-dir baseline_output
 """
 
 import argparse
@@ -78,11 +80,27 @@ def run_baseline(
     return BaselineResult(profile, response, raw_path, meta_path)
 
 
+def resolve_inside(path: Path, root: Path) -> Path:
+    """Resolve path and refuse it if it points outside root (no ../ escapes)."""
+    resolved = (root / path).resolve()
+    if not resolved.is_relative_to(root):
+        raise ValueError(f"{path} is outside {root}")
+    return resolved
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("transcripts", nargs="+", type=Path)
     parser.add_argument("--out-dir", type=Path, default=Path("baseline_output"))
     args = parser.parse_args(argv)
+
+    # Only read and write under the directory the script is run from (the repo).
+    root = Path.cwd().resolve()
+    try:
+        transcripts = [resolve_inside(path, root) for path in args.transcripts]
+        out_dir = resolve_inside(args.out_dir, root)
+    except ValueError as error:
+        parser.error(str(error))
 
     try:
         provider = get_provider()
@@ -90,9 +108,9 @@ def main(argv: list[str] | None = None) -> int:
         parser.error(str(error))
 
     failed = False
-    for transcript in args.transcripts:
+    for transcript in transcripts:
         try:
-            result = run_baseline(transcript, args.out_dir, provider)
+            result = run_baseline(transcript, out_dir, provider)
         except (ProviderError, BaselineOutputError) as error:
             print(f"{transcript}: FAILED ({error})")
             failed = True
