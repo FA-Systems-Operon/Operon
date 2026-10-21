@@ -71,6 +71,16 @@ def test_missing_response_key_raises_response_error():
         provider.generate("Say hi")
 
 
+@pytest.mark.parametrize("value", [None, 42, ["hi"], {"text": "hi"}])
+def test_non_string_response_raises_response_error(value):
+    provider = make_provider(
+        lambda request: httpx.Response(200, json={"response": value})
+    )
+
+    with pytest.raises(ProviderResponseError, match="not a string"):
+        provider.generate("Say hi")
+
+
 def test_timeout_raises_provider_timeout():
     def handler(request):
         raise httpx.ReadTimeout("too slow", request=request)
@@ -157,3 +167,19 @@ def test_list_models_maps_connection_failure():
 
     with pytest.raises(ProviderUnavailable):
         make_provider(handler).list_models()
+
+
+@pytest.mark.parametrize("body", [[], {"models": [{"id": "a"}]}, {"models": [3]}])
+def test_list_models_rejects_unexpected_shape(body):
+    provider = make_provider(lambda request: httpx.Response(200, json=body))
+
+    with pytest.raises(ProviderResponseError, match="unexpected model list"):
+        provider.list_models()
+
+
+def test_other_transport_error_raises_provider_unavailable():
+    def handler(request):
+        raise httpx.RemoteProtocolError("dropped", request=request)
+
+    with pytest.raises(ProviderUnavailable, match="RemoteProtocolError"):
+        make_provider(handler).generate("Say hi")

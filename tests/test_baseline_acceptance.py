@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from src.ai import ModelResponse, baseline
+from src.ai import ModelResponse, ProviderConfigError, baseline
 from src.ai.baseline import BaselineOutputError, parse_client_profile, run_baseline
 
 BASELINE_DIR = Path(__file__).parent / "fixtures" / "baseline"
@@ -152,11 +152,63 @@ def test_cli_refuses_paths_outside_working_directory(tmp_path, monkeypatch, args
     assert not (tmp_path / "outside").exists()
 
 
+@pytest.mark.parametrize(
+    "names", [["a/t.txt", "b/t.txt"], ["a/t.txt", "b/t.md"], ["a/t.txt", "a/t.txt"]]
+)
+def test_cli_refuses_transcripts_whose_outputs_would_collide(
+    tmp_path, monkeypatch, capsys, names
+):
+    for name in names:
+        (tmp_path / name).parent.mkdir(exist_ok=True)
+        (tmp_path / name).write_text("Someone: hello", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    provider = FakeProvider('{"name": null, "needs": [], "goals": []}')
+    monkeypatch.setattr(baseline, "get_provider", lambda: provider)
+
+    with pytest.raises(SystemExit):
+        baseline.main([*names, "--out-dir", "out"])
+
+    assert "overwrite each other's outputs: t" in capsys.readouterr().err
+    assert provider.calls == []
+    assert not (tmp_path / "out").exists()
+
+
+def test_cli_accepts_transcripts_with_different_names(tmp_path, monkeypatch):
+    for name in ("a/t.txt", "b/u.txt"):
+        (tmp_path / name).parent.mkdir(exist_ok=True)
+        (tmp_path / name).write_text("Someone: hello", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    reply = '{"name": null, "needs": [], "goals": []}'
+    monkeypatch.setattr(baseline, "get_provider", lambda: FakeProvider(reply))
+
+    assert baseline.main(["a/t.txt", "b/u.txt", "--out-dir", "out"]) == 0
+    assert sorted(p.name for p in (tmp_path / "out").glob("*.raw.json")) == [
+        "t.raw.json",
+        "u.raw.json",
+    ]
+
+
+def test_cli_reports_provider_config_error(tmp_path, monkeypatch, capsys):
+    (tmp_path / "t.txt").write_text("Someone: hello", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    def no_provider():
+        raise ProviderConfigError("OLLAMA_MODEL is not set.")
+
+    monkeypatch.setattr(baseline, "get_provider", no_provider)
+
+    with pytest.raises(SystemExit):
+        baseline.main(["t.txt"])
+
+    assert "OLLAMA_MODEL is not set." in capsys.readouterr().err
+
+
 @pytest.mark.skipif(
     os.getenv("RUN_OLLAMA_TESTS") != "1", reason="set RUN_OLLAMA_TESTS=1 to call Ollama"
 )
 @pytest.mark.parametrize("transcript", TRANSCRIPTS, ids=lambda path: path.stem)
-def test_baseline_script_with_real_model(transcript, tmp_path):
+def test_baseline_script_with_real_model(transcript, tmp_path):  # pragma: no cover
+    # Skipped in CI (no Ollama there), so it's left out of the coverage count.
     from src.ai import get_provider
 
     result = run_baseline(transcript, tmp_path, get_provider())

@@ -102,6 +102,15 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError as error:
         parser.error(str(error))
 
+    # Outputs are named after the transcript file, so a/t.txt and b/t.txt would
+    # overwrite each other's saved results. Refuse before anything is written.
+    stems = [path.stem for path in transcripts]
+    duplicates = sorted({stem for stem in stems if stems.count(stem) > 1})
+    if duplicates:
+        parser.error(
+            "transcripts would overwrite each other's outputs: " + ", ".join(duplicates)
+        )
+
     try:
         provider = get_provider()
     except ProviderError as error:
@@ -120,5 +129,5 @@ def main(argv: list[str] | None = None) -> int:
     return 1 if failed else 0
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(main())

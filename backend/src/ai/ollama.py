@@ -57,6 +57,11 @@ class OllamaProvider:
             text = body["response"]
         except (KeyError, TypeError) as error:
             raise ProviderResponseError("Ollama reply has no 'response' key") from error
+        # e.g. {"response": null}: callers expect text, so don't pass it through.
+        if not isinstance(text, str):
+            raise ProviderResponseError(
+                f"Ollama 'response' is {type(text).__name__}, not a string"
+            )
 
         return ModelResponse(
             text=text, provider=self.name, model=self.model, duration_ms=duration_ms
