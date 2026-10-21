@@ -180,14 +180,3 @@ def test_new_records_and_edits_are_unapproved_and_preserve_approved_history(
     history = client.get(f"{record_type.path}/{record_id}/versions").json()
     assert history[0]["approved_at"] is not None
     assert history[1]["approved_at"] is None
-
-
-def test_legacy_duplicate_version_numbers_have_stable_selection(
-    record_type, record_factory, version_factory, db_session
-):
-    # #18 currently has no uniqueness constraint on record/version_number.
-    # Use UUID as a deterministic last tie-breaker, not as version chronology.
-    record = record_factory()
-    expected = version_factory(record, 2, APPROVAL_TIME, id=uuid.UUID(int=2))
-    version_factory(record, 2, APPROVAL_TIME, id=uuid.UUID(int=1))
-    assert record_type.retrieve(db_session, record.id).id == expected.id

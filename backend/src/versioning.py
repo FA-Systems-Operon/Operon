@@ -10,7 +10,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from src.models import ClientProfileVersion, PlaybookVersion
+from src.models import ArtifactVersion, ClientProfileVersion, PlaybookVersion
 
 
 def next_client_profile_version(db: Session, client_profile_id: uuid.UUID) -> int:
@@ -91,3 +91,21 @@ def get_latest_approved_playbook_version(
         .order_by(PlaybookVersion.version_number.desc(), PlaybookVersion.id.desc())
         .limit(1)
     )
+
+
+def next_artifact_version(db: Session, artifact_id: uuid.UUID) -> int:
+    """Return the next version number for an Artifact, holding a row lock.
+
+    Callers should also hold the Artifact row lock; the unique constraint on
+    (artifact_id, version_number) is the final backstop.
+    """
+    rows = (
+        db.execute(
+            select(ArtifactVersion.version_number)
+            .where(ArtifactVersion.artifact_id == artifact_id)
+            .with_for_update()
+        )
+        .scalars()
+        .all()
+    )
+    return max(rows, default=0) + 1
