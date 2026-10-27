@@ -1,0 +1,7 @@
+{
+  "transcript": "transcript_1.txt",
+  "provider": "ollama",
+  "model": "llama3.2:latest",
+  "duration_ms": 4594,
+  "prompt": "build_baseline_client_profile_prompt"
+}

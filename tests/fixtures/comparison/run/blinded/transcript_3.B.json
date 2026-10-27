@@ -1,0 +1,17 @@
+{
+  "name": "Priya Nair",
+  "needs": [
+    "no-shows",
+    "patients missing appointments without calling",
+    "chair sitting empty",
+    "hygienist being paid either way",
+    "patients reaching out to reschedule appointments",
+    "office line being only answered from 8 to 4",
+    "patients not listening to voicemail",
+    "website looking dated"
+  ],
+  "goals": [
+    "get no-shows under one in ten by the end of the year",
+    "Josée spending less than an hour a day on reminder calls"
+  ]
+}

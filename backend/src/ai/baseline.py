@@ -9,6 +9,7 @@ Paths must stay inside the directory you run it from:
 
 import argparse
 import json
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -50,15 +51,19 @@ def parse_client_profile(text: str) -> dict:
 
 
 def run_baseline(
-    transcript_path: Path, out_dir: Path, provider: ModelProvider
+    transcript_path: Path,
+    out_dir: Path,
+    provider: ModelProvider,
+    build_prompt: Callable[[str], str] = build_baseline_client_profile_prompt,
 ) -> BaselineResult:
     """Run the baseline prompt on one transcript and save the untouched reply.
 
     The raw reply is saved before it is checked, so a malformed answer is still
-    kept for the Story 2.2 comparison.
+    kept for the Story 2.2 comparison. Story 2.2 passes its own build_prompt to
+    run the Brain-assisted prompt through the same steps.
     """
     transcript = Path(transcript_path).read_text(encoding="utf-8")
-    prompt = build_baseline_client_profile_prompt(transcript)
+    prompt = build_prompt(transcript)
     response = provider.generate(prompt, json_output=True)
 
     out_dir = Path(out_dir)
@@ -72,7 +77,8 @@ def run_baseline(
         "provider": response.provider,
         "model": response.model,
         "duration_ms": response.duration_ms,
-        "prompt": "build_baseline_client_profile_prompt",
+        # A functools.partial (the Brain-assisted prompt) keeps its function in .func.
+        "prompt": getattr(build_prompt, "func", build_prompt).__name__,
     }
     meta_path.write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
 
@@ -86,6 +92,12 @@ def resolve_inside(path: Path, root: Path) -> Path:
     if not resolved.is_relative_to(root):
         raise ValueError(f"{path} is outside {root}")
     return resolved
+
+
+def duplicate_stems(paths: list[Path]) -> list[str]:
+    """File names (without extension) shared by more than one path."""
+    stems = [path.stem for path in paths]
+    return sorted({stem for stem in stems if stems.count(stem) > 1})
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -104,8 +116,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # Outputs are named after the transcript file, so a/t.txt and b/t.txt would
     # overwrite each other's saved results. Refuse before anything is written.
-    stems = [path.stem for path in transcripts]
-    duplicates = sorted({stem for stem in stems if stems.count(stem) > 1})
+    duplicates = duplicate_stems(transcripts)
     if duplicates:
         parser.error(
             "transcripts would overwrite each other's outputs: " + ", ".join(duplicates)
