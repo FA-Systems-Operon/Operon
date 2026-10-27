@@ -1,0 +1,18 @@
+{
+  "name": "Elena Rossi",
+  "needs": [
+    "Quotes take too long (up to two weeks after the visit) and about a third of quoted clients go elsewhere",
+    "Dave builds quotes in a spreadsheet at night after site work",
+    "Clients call to ask where their quote is and no one can tell them"
+  ],
+  "goals": [
+    "Send every quote within three days of the visit",
+    "Twenty new leads a month"
+  ],
+  "must_not_include": [
+    "Twenty new leads a week (the client corrected this to a month)",
+    "Losing half of quoted clients (the client corrected this to a third)",
+    "Changing who does site visits (the client wants Dave to keep doing them)",
+    "Dave as the client's name (he is her partner)"
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "name": null,
+  "needs": [
+    "Calls are missed between May and September because crews are on job sites",
+    "Callers hire someone else before the evening call-back (about ten jobs a month in summer, around $2,000 each)",
+    "Quotes are written on paper and sometimes get lost"
+  ],
+  "goals": [
+    "Stop losing those jobs",
+    "Every caller hears back within an hour",
+    "Stop writing quotes on paper by next spring"
+  ],
+  "must_not_include": [
+    "Any person or company name (the client declined to give one)",
+    "FA Systems as the client's name",
+    "Hiring a receptionist (suggested by FA Systems and declined by the client)",
+    "Snow removal or winter work (no problem stated)"
+  ]
+}
