@@ -1,0 +1,38 @@
+{
+  "title": "FA Systems onboarding context (synthetic)",
+  "sections": [
+    {
+      "heading": "What FA Systems does",
+      "points": [
+        "FA Systems helps small service businesses win and keep clients: lead follow-up, appointment booking, reminders and client communication.",
+        "Typical clients are owner-run businesses with 2 to 20 staff, such as clinics, trades, studios and professional services."
+      ]
+    },
+    {
+      "heading": "Ideal client profile",
+      "points": [
+        "The owner can describe a concrete problem in how leads or bookings are handled.",
+        "The owner has a measurable target, such as a number per month, a response time or a rate."
+      ]
+    },
+    {
+      "heading": "Onboarding playbook: capturing a client profile",
+      "points": [
+        "Record the client's own needs and goals, not services FA Systems could offer.",
+        "On call transcripts, FA Systems staff are labelled 'FA Systems' or '(FA Systems)'. Their questions and suggestions are not client needs unless the client agrees to them.",
+        "Numbers or examples about other businesses are not the client's goals.",
+        "If the client corrects a figure, record the corrected figure only.",
+        "Keep numbers, time frames and rates exactly as the client states them.",
+        "A need is a current problem or requirement. A goal is a result the client wants to reach."
+      ]
+    },
+    {
+      "heading": "Terms",
+      "points": [
+        "Qualified appointment: a booked meeting with a prospect who fits the client's service and area.",
+        "No-show: a booked client who misses the appointment without notice.",
+        "Response time: time from a new inquiry to the first useful reply."
+      ]
+    }
+  ]
+}
