@@ -93,3 +93,23 @@ def test_save_participates_in_callers_transaction(
     assert (
         db_session.scalar(select(func.count()).select_from(ClientProfileVersion)) == 1
     )
+
+
+@pytest.mark.parametrize("spelling", ["uppercase", "hex", "braces"])
+def test_equivalent_document_ids_save_as_canonical_uuid(
+    db_session, profile_factory, stored_document, spelling
+):
+    original = profile_factory()
+    document = stored_document()
+    add_text(db_session, document)
+    alternate = {
+        "uppercase": str(document.id).upper(),
+        "hex": document.id.hex,
+        "braces": "{" + str(document.id) + "}",
+    }[spelling]
+    draft = make_draft(alternate)
+    version = save_source_profile(db_session, original.client_profile_id, draft)
+    db_session.commit()
+    db_session.expire_all()
+    assert version.data["source_references"][0]["document_id"] == str(document.id)
+    assert draft.source_references[0].document_id == alternate

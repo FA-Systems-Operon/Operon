@@ -32,6 +32,18 @@ def save_source_profile(
         ids = {uuid.UUID(document_id) for document_id in document_ids}
     except ValueError as error:
         raise ValueError("References must identify stored source documents") from error
+    # Canonicalize a copy: equivalent UUID spellings must match stored IDs,
+    # and normalizing must not mutate the caller's generated draft.
+    draft = draft.model_copy(
+        update={
+            "source_references": [
+                reference.model_copy(
+                    update={"document_id": str(uuid.UUID(reference.document_id))}
+                )
+                for reference in draft.source_references
+            ]
+        }
+    )
     sources = []
     for document_id in ids:
         row = db.execute(
