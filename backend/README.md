@@ -245,3 +245,22 @@ make the constraint pass.
 Tests for preservation, reruns, and rollback on duplicates are in
 `tests/test_version_review_migration.py`. #21's requirement-to-test mapping and
 CI command are in `tests/README.md`.
+
+
+## Source-linked draft profiles (#40)
+
+`POST /client-profiles/{profile_id}/source-drafts` accepts the #39 output:
+`name`, `needs`, `goals`, and `source_references` (each with `field`,
+`document_id`, and `quote`). Create the profile first using the existing endpoint.
+Documents must belong to that profile's client and have saved extracted text.
+Missing profiles return 404; invalid or incomplete evidence returns 422 without
+saving a version. Document IDs must be stored UUIDs. Quote matching verifies
+provenance, not whether the model's interpretation is correct.
+
+A successful request returns 201 with a new draft version. Profile values and
+references are stored together in the existing immutable `data` JSON snapshot;
+no migration is required, and old versions remain unchanged. Retrieve evidence
+through `GET /client-profiles/{profile_id}/versions` in each version's `data`.
+The existing latest-approved endpoint continues to return only approved versions.
+This follows the existing profile route prefix; frontend proxy integration is
+separate. Existing generic profile endpoints keep their current behavior.

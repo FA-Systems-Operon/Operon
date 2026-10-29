@@ -8,8 +8,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from src.ai.source_prompt import SourceLinkedProfile
 from src.db import get_db
 from src.models import ClientProfile, ClientProfileVersion, ReviewStatus
+from src.profile_sources import save_source_profile
 from src.schemas import ApproveIn, ClientProfileVersionOut, ProfileApprovalOut
 from src.staleness import mark_stale_for_client_profile
 from src.versioning import (
@@ -59,6 +61,33 @@ def update_client_profile(
     )
     db.add(version)
     db.commit()
+    db.refresh(version)
+    return version
+
+
+@router.post(
+    "/{profile_id}/source-drafts",
+    response_model=ClientProfileVersionOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_source_draft(
+    profile_id: uuid.UUID, body: SourceLinkedProfile, db: DbSession
+) -> ClientProfileVersion:
+    """Save a generated draft only when its evidence matches stored client text."""
+    try:
+        version = save_source_profile(db, profile_id, body)
+        db.commit()
+    except LookupError as error:
+        db.rollback()
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(error)) from error
+    except ValueError as error:
+        db.rollback()
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT, str(error)
+        ) from error
+    except Exception:
+        db.rollback()
+        raise
     db.refresh(version)
     return version
 
