@@ -64,6 +64,44 @@ def test_upload_succeeds(
     assert listed.json() == [body]
 
 
+@pytest.mark.parametrize("kind", ["transcript", "intake"])
+def test_upload_records_document_kind(client, db_session, demo_client, kind):
+    response = client.post(
+        documents_url(demo_client.id),
+        files={"file": ("notes.txt", b"hi", "text/plain")},
+        data={"kind": kind},
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["kind"] == kind
+    assert db_session.get(SourceDocument, uuid.UUID(body["id"])).kind.value == kind
+    assert client.get(documents_url(demo_client.id)).json() == [body]
+
+
+def test_upload_without_kind_stores_null(client, demo_client):
+    response = client.post(
+        documents_url(demo_client.id), files={"file": ("a.txt", b"hi")}
+    )
+
+    assert response.status_code == 201
+    assert response.json()["kind"] is None
+
+
+def test_upload_with_unknown_kind_returns_422(
+    client, db_session, demo_client, tmp_path
+):
+    response = client.post(
+        documents_url(demo_client.id),
+        files={"file": ("a.txt", b"hi")},
+        data={"kind": "contract"},
+    )
+
+    assert response.status_code == 422
+    assert db_session.scalar(select(func.count()).select_from(SourceDocument)) == 0
+    assert stored_files(tmp_path) == []
+
+
 def test_upload_unknown_client_returns_404(client, tmp_path):
     response = client.post(
         documents_url(uuid.uuid4()), files={"file": ("a.txt", b"hi")}
