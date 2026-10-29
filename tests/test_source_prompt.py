@@ -1,14 +1,17 @@
 """Task #39: source-aware prompts preserve inputs and define usable evidence."""
 
 import json
+from unittest.mock import Mock
 
 import pytest
 from pydantic import ValidationError
 
+from src.ai.provider import ModelResponse, ProviderUnavailable
 from src.ai.source_prompt import (
     SourceInput,
     SourceLinkedProfile,
     build_source_profile_prompt,
+    generate_source_profile,
     parse_source_profile,
 )
 
@@ -128,3 +131,52 @@ def test_parser_rejects_malformed_model_output(evidence_case, text):
     sources, _ = evidence_case
     with pytest.raises(ValidationError):
         parse_source_profile(text, sources)
+
+
+def test_generation_returns_validated_profile(evidence_case):
+    sources, profile = evidence_case
+    provider = Mock()
+    provider.generate.return_value = ModelResponse(
+        json.dumps(profile), "fake", "fake", 1
+    )
+    result = generate_source_profile(sources, provider, "Context only")
+    assert result.model_dump() == profile
+    provider.generate.assert_called_once_with(
+        build_source_profile_prompt(sources, "Context only"), json_output=True
+    )
+
+
+def test_generation_rejects_invalid_evidence_without_retry(evidence_case):
+    sources, profile = evidence_case
+    profile["source_references"][0]["quote"] = "Invented quote"
+    provider = Mock()
+    provider.generate.return_value = ModelResponse(
+        json.dumps(profile), "fake", "fake", 1
+    )
+    with pytest.raises(ValueError, match="occur exactly"):
+        generate_source_profile(sources, provider)
+    provider.generate.assert_called_once()
+
+
+def test_generation_propagates_provider_failure(evidence_case):
+    sources, _ = evidence_case
+    provider = Mock()
+    provider.generate.side_effect = ProviderUnavailable("offline")
+    with pytest.raises(ProviderUnavailable, match="offline"):
+        generate_source_profile(sources, provider)
+    provider.generate.assert_called_once()
+
+
+def test_generation_checks_sources_before_calling_provider():
+    provider = Mock()
+    with pytest.raises(ValueError, match="At least one"):
+        generate_source_profile([], provider)
+    provider.generate.assert_not_called()
+
+
+@pytest.mark.parametrize("field", ["name", "needs", "goals"])
+def test_parser_rejects_blank_profile_values(evidence_case, field):
+    sources, profile = evidence_case
+    profile[field] = " " if field == "name" else [" "]
+    with pytest.raises(ValueError, match="blank"):
+        parse_source_profile(json.dumps(profile), sources)

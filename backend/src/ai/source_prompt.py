@@ -4,6 +4,8 @@ import json
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from src.ai.provider import ModelProvider
+
 
 class SourceInput(BaseModel):
     """One document's extracted text; document_id identifies the supplied source."""
@@ -100,3 +102,16 @@ def parse_source_profile(text: str, sources: list[SourceInput]) -> SourceLinkedP
     if missing := required - referenced:
         raise ValueError("Missing source references for: " + ", ".join(sorted(missing)))
     return profile
+
+
+def generate_source_profile(
+    sources: list[SourceInput], provider: ModelProvider, brain_context: str = ""
+) -> SourceLinkedProfile:
+    """Generate and validate a draft; provider and validation errors reach the caller.
+
+    This does not save the profile or retry invalid output. The job layer can
+    decide how to report failures without accepting unsupported references.
+    """
+    prompt = build_source_profile_prompt(sources, brain_context)
+    response = provider.generate(prompt, json_output=True)
+    return parse_source_profile(response.text, sources)
