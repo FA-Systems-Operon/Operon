@@ -56,6 +56,8 @@ def build_source_profile_prompt(
         "- Every non-null name and every needs/goals item must have evidence.\n"
         "- References use field name, needs/0, goals/0, etc. Indexes start at zero.\n"
         "- Copy document_id and a non-empty exact quote from that document's text.\n"
+        "- Each quote must occur inside the SAME document identified by document_id.\n"
+        "- Never attach a transcript quote to an intake document, or vice versa.\n"
         "- Quotes must support the associated value, including who stated it.\n"
         "- Do not reference null name or nonexistent list items.\n"
         "- Brain context helps interpretation only; it is not evidence for client facts.\n"
