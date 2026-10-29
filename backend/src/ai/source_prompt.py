@@ -64,3 +64,39 @@ def build_source_profile_prompt(
         + inputs
         + "\n"
     )
+
+
+def parse_source_profile(text: str, sources: list[SourceInput]) -> SourceLinkedProfile:
+    """Validate structure, field coverage and verbatim evidence before use.
+
+    Exact quote matching establishes provenance, not semantic correctness. Reviewers
+    must still assess whether the passage supports the claimed interpretation.
+    """
+    # Apply the same source checks as the prompt builder, including unique IDs.
+    build_source_profile_prompt(sources)
+    profile = SourceLinkedProfile.model_validate_json(text)
+    documents = {source.document_id: source.text for source in sources}
+    required = {"name"} if profile.name is not None else set()
+    for field in ("needs", "goals"):
+        values = getattr(profile, field)
+        if any(not value.strip() for value in values):
+            raise ValueError(f"{field} items must not be blank")
+        required.update(f"{field}/{index}" for index in range(len(values)))
+    if profile.name is not None and not profile.name.strip():
+        raise ValueError("name must not be blank")
+
+    referenced = set()
+    for reference in profile.source_references:
+        if reference.field not in required:
+            raise ValueError(f"Reference targets an absent field: {reference.field}")
+        source_text = documents.get(reference.document_id)
+        if source_text is None:
+            raise ValueError("Reference targets an unknown source document")
+        if not reference.quote.strip() or reference.quote not in source_text:
+            raise ValueError(
+                "Reference quote must occur exactly in its source document"
+            )
+        referenced.add(reference.field)
+    if missing := required - referenced:
+        raise ValueError("Missing source references for: " + ", ".join(sorted(missing)))
+    return profile
