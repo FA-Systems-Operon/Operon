@@ -5,7 +5,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.models import ReviewStatus
+from src.models import DocumentKind, ReviewStatus
 
 # What the API user sends
 
@@ -44,6 +44,7 @@ class SourceDocumentOut(BaseModel):
     content_type: str
     size_bytes: int
     sha256: str
+    kind: DocumentKind | None
     uploaded_at: datetime
 
 

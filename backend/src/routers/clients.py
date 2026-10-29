@@ -1,16 +1,17 @@
-"""Endpoints for creating and looking up clients."""
+"""Endpoints for creating, listing and looking up clients."""
 
 import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from src.db import get_db
 from src.models import Client
 from src.schemas import ClientIn, ClientOut
 
-router = APIRouter(prefix="/clients", tags=["clients"])
+router = APIRouter(prefix="/api/v1/clients", tags=["clients"])
 
 DbSession = Annotated[Session, Depends(get_db)]
 
@@ -23,6 +24,14 @@ def create_client(body: ClientIn, db: DbSession) -> Client:
     db.commit()
     db.refresh(client)  # loads id and created_at filled in by Postgres
     return client
+
+
+@router.get("", response_model=list[ClientOut])
+def list_clients(db: DbSession) -> list[Client]:
+    """Return every client, sorted by name, for pickers such as the upload screen."""
+    # lower() keeps the order case-insensitive under any database collation.
+    query = select(Client).order_by(func.lower(Client.name), Client.id)
+    return list(db.scalars(query))
 
 
 @router.get("/{client_id}", response_model=ClientOut)

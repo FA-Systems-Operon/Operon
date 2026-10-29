@@ -4,7 +4,7 @@ import hashlib
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -16,7 +16,7 @@ from src.document_extraction import (
     extract_document,
     validate_document,
 )
-from src.models import Client, ExtractedText, SourceDocument
+from src.models import Client, DocumentKind, ExtractedText, SourceDocument
 from src.schemas import ExtractedTextOut, SourceDocumentOut
 from src.storage import DocumentStorage, get_storage
 
@@ -44,7 +44,11 @@ def list_documents(client_id: uuid.UUID, db: DbSession) -> list[SourceDocument]:
 
 @router.post("", response_model=SourceDocumentOut, status_code=status.HTTP_201_CREATED)
 def upload_document(
-    client_id: uuid.UUID, file: UploadFile, db: DbSession, storage: Storage
+    client_id: uuid.UUID,
+    file: UploadFile,
+    db: DbSession,
+    storage: Storage,
+    kind: Annotated[DocumentKind | None, Form()] = None,
 ) -> SourceDocument:
     """Store an uploaded file against a client and record its metadata."""
     if db.get(Client, client_id) is None:
@@ -73,6 +77,7 @@ def upload_document(
         size_bytes=len(data),
         sha256=hashlib.sha256(data).hexdigest(),
         storage_key=storage_key,
+        kind=kind,
     )
     try:
         validate_document(document, data)

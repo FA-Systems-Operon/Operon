@@ -70,6 +70,26 @@ docker compose up --build api db
 Alembic was removed on purpose for now. It should come back before we have any
 data we can't wipe (shared staging, prod, or real client data).
 
+## Document kind and client list (#35)
+
+Uploads accept an optional `kind` form field, `transcript` or `intake`, so the
+agent and reviewers can tell a sales transcript from intake answers. It is
+returned on every document response and is `null` for documents uploaded
+without one. Any other value returns `422` and nothing is saved.
+
+`GET /api/v1/clients` lists every client sorted by name, for the upload screen's
+client picker. The client endpoints moved from `/clients` to `/api/v1/clients`,
+matching the documents endpoints, so the frontend proxy and Caddy forward them.
+
+Fresh databases get the `kind` column through `create_all`. An existing
+development database needs this additive script, which can be rerun and leaves
+existing documents unchanged with `kind = NULL`:
+
+```bash
+docker compose exec -T db sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
+  < backend/migrations/003_add_document_kind.sql
+```
+
 ## Extracted document text
 
 The `extracted_texts` table stores derived plain text separately from the original

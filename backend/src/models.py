@@ -48,6 +48,13 @@ def _status_column() -> MappedColumn[ReviewStatus]:
     )
 
 
+class DocumentKind(str, enum.Enum):
+    """What a source document is, so agents and reviewers can tell sources apart."""
+
+    TRANSCRIPT = "transcript"
+    INTAKE = "intake"
+
+
 class Client(Base):
     """A business client. Every source document belongs to exactly one client."""
 
@@ -79,6 +86,16 @@ class SourceDocument(Base):
     sha256: Mapped[str] = mapped_column(String(64))
     # Where the storage backend keeps the file (e.g. "<client_id>/<document_id>").
     storage_key: Mapped[str] = mapped_column(String(512), unique=True)
+    # NULL for documents uploaded before kinds existed, or without one.
+    kind: Mapped[DocumentKind | None] = mapped_column(
+        Enum(
+            DocumentKind,
+            native_enum=False,
+            length=20,
+            values_callable=lambda e: [member.value for member in e],
+        ),
+        nullable=True,
+    )
     uploaded_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
