@@ -4,7 +4,7 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from src.db import get_db
@@ -29,7 +29,9 @@ def create_client(body: ClientIn, db: DbSession) -> Client:
 @router.get("", response_model=list[ClientOut])
 def list_clients(db: DbSession) -> list[Client]:
     """Return every client, sorted by name, for pickers such as the upload screen."""
-    return list(db.scalars(select(Client).order_by(Client.name, Client.id)))
+    # lower() keeps the order case-insensitive under any database collation.
+    query = select(Client).order_by(func.lower(Client.name), Client.id)
+    return list(db.scalars(query))
 
 
 @router.get("/{client_id}", response_model=ClientOut)

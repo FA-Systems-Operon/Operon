@@ -53,6 +53,15 @@ def test_list_clients_sorted_by_name(client, client_factory):
     ]
 
 
+def test_list_clients_ignores_case(client, client_factory):
+    client_factory("Zeta Dental")
+    client_factory("acme plumbing")
+
+    response = client.get(CLIENTS_URL)
+
+    assert [c["name"] for c in response.json()] == ["acme plumbing", "Zeta Dental"]
+
+
 def test_old_unprefixed_clients_path_is_gone(client):
     # Everything the frontend calls lives under /api/v1, which the proxy forwards.
     assert client.get("/clients").status_code == 404
