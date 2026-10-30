@@ -18,7 +18,9 @@ export default defineConfig({
     globals: true,
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'lcov'],
+      // lcov paths are relative to the repo root (frontend/src/...) so SonarQube,
+      // which scans from the root, can match them to source files.
+      reporter: ['text', ['lcov', { projectRoot: '..' }]],
       include: ['src/**/*.{ts,tsx}'],
       exclude: ['src/main.tsx', 'src/**/*.test.tsx', 'src/setupTests.ts'],
     },
