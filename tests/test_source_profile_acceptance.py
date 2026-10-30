@@ -148,7 +148,8 @@ def test_real_quote_cited_from_the_wrong_document_is_not_saved(
     sources = store_sources(db_session, stored_document, example["documents"])
     payload = model_reply(example["draft"], sources)
     # "Contact name: Maya Chen" is real, but only the intake form contains it.
-    payload["source_references"][0]["document_id"] = sources[0].document_id
+    transcript = next(source for source in sources if source.kind == "transcript")
+    payload["source_references"][0]["document_id"] = transcript.document_id
 
     response = client.post(
         f"/client-profiles/{profile.client_profile_id}/source-drafts", json=payload
