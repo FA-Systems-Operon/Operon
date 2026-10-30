@@ -12,7 +12,7 @@ on:
 jobs:
   sonarqube:
     name: SonarQube
-    needs: codecov
+    needs: [codecov, frontend]
     runs-on: ubuntu-latest
 
     steps:
@@ -25,6 +25,12 @@ jobs:
         with:
           name: python-coverage
           path: .
+
+      - name: Download frontend coverage report
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          name: frontend-coverage
+          path: frontend/coverage
 
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@7006c4492b2e0ee0f816d36501671557c97f5995 # v8.1.0
@@ -83,3 +89,34 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  frontend:
+    name: Frontend tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24" # same major as frontend/Dockerfile
+
+      - name: Install dependencies
+        # Lockfile only, no package install scripts (same as Dockerfile.prod).
+        working-directory: frontend
+        run: npm ci --ignore-scripts
+
+      - name: Run tests with coverage
+        working-directory: frontend
+        run: npm test
+
+      - name: Build
+        working-directory: frontend
+        run: npm run build
+
+      - name: Save coverage report for SonarQube
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: frontend-coverage
+          path: frontend/coverage/lcov.info
+          if-no-files-found: error
