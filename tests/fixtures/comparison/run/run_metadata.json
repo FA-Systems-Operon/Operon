@@ -1,0 +1,22 @@
+{
+  "created_at": "2026-10-27T03:24:55+00:00",
+  "provider": "ollama",
+  "model": "llama3.2:latest",
+  "settings": "temperature 0, seed 42 (fixed in src/ai/ollama.py)",
+  "transcripts": [
+    "tests/fixtures/baseline/transcript_1.txt",
+    "tests/fixtures/baseline/transcript_2.txt",
+    "tests/fixtures/comparison/transcript_3.txt",
+    "tests/fixtures/comparison/transcript_4.txt",
+    "tests/fixtures/comparison/transcript_5.txt",
+    "tests/fixtures/comparison/transcript_6.txt"
+  ],
+  "prompts": {
+    "baseline": "build_baseline_client_profile_prompt",
+    "brain_assisted": "build_brain_assisted_client_profile_prompt"
+  },
+  "brain_context": {
+    "file": "tests/fixtures/brain/fa_systems_context.json",
+    "sha256": "38d1aebf87f90701f94e4735c6bfc7f75f906eec671c26db92bea19493ee52c1"
+  }
+}

@@ -1,0 +1,37 @@
+transcript,output,scorer,format_pass,name_correct,items_expected,items_captured,unsupported_invented,unsupported_misattributed,unsupported_outdated,unsupported_brain,misplaced,notes
+transcript_1,A,rimmch,TRUE,TRUE,3,1,,,,,,
+transcript_1,B,rimmch,TRUE,TRUE,3,1,,,,,,
+transcript_1,A,wassdak,TRUE,TRUE,3,1,,,,,,
+transcript_1,B,wassdak,TRUE,TRUE,3,1,,,,,,
+transcript_1,A,final,TRUE,TRUE,3,2,0,0,0,0,0,"Review: rubric scale is items found (0 to items_expected), not a 0-1 rating. Found 2 of 3; misses 'few visitors complete the contact form'."
+transcript_1,B,final,TRUE,TRUE,3,2,0,0,0,0,1,"Review: found 2 of 3, same items as A. Goal repeated under needs (misplaced 1)."
+transcript_2,A,rimmch,TRUE,TRUE,3,1,,,,,,
+transcript_2,B,rimmch,TRUE,TRUE,3,1,,,,,,
+transcript_2,A,wassdak,TRUE,TRUE,3,1,,,,,,
+transcript_2,B,wassdak,TRUE,TRUE,3,1,,,,,,
+transcript_2,A,final,TRUE,TRUE,3,2,0,0,0,0,0,Review: found 2 of 3; misses 'team replies too late'.
+transcript_2,B,final,TRUE,TRUE,3,2,0,0,0,0,0,Review: found 2 of 3; output identical to A.
+transcript_3,A,rimmch,TRUE,TRUE,6,0.5,,,,,,
+transcript_3,B,rimmch,TRUE,TRUE,6,0.5,,,,,,
+transcript_3,A,wassdak,TRUE,TRUE,6,0.5,,,,,,
+transcript_3,B,wassdak,TRUE,TRUE,6,0.5,,,,,,
+transcript_3,A,final,TRUE,TRUE,6,4,0,0,0,0,0,Review: found 4 of 6 (no-shows without 'one in five' = 0.5; reminders only partly = 0.5; text-reminder request missing). Dropped 'one in five' although the Brain context says keep numbers exactly.
+transcript_3,B,final,TRUE,TRUE,6,3.5,0,1,0,0,0,Review: found 3.5 of 6. 'website looking dated' is FA Systems staff's remark and the client deferred it: unsupported_misattributed should be 1.
+transcript_4,A,rimmch,TRUE,FALSE,6,0.5,,,,,,
+transcript_4,B,rimmch,TRUE,FALSE,6,0.5,,,,,,
+transcript_4,A,wassdak,TRUE,FALSE,6,0.5,,,,,,
+transcript_4,B,wassdak,TRUE,FALSE,6,0.5,,,,,,
+transcript_4,A,final,TRUE,FALSE,6,4.5,0,1,0,0,0,"Review: found 4.5 of 6. 'winter is quiet, the phone is not a problem' is listed as a need and is on must_not_include: unsupported_misattributed should be 1. Name is a sentence, so name_correct FALSE is right."
+transcript_4,B,final,TRUE,FALSE,6,5,0,0,0,0,1,"Review: found 5 of 6 (has 'not losing those jobs'; loses May-September and $2,000). Spring quote goal also listed under needs (misplaced 1)."
+transcript_5,A,rimmch,TRUE,TRUE,5,1,,,,,,
+transcript_5,B,rimmch,TRUE,TRUE,5,0.5,,,,,,
+transcript_5,A,wassdak,TRUE,TRUE,5,1,,,,,,
+transcript_5,B,wassdak,TRUE,TRUE,5,0.5,,,,,,
+transcript_5,A,final,TRUE,TRUE,5,2.5,0,0,0,0,1,"Review: found 2.5 of 5, the same items as B, so A=1 vs B=0.5 is not supported. Goal repeated under needs (misplaced 1). 'change things for us' as a goal is borderline; not counted."
+transcript_5,B,final,TRUE,TRUE,5,2.5,0,0,0,0,0,Review: found 2.5 of 5; misses 'most trial members never come back' and 'texting from personal phone'.
+transcript_6,A,rimmch,TRUE,TRUE,5,0.5,,,1,,,
+transcript_6,B,rimmch,TRUE,TRUE,5,0.5,,,,,,
+transcript_6,A,wassdak,TRUE,TRUE,5,0.5,,,1,,,
+transcript_6,B,wassdak,TRUE,TRUE,5,0.5,,,,,,
+transcript_6,A,final,TRUE,TRUE,5,4.5,0,0,1,0,1,"Review: found 4.5 of 5. 'Twenty new leads a week' is the figure the client corrected (outdated 1 agrees), although the Brain context says record corrected figures only. 'Twenty a month' repeated under needs (misplaced 1)."
+transcript_6,B,final,TRUE,TRUE,5,2,0,0,0,0,2,Review: found 2 of 5. Lists both goals under needs and drops all three needs (misplaced 2). Largest gap between A and B in the sample.

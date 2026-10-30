@@ -1,0 +1,26 @@
+{
+  "transcript_1": {
+    "A": "baseline",
+    "B": "brain_assisted"
+  },
+  "transcript_2": {
+    "A": "baseline",
+    "B": "brain_assisted"
+  },
+  "transcript_3": {
+    "A": "brain_assisted",
+    "B": "baseline"
+  },
+  "transcript_4": {
+    "A": "brain_assisted",
+    "B": "baseline"
+  },
+  "transcript_5": {
+    "A": "brain_assisted",
+    "B": "baseline"
+  },
+  "transcript_6": {
+    "A": "brain_assisted",
+    "B": "baseline"
+  }
+}

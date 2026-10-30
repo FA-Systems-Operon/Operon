@@ -1,0 +1,25 @@
+Client onboarding call
+
+Sam (FA Systems): Thanks for joining, and sorry about the link change this morning. Can you tell me a bit about the clinic?
+Priya Nair: No problem. I own Brightside Dental, a two-chair practice in Laval. It is me, one hygienist, and Josée at the front desk three days a week. We have been open about six years.
+Sam (FA Systems): Great. What made you reach out to us?
+Priya Nair: Our biggest problem is no-shows. About one in five patients misses their appointment without calling. When that happens the chair just sits empty, and the hygienist is paid either way.
+Sam (FA Systems): That is a lot. Do you send reminders today?
+Priya Nair: Only a phone call the day before, when the front desk has time, which is not often. On the days Josée is not in, nobody calls at all.
+Sam (FA Systems): How do patients reach you if they need to move an appointment?
+Priya Nair: They have to phone us, and the office line is only answered from eight to four. A lot of people work those same hours, so they just do not come instead of rescheduling.
+Sam (FA Systems): Have patients said anything about how they would like to be reminded?
+Priya Nair: Yes, many of them have asked for text reminders. Especially the younger patients. Some of them told me they never listen to voicemail.
+Sam (FA Systems): That makes sense. A lot of clinics we work with also run Google Ads to fill empty slots. Is that something you would want?
+Priya Nair: Not right now. Our schedule is already full; we just need people to actually show up.
+Sam (FA Systems): Understood. We also do website redesigns, with online booking built in. Your current site looks a little dated.
+Priya Nair: Maybe next year. I do not want to touch the website now.
+Sam (FA Systems): Fair enough. Is there anyone else at the clinic we should involve?
+Priya Nair: Josée, since she does the calls. She spends about two hours a day on the phone confirming appointments when she is in, and she hates it.
+Sam (FA Systems): I can imagine. Have you looked at what other clinics do?
+Priya Nair: A colleague of mine in Terrebonne says her clinic got no-shows down to three percent with automated texts. I do not know if that is realistic for us.
+Sam (FA Systems): So what would success look like for you?
+Priya Nair: I would like to get no-shows under one in ten by the end of the year. And I would like Josée to spend less than an hour a day on reminder calls, so she can deal with the patients in front of her.
+Sam (FA Systems): Got it. Anything else before we wrap up?
+Priya Nair: Just that we use paper charts for some older patients, but I do not think that matters for this.
+Sam (FA Systems): Noted. I will send a summary by Friday.

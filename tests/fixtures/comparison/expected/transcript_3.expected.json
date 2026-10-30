@@ -1,0 +1,20 @@
+{
+  "name": "Priya Nair",
+  "needs": [
+    "Reduce no-shows (about one in five patients misses without calling)",
+    "Reminders are inconsistent: only a phone call the day before, when the front desk has time (none on days Josée is out)",
+    "Patients can only reschedule by phone during office hours (8 to 4)",
+    "Many patients have asked for text reminders"
+  ],
+  "goals": [
+    "Get no-shows under one in ten by the end of the year",
+    "Front desk (Josée) spends less than an hour a day on reminder calls"
+  ],
+  "must_not_include": [
+    "Google Ads or advertising (suggested by FA Systems and declined by the client)",
+    "Website redesign or online booking (suggested by FA Systems and deferred by the client)",
+    "Filling empty slots or getting more patients (the schedule is already full)",
+    "Three percent no-shows (a colleague's clinic, not the client's goal)",
+    "Paper charts (the client says this does not matter)"
+  ]
+}

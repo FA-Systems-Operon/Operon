@@ -1,0 +1,13 @@
+transcript,output,format_pass,name_correct
+transcript_1,A,True,True
+transcript_1,B,True,True
+transcript_2,A,True,True
+transcript_2,B,True,True
+transcript_3,A,True,True
+transcript_3,B,True,True
+transcript_4,A,True,False
+transcript_4,B,True,False
+transcript_5,A,True,True
+transcript_5,B,True,True
+transcript_6,A,True,True
+transcript_6,B,True,True

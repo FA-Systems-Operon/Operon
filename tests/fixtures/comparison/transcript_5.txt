@@ -1,0 +1,25 @@
+Client onboarding call
+
+Marcus Leblanc: Sorry I am late, the traffic on Decarie was brutal. Did you catch the hockey game last night?
+FA Systems: I missed it, unfortunately.
+Marcus Leblanc: You did not miss much. Three goals in the first period and then nothing. And this rain, it has not stopped all week.
+FA Systems: It has been a grey week. Tell me about your business.
+Marcus Leblanc: I own Ironside Fitness, a strength gym in Verdun. We have been open three years. It is me and two coaches; Kevin runs the front desk in the mornings and coaches in the evening.
+FA Systems: How do new members usually find you?
+Marcus Leblanc: Word of mouth, mostly. We offer a free one-week trial. A friend of mine runs a gym downtown and says he gets fifty trial sign-ups a month from Instagram, which sounds wild to me.
+FA Systems: How many trial sign-ups do you get now?
+Marcus Leblanc: Maybe eight. Honestly that is enough for a gym our size. The real issue is that most trial members never come back after their first class.
+FA Systems: Do you know why?
+Marcus Leblanc: Not really. Nobody checks in with them. I need a way to follow up with them during their first week.
+FA Systems: Do you follow up with anyone today?
+Marcus Leblanc: Sometimes I text them myself from my personal phone, when I remember, which is maybe one in three. It is not a system.
+FA Systems: How do you track who came back for a second class?
+Marcus Leblanc: We have a paper sign-in sheet at the door. So I cannot really tell which trial members came back unless I go through the sheets by hand, and I never do.
+FA Systems: What does a membership cost?
+Marcus Leblanc: Eighty-nine dollars a month.
+FA Systems: And if this worked, what would it look like?
+Marcus Leblanc: If I could convert half of my trial members into paying memberships within three months, I would be happy. That would change things for us.
+FA Systems: Is there anything you do not want us to change?
+Marcus Leblanc: Leave the coaching alone. That part works. Kevin would kill me if we changed his class schedule.
+FA Systems: Understood. We will put together a proposal.
+Marcus Leblanc: Sounds good. And go watch the next game, it has to be better.
