@@ -81,3 +81,34 @@ Most versioning tests exercise PostgreSQL or HTTP endpoints and are integration
 regression tests despite the issue's "unit tests" title. Schema validation tests
 are unit tests. Approval identity is supplied by the test API helper; authenticated
 reviewer authorization is separate from this issue.
+
+## Source-linked draft acceptance (AT 3.2, #48)
+
+Criterion: given a generated draft profile, when a reviewer opens it, every field
+shows a link to the part of the transcript or intake form it came from. The model
+is faked, so CI needs no Ollama. Controlled examples: `transcript_1.txt` with a
+short intake form, plus an unnamed transcript-only call.
+
+| Criterion part | Evidence |
+| --- | --- |
+| A generated draft is saved and read back with its references | `test_source_profile_acceptance.py::test_every_saved_field_links_to_its_source_passage` |
+| Every populated field (name, each need, each goal) has a reference | same test (populated fields must equal the answer key) |
+| Each reference is one of the client's stored documents, and its quote occurs in that document's text | same test (checked against the database) |
+| Each reference points to the right document (intake-only facts cite the intake) | same test (quote occurs in no other document; kinds match the answer key) |
+| A real quote cited from the wrong document is rejected (422) and not saved | `test_source_profile_acceptance.py::test_real_quote_cited_from_the_wrong_document_is_not_saved` |
+| The reviewer sees one link per field to the correct document and quote | `frontend/src/components/DraftSourceView.acceptance.test.tsx` |
+
+Invented quotes, unknown or other clients' documents and missing references are
+already covered by `test_profile_sources_api.py` (#40) and `test_source_prompt.py` (#39).
+
+```bash
+python -m pytest tests/test_source_profile_acceptance.py tests/test_source_prompt.py \
+  tests/test_profile_sources.py tests/test_profile_sources_api.py -q
+cd frontend && npm test
+```
+
+**Limitation:** "when a reviewer opens it" is verified at component level with
+`DraftSourceView`, since the review page (#57) is not built yet. The frontend
+example copies the backend's saved data, so update both if the example changes.
+Exact quote matching proves provenance, not that the passage supports the value;
+that stays a reviewer judgement.
