@@ -14,6 +14,7 @@ from src.ai import (
 from src.ai.ollama import OllamaProvider
 from src.config import settings
 from src.db import Base, engine
+from src.onboarding_jobs import start_worker
 from src.routers import artifacts, client_profiles, clients, documents, playbooks
 
 
@@ -25,7 +26,11 @@ async def lifespan(app: FastAPI):
     until Alembic is added back (see backend/README.md).
     """
     Base.metadata.create_all(bind=engine)
+    # Picks up pending onboarding jobs, including ones a crash left behind (#37).
+    stop_worker = start_worker() if settings.BACKGROUND_WORKER_ENABLED else None
     yield
+    if stop_worker is not None:
+        stop_worker()
 
 
 app = FastAPI(

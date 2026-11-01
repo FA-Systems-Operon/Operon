@@ -133,7 +133,12 @@ class JobStatus(str, enum.Enum):
 
 
 class OnboardingJob(Base):
-    """One onboarding-agent run, created in the same commit as its upload (#36)."""
+    """One onboarding-agent run, created in the same commit as its upload (#36).
+
+    The row is committed as pending before anything runs, so a crash can't lose
+    it (#37). A runner claims it with a lease; if the lease runs out before the
+    job finishes, the worker treats it as abandoned and retries it.
+    """
 
     __tablename__ = "onboarding_jobs"
 
@@ -159,6 +164,18 @@ class OnboardingJob(Base):
     # The draft profile version this run produced, when it succeeded.
     result_version_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("client_profile_versions.id"), nullable=True
+    )
+    # How many times a runner has claimed this job, including the current run.
+    attempts: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    # While running: when the claim expires and the job counts as abandoned.
+    lease_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # While pending after a failed attempt: don't retry before this time.
+    next_attempt_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

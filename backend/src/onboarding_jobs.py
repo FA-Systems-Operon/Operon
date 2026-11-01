@@ -1,25 +1,36 @@
-"""Run the onboarding agent on a client's documents after an upload (#36).
+"""Run the onboarding agent on a client's documents after an upload (#36, #37).
 
-The upload endpoint saves a pending OnboardingJob in the same commit as the
-document, then schedules run_onboarding_job as a FastAPI background task. Each
-status change is committed on its own so callers can watch progress:
+The upload endpoint commits a pending OnboardingJob together with the document,
+before anything runs, so a crash can't lose it. Two things then run jobs:
 
-    pending -> running -> succeeded | failed
+- a FastAPI background task started by the upload, so new jobs start at once;
+- a single worker thread (start_worker) that picks up pending jobs, including
+  ones left behind by a crash or restart, and retries temporary failures.
 
-Background tasks run inside the API process, so a crash or restart can leave a
-job pending or running. Picking those up again and retrying is #37.
+Status moves pending -> running -> succeeded | failed, and back to pending when
+a temporary failure is retried. Every change is committed on its own.
+
+Claiming is recovery-safe. A runner claims a job with a conditional UPDATE that
+also starts a lease and counts the attempt. If the runner dies, the lease runs
+out and recover_abandoned_jobs() puts the job back to pending (or fails it once
+the attempts are used up). A runner may only finish the attempt it claimed, in
+the same transaction that saves the draft, so a run that lost its lease can't
+save a second draft.
 """
 
 import logging
+import threading
 import uuid
-from datetime import datetime, timezone
+from collections.abc import Callable
+from datetime import datetime, timedelta, timezone
 
 from pydantic import ValidationError
-from sqlalchemy import select, update
+from sqlalchemy import or_, select, update
 from sqlalchemy.orm import Session
 
 from src.ai.provider import ProviderConfigError, ProviderError, get_provider
 from src.ai.source_prompt import SourceInput, generate_source_profile
+from src.config import settings
 from src.db import SessionLocal
 from src.document_extraction import UnsupportedDocumentTypeError, extract_document
 from src.models import (
@@ -30,7 +41,7 @@ from src.models import (
     SourceDocument,
 )
 from src.profile_sources import save_source_profile
-from src.storage import DocumentStorage
+from src.storage import DocumentStorage, get_storage
 
 log = logging.getLogger(__name__)
 
@@ -39,49 +50,230 @@ MAX_ERROR_LENGTH = 500
 
 
 def run_onboarding_job(job_id: uuid.UUID, storage: DocumentStorage) -> None:
-    """Extract the upload, run the agent on the client's text and save a draft.
+    """Run one job if it is pending and due. Used right after an upload.
 
-    Never raises: every failure is recorded on the job as status "failed".
+    Never raises: every failure is recorded on the job.
     """
     # A session of its own: the request's session is closed once the response
     # has been sent, which is when background tasks run.
     with SessionLocal() as db:
         job = _claim(db, job_id)
-        if job is None:
-            return
-        try:
-            extract_document(job.client_id, job.document_id, db, storage)
-            sources = _client_sources(db, job.client_id)
-            # The model call happens outside any transaction, so no row locks
-            # are held while a local model takes its time.
-            draft = generate_source_profile(sources, get_provider())
-            profile = _profile_for(db, job.client_id)
-            version = save_source_profile(db, profile.id, draft)
-            job.status = JobStatus.SUCCEEDED
-            job.result_version_id = version.id
-            job.finished_at = _now()
-            db.commit()
-        except Exception as error:
+        if job is not None:
+            _execute(db, job, storage)
+
+
+def run_next_job(storage: DocumentStorage) -> bool:
+    """Claim and run the oldest due pending job. Returns False if there was none."""
+    with SessionLocal() as db:
+        # SKIP LOCKED: if another runner is claiming this row, take the next one.
+        job_id = db.scalar(
+            select(OnboardingJob.id)
+            .where(OnboardingJob.status == JobStatus.PENDING, _is_due())
+            .order_by(OnboardingJob.created_at, OnboardingJob.id)
+            .limit(1)
+            .with_for_update(skip_locked=True)
+        )
+        if job_id is None:
             db.rollback()
-            log.exception("Onboarding job %s failed", job_id)
-            _mark_failed(db, job_id, _describe(error))
+            return False
+        job = _claim(db, job_id)
+        if job is not None:
+            _execute(db, job, storage)
+        return True
+
+
+def recover_abandoned_jobs() -> int:
+    """Requeue running jobs whose lease ran out; fail them if out of attempts.
+
+    A running job with an expired lease means its runner stopped (crash,
+    restart, or a run longer than JOB_TIMEOUT_SECONDS). Returns how many
+    jobs were recovered.
+    """
+    now = _now()
+    abandoned = (
+        OnboardingJob.status == JobStatus.RUNNING,
+        OnboardingJob.lease_expires_at < now,
+    )
+    max_attempts = 1 + settings.JOB_RETRY_ATTEMPTS
+    with SessionLocal() as db:
+        requeued = db.execute(
+            update(OnboardingJob)
+            .where(*abandoned, OnboardingJob.attempts < max_attempts)
+            .values(
+                status=JobStatus.PENDING,
+                lease_expires_at=None,
+                next_attempt_at=now,
+                error="Previous attempt stopped before finishing",
+            )
+        ).rowcount
+        failed = db.execute(
+            update(OnboardingJob)
+            .where(*abandoned, OnboardingJob.attempts >= max_attempts)
+            .values(
+                status=JobStatus.FAILED,
+                lease_expires_at=None,
+                finished_at=now,
+                error="Job stopped before finishing and has no attempts left",
+            )
+        ).rowcount
+        db.commit()
+    if requeued or failed:
+        log.warning(
+            "Recovered abandoned onboarding jobs: %s requeued, %s failed",
+            requeued,
+            failed,
+        )
+    return requeued + failed
+
+
+def start_worker(
+    storage_factory: Callable[[], DocumentStorage] = get_storage,
+) -> Callable[[], None]:
+    """Start the single background worker thread; returns a function to stop it.
+
+    Each round recovers abandoned jobs, then runs due pending jobs one at a
+    time until none are left, then waits JOB_POLL_SECONDS.
+    """
+    stop = threading.Event()
+
+    def loop() -> None:
+        storage = storage_factory()
+        while not stop.is_set():
+            try:
+                recover_abandoned_jobs()
+                while not stop.is_set() and run_next_job(storage):
+                    pass
+            except Exception:
+                # e.g. the database is briefly unreachable; try again next round.
+                log.exception("Onboarding worker round failed")
+            stop.wait(settings.JOB_POLL_SECONDS)
+
+    thread = threading.Thread(target=loop, name="onboarding-worker", daemon=True)
+    thread.start()
+
+    def stop_worker() -> None:
+        stop.set()
+        thread.join(timeout=settings.JOB_POLL_SECONDS + 5)
+
+    return stop_worker
 
 
 def _claim(db: Session, job_id: uuid.UUID) -> OnboardingJob | None:
-    """Move a pending job to running, or return None if it isn't pending.
+    """Move a due pending job to running, or return None if it isn't one.
 
-    The conditional UPDATE means two runners can't both start the same job.
+    The conditional UPDATE means two runners can't both claim the same attempt.
     """
+    now = _now()
     claimed = db.execute(
         update(OnboardingJob)
-        .where(OnboardingJob.id == job_id, OnboardingJob.status == JobStatus.PENDING)
-        .values(status=JobStatus.RUNNING, started_at=_now())
+        .where(
+            OnboardingJob.id == job_id,
+            OnboardingJob.status == JobStatus.PENDING,
+            _is_due(now),
+        )
+        .values(
+            status=JobStatus.RUNNING,
+            attempts=OnboardingJob.attempts + 1,
+            started_at=now,
+            lease_expires_at=now + timedelta(seconds=settings.JOB_TIMEOUT_SECONDS),
+            next_attempt_at=None,
+        )
     ).rowcount
     db.commit()
     if not claimed:
-        log.warning("Onboarding job %s is missing or not pending; skipped", job_id)
+        # Normal when the worker and the upload's task race for a new job.
+        log.debug("Onboarding job %s is not pending and due; skipped", job_id)
         return None
     return db.get(OnboardingJob, job_id)
+
+
+def _execute(db: Session, job: OnboardingJob, storage: DocumentStorage) -> None:
+    """Run a claimed job and record the outcome of this attempt."""
+    job_id, attempt = job.id, job.attempts
+    try:
+        extract_document(job.client_id, job.document_id, db, storage)
+        sources = _client_sources(db, job.client_id)
+        # The model call happens outside any transaction, so no row locks
+        # are held while a local model takes its time.
+        draft = generate_source_profile(sources, get_provider())
+        profile = _profile_for(db, job.client_id)
+        version = save_source_profile(db, profile.id, draft)
+        # Same transaction as the draft: if this attempt lost its claim, the
+        # rollback discards the draft too, so retries can't duplicate it.
+        if not _finish_attempt(
+            db,
+            job_id,
+            attempt,
+            status=JobStatus.SUCCEEDED,
+            result_version_id=version.id,
+            error=None,
+            finished_at=_now(),
+        ):
+            db.rollback()
+            log.warning("Onboarding job %s lost its claim; draft discarded", job_id)
+            return
+        db.commit()
+    except Exception as error:
+        db.rollback()
+        log.exception("Onboarding job %s attempt %s failed", job_id, attempt)
+        _record_failure(db, job_id, attempt, error)
+
+
+def _finish_attempt(db: Session, job_id: uuid.UUID, attempt: int, **values) -> bool:
+    """Update the job only if this attempt still holds the claim."""
+    return bool(
+        db.execute(
+            update(OnboardingJob)
+            .where(
+                OnboardingJob.id == job_id,
+                OnboardingJob.status == JobStatus.RUNNING,
+                OnboardingJob.attempts == attempt,
+            )
+            .values(lease_expires_at=None, **values)
+        ).rowcount
+    )
+
+
+def _record_failure(
+    db: Session, job_id: uuid.UUID, attempt: int, error: Exception
+) -> None:
+    """Schedule a retry for temporary failures with attempts left, else fail."""
+    message = _describe(error)[:MAX_ERROR_LENGTH]
+    now = _now()
+    if _is_retryable(error) and attempt <= settings.JOB_RETRY_ATTEMPTS:
+        delay = timedelta(seconds=settings.JOB_RETRY_DELAY_SECONDS * attempt)
+        values = {
+            "status": JobStatus.PENDING,
+            "next_attempt_at": now + delay,
+            "error": message,
+        }
+    else:
+        values = {"status": JobStatus.FAILED, "finished_at": now, "error": message}
+    try:
+        if not _finish_attempt(db, job_id, attempt, **values):
+            log.warning("Onboarding job %s lost its claim before failing", job_id)
+        db.commit()
+    except Exception:
+        # Most likely the database itself is down. The lease will run out and
+        # recover_abandoned_jobs() will pick the job up again.
+        db.rollback()
+        log.exception("Could not record failure for onboarding job %s", job_id)
+
+
+def _is_retryable(error: Exception) -> bool:
+    """Temporary problems worth another try; bad input or output is not."""
+    if isinstance(error, ProviderConfigError):
+        return False
+    if isinstance(error, ProviderError):
+        return True  # unreachable, timed out, or an error reply from the model
+    return isinstance(error, OSError) and not isinstance(error, FileNotFoundError)
+
+
+def _is_due(now: datetime | None = None):
+    now = now or _now()
+    return or_(
+        OnboardingJob.next_attempt_at.is_(None), OnboardingJob.next_attempt_at <= now
+    )
 
 
 def _client_sources(db: Session, client_id: uuid.UUID) -> list[SourceInput]:
@@ -120,25 +312,6 @@ def _profile_for(db: Session, client_id: uuid.UUID) -> ClientProfile:
         db.add(profile)
         db.flush()
     return profile
-
-
-def _mark_failed(db: Session, job_id: uuid.UUID, message: str) -> None:
-    try:
-        db.execute(
-            update(OnboardingJob)
-            .where(OnboardingJob.id == job_id)
-            .values(
-                status=JobStatus.FAILED,
-                error=message[:MAX_ERROR_LENGTH],
-                finished_at=_now(),
-            )
-        )
-        db.commit()
-    except Exception:
-        # Most likely the database itself is down; the job stays "running"
-        # until #37's recovery picks it up.
-        db.rollback()
-        log.exception("Could not record failure for onboarding job %s", job_id)
 
 
 def _describe(error: Exception) -> str:
