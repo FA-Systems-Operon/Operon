@@ -5,7 +5,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.models import DocumentKind, ReviewStatus
+from src.models import DocumentKind, JobStatus, ReviewStatus
 
 # What the API user sends
 
@@ -56,6 +56,22 @@ class ExtractedTextOut(BaseModel):
     document_id: uuid.UUID
     text: str
     extracted_at: datetime
+
+
+class OnboardingJobOut(BaseModel):
+    """Status of the onboarding-agent run started by a document upload."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    client_id: uuid.UUID
+    document_id: uuid.UUID
+    status: JobStatus
+    error: str | None
+    result_version_id: uuid.UUID | None
+    created_at: datetime
+    started_at: datetime | None
+    finished_at: datetime | None
 
 
 class ClientProfileOut(BaseModel):
