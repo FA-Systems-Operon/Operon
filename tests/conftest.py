@@ -29,6 +29,9 @@ if not (make_url(TEST_DATABASE_URL).database or "").endswith("_test"):
 # so this makes the app's own engine point at the test database. This applies to
 # every test, including test_api.py and test_config.py.
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
+# The job worker thread would pick up other tests' jobs; tests that need it
+# start it themselves (#37).
+os.environ["BACKGROUND_WORKER_ENABLED"] = "false"
 
 import pytest
 from fastapi.testclient import TestClient
