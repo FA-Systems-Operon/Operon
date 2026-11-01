@@ -83,7 +83,7 @@ def db_session(database):
     with engine.begin() as conn:
         conn.execute(
             text(
-                "TRUNCATE artifact_versions, artifacts, "
+                "TRUNCATE onboarding_jobs, artifact_versions, artifacts, "
                 "client_profile_versions, client_profiles, "
                 "playbook_versions, playbooks, "
                 "extracted_texts, source_documents, clients"

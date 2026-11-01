@@ -14,6 +14,13 @@ from src.models import Client, ExtractedText, SourceDocument
 from src.pdf_extraction import MAX_PDF_PAGES
 
 
+@pytest.fixture(autouse=True)
+def no_onboarding_job(monkeypatch):
+    """These tests cover manual extraction, so uploads must not extract by
+    themselves through the onboarding job (#36)."""
+    monkeypatch.setattr("src.routers.documents.run_onboarding_job", lambda *a: None)
+
+
 def document_url(client_id, document_id) -> str:
     return f"/api/v1/clients/{client_id}/documents/{document_id}"
 
