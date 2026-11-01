@@ -1,4 +1,4 @@
-"""Task #36: failure paths of the onboarding job that the upload flow rarely hits.
+"""Tasks #36/#37: failure paths of the onboarding job that the upload flow rarely hits.
 
 Every failure must end with a short, user-safe error on the job, and recording
 the failure must never raise, even when the database is unavailable.
@@ -16,9 +16,10 @@ from src.ai.provider import (
     ProviderTimeout,
     ProviderUnavailable,
 )
+from src.config import settings
 from src.document_extraction import UnsupportedDocumentTypeError
 from src.models import JobStatus, OnboardingJob
-from src.onboarding_jobs import _describe, _mark_failed, run_onboarding_job
+from src.onboarding_jobs import _describe, _record_failure, run_onboarding_job
 
 
 class _Strict(BaseModel):
@@ -121,6 +122,8 @@ def test_storage_failure_fails_the_job(
         raise PermissionError(f"/code/storage/{key}")
 
     monkeypatch.setattr(storage, "read", unreadable)
+    # Storage errors are retried (#37); with no retries left the job fails.
+    monkeypatch.setattr(settings, "JOB_RETRY_ATTEMPTS", 0)
 
     run_onboarding_job(job.id, storage)
 
@@ -160,7 +163,7 @@ class _UnavailableDatabase:
 def test_failure_that_cannot_be_recorded_is_logged_not_raised(caplog):
     db = _UnavailableDatabase()
 
-    _mark_failed(db, uuid.uuid4(), "AI provider failed: ProviderUnavailable")
+    _record_failure(db, uuid.uuid4(), 1, ProviderUnavailable("refused"))
 
     assert db.rolled_back
     assert "Could not record failure" in caplog.text
