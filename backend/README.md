@@ -284,3 +284,34 @@ through `GET /client-profiles/{profile_id}/versions` in each version's `data`.
 The existing latest-approved endpoint continues to return only approved versions.
 This follows the existing profile route prefix; frontend proxy integration is
 separate. Existing generic profile endpoints keep their current behavior.
+
+## Onboarding job on upload (#36)
+
+Every successful upload also saves an `onboarding_jobs` row with status
+`pending`, in the same commit as the document. After the response is sent, a
+FastAPI background task runs the onboarding agent:
+
+1. extracts the uploaded document's text,
+2. sends all of the client's extracted documents (transcript and intake) to the
+   source-linked profile prompt (#39),
+3. saves the validated result as a new draft version of the client's newest
+   profile, creating a profile if the client has none (#40).
+
+The status moves `pending` → `running` → `succeeded` or `failed`, and each step
+is committed so it can be watched while the model runs. Check it with
+`GET /api/v1/clients/{client_id}/documents/{document_id}/onboarding-job`, which
+returns the latest job for that document: `status`, a short `error` on failure,
+`result_version_id` on success, and timestamps. Another client's document
+returns 404.
+
+Failures are recorded on the job and never undo the upload or its extracted
+text. Model errors, unsupported evidence and malformed replies save no profile
+version. The full traceback goes to the server log; `error` stays short and does
+not include model output.
+
+The job runs inside the API process. If the API stops mid-job, the row stays
+`pending` or `running`; recovering and retrying those jobs is #37. A job runs
+only when it is `pending`, so running the same job twice does nothing.
+
+New databases get the table from `create_all`. For an existing database, apply
+`backend/migrations/004_add_onboarding_jobs.sql`.
