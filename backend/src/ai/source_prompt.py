@@ -72,7 +72,7 @@ def build_source_profile_prompt(
     inputs = json.dumps([source.model_dump() for source in sources], ensure_ascii=False)
     return (
         "Read both documents and extract the profile. FIRST compare each onboarding "
-        "field across BOTH documents. Different current values for the same field are "
+        "field across BOTH documents. Incompatible current values for a single-valued field are "
         "a POTENTIAL CONFLICT: preserve both and use null in the profile. Do not silently "
         "copy the first document. Otherwise extract values as text; missing values are "
         "null. Never invent a name. Return this JSON shape with populated values:\n"
@@ -89,6 +89,10 @@ def build_source_profile_prompt(
         "- needs are stated problems/requirements; goals are desired outcomes. "
         "Both are arrays of plain strings, never objects; put evidence only in "
         "source_references. Use empty lists if absent; every needs/goals item must have evidence.\n"
+        "- Needs and goals are multi-valued lists. Distinct compatible items coexist; "
+        "having two different goals is not itself a conflict. Flag a list conflict "
+        "only for explicit negation or mutually exclusive claims about the same "
+        "target and context. The explanation must identify the incompatibility.\n"
         "- Reference list items individually (needs/0, goals/0), never needs or goals.\n"
         "- Each quote must occur inside the SAME document identified by document_id.\n"
         "- One conflict alternative must cite the transcript and the other the intake. "
@@ -187,8 +191,8 @@ def validate_generated_profile(
     """Complete literal scalar evidence, then apply the same strict validator.
 
     This does not guess provenance: only exact value occurrences in the supplied
-    source pair can supply missing scalar references. Invalid existing evidence
-    is left intact for rejection. Conflict evidence stays in alternatives.
+    source pair can supply missing scalar references. Terminal punctuation can
+    be aligned only to an exact source substring; unsupported evidence is rejected. Conflict evidence stays in alternatives.
     """
     profile = SourceLinkedProfile.model_validate_json(text)
     documents = {source.document_id: source.text for source in sources}
