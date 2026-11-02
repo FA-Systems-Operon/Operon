@@ -324,9 +324,47 @@ text. Model errors, unsupported evidence, malformed replies, or a document
 without text save no profile version. The full traceback goes to the server
 log; `error` stays short and does not include model output.
 
-The job runs inside the API process. If the API stops mid-job, the row stays
-`pending` or `running`; recovering and retrying those jobs is #37. A job runs
-only when it is `pending`, so running the same job twice does nothing.
+A job runs only when it is `pending`, so running the same job twice does
+nothing. Crash recovery and retries are covered in the next section (#37).
 
 New databases get the table from `create_all`. For an existing database, apply
 `backend/migrations/004_add_onboarding_jobs.sql`.
+
+## Job recovery and retries (#37)
+
+The pending job is committed before anything runs, so a crash or restart can't
+lose it. A single worker thread, started with the API, then:
+
+- runs due `pending` jobs one at a time, oldest first, including jobs whose
+  start call's background task never ran;
+- every `JOB_POLL_SECONDS`, puts `running` jobs whose lease has expired back to
+  `pending`, or marks them `failed` once they have no attempts left.
+
+Claiming is recovery-safe. A runner claims a job with a conditional update that
+counts the attempt (`attempts`) and starts a lease of `JOB_TIMEOUT_SECONDS`.
+The worker skips rows another runner has locked (`SKIP LOCKED`). A run can only
+finish the attempt it claimed, in the same transaction that saves the draft, so
+a run that outlived its lease can't save a second draft.
+
+Temporary failures (model unreachable, timed out or answering with an error,
+storage unavailable) go back to `pending` with `error` and `next_attempt_at`
+set, waiting `JOB_RETRY_DELAY_SECONDS` times the attempt number. Bad model
+output, unsupported evidence, a missing file or a missing model setting fail
+straight away, because retrying wouldn't help.
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `BACKGROUND_WORKER_ENABLED` | `true` | Start the worker with the API. |
+| `JOB_POLL_SECONDS` | `5` | Wait between worker rounds. |
+| `JOB_TIMEOUT_SECONDS` | `600` | Lease length; a longer run counts as abandoned. Keep it above `OLLAMA_TIMEOUT_SECONDS`. |
+| `JOB_RETRY_ATTEMPTS` | `3` | Retries after the first attempt. |
+| `JOB_RETRY_DELAY_SECONDS` | `30` | Base wait before a retry. |
+
+The worker assumes one API process. `MAX_CONCURRENT_JOBS` in
+`compose.prod.yaml` is not used yet. After a crash, a job that was running is
+retried once its lease expires, so up to `JOB_TIMEOUT_SECONDS` later.
+The status endpoint also returns `attempts` and `next_attempt_at`. Starting a
+failed pair again resets its attempts.
+
+For an existing database, apply `backend/migrations/005_add_onboarding_job_retries.sql`
+after 004.

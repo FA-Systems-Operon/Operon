@@ -14,6 +14,7 @@ import pytest
 from sqlalchemy import func, select
 
 from src.ai.provider import ModelResponse, ProviderConfigError, ProviderUnavailable
+from src.config import settings
 from src.models import (
     ClientProfile,
     ClientProfileVersion,
@@ -382,6 +383,9 @@ def test_provider_failure_marks_the_job_failed_and_saves_nothing(
         raise ProviderUnavailable("connection refused")
 
     monkeypatch.setattr("src.onboarding_jobs.get_provider", unavailable)
+    # With no retries left the job fails at once; retries are covered in
+    # test_onboarding_job_recovery.py (#37).
+    monkeypatch.setattr(settings, "JOB_RETRY_ATTEMPTS", 0)
 
     transcript, _, job = start_draft(client, demo_client)
 

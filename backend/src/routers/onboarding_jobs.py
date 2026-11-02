@@ -117,8 +117,11 @@ def _job_for_pair(db: Session, body: OnboardingJobIn) -> OnboardingJob | None:
 
 
 def _requeue(job: OnboardingJob) -> None:
-    """Give a failed job a fresh start."""
+    """Give a failed job a fresh start, with its full set of attempts (#37)."""
     job.status = JobStatus.PENDING
     job.error = None
+    job.attempts = 0
+    job.lease_expires_at = None
+    job.next_attempt_at = None
     job.started_at = None
     job.finished_at = None

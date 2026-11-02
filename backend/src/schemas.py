@@ -77,6 +77,8 @@ class OnboardingJobOut(BaseModel):
     status: JobStatus
     error: str | None
     result_version_id: uuid.UUID | None
+    attempts: int
+    next_attempt_at: datetime | None
     created_at: datetime
     started_at: datetime | None
     finished_at: datetime | None

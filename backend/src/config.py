@@ -21,6 +21,19 @@ class Settings:
         self.MAX_UPLOAD_BYTES = int(
             os.getenv("MAX_UPLOAD_BYTES", str(20 * 1024 * 1024))
         )
+        # Onboarding jobs (#37). The worker polls for pending jobs and recovers
+        # jobs whose runner stopped (crash, restart) once their lease runs out.
+        self.BACKGROUND_WORKER_ENABLED = (
+            os.getenv("BACKGROUND_WORKER_ENABLED", "true").lower() == "true"
+        )
+        self.JOB_POLL_SECONDS = float(os.getenv("JOB_POLL_SECONDS", "5"))
+        # How long one run may take before it counts as abandoned. Keep this
+        # longer than OLLAMA_TIMEOUT_SECONDS.
+        self.JOB_TIMEOUT_SECONDS = float(os.getenv("JOB_TIMEOUT_SECONDS", "600"))
+        # Retries after the first attempt, for temporary failures only.
+        self.JOB_RETRY_ATTEMPTS = int(os.getenv("JOB_RETRY_ATTEMPTS", "3"))
+        # Wait before retry N is N times this (30s, 60s, 90s, ...).
+        self.JOB_RETRY_DELAY_SECONDS = float(os.getenv("JOB_RETRY_DELAY_SECONDS", "30"))
 
 
 settings = Settings()
