@@ -6,6 +6,7 @@ Fake model output tests the contract and workflow, not semantic model accuracy.
 
 import copy
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -104,3 +105,49 @@ def test_invalid_conflict_fails_job_without_persisting_a_draft(
     assert (
         db_session.scalar(select(func.count()).select_from(ClientProfileVersion)) == 0
     )
+
+
+@pytest.mark.skipif(
+    os.getenv("RUN_OLLAMA_TESTS") != "1",
+    reason="set RUN_OLLAMA_TESTS=1 to call local Ollama",
+)
+@pytest.mark.parametrize(
+    "case", [CASES[0], CASES[1], CASES[3]], ids=lambda case: "live_" + case["id"]
+)
+def test_real_provider_job_saves_validated_flags(  # pragma: no cover
+    client,
+    db_session,
+    demo_client,
+    profile_factory,
+    case,
+):
+    """Real inference, UUID sources and persistence; CI has no local model."""
+    original = profile_factory(approved=True, data={"email": "approved@example.test"})
+    transcript, intake = upload_pair(client, demo_client, **case["documents"])
+    response = start(client, demo_client, transcript, intake)
+    assert response.status_code == 201, response.text
+    job = get_job(client, demo_client, response.json())
+    assert job["status"] == "succeeded", job
+    versions = client.get(
+        f"/client-profiles/{original.client_profile_id}/versions"
+    ).json()
+    saved = next(
+        version for version in versions if version["id"] == job["result_version_id"]
+    )
+    assert saved["status"] == "draft"
+    data = saved["data"]
+    assert data["assessment"]["missing_fields"] == case["expected"]["missing_fields"]
+    assert [conflict["field"] for conflict in data["conflicts"]] == case["expected"][
+        "conflict_fields"
+    ]
+    if data["conflicts"]:
+        assert data["email"] is None
+        alternatives = data["conflicts"][0]["alternatives"]
+        assert sorted(value["value"] for value in alternatives) == sorted(
+            case["expected"]["email_values"]
+        )
+        assert {value["document_id"] for value in alternatives} == {
+            transcript["id"],
+            intake["id"],
+        }
+    assert versions[0]["data"] == {"email": "approved@example.test"}

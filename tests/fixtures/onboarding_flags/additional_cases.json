@@ -1,0 +1,26 @@
+[
+  {
+    "id": "phone_conflict_prose",
+    "documents": {
+      "transcript": "Owner of Rivage Studio: Our business number is NEQ-987654321. Our website is https://rivage.example. The domain is managed through Northstar Domains. Our Meta Business Manager ID is 987654. Our Facebook page is facebook.com/rivagestudio and Instagram is @rivagestudio. The current business phone is +1 438 555 0142. For email, use team@rivage.example. Our business address is 72 Harbour Road, Quebec City.",
+      "intake": "Business: Rivage Studio\nBusiness number: NEQ-987654321\nWebsite: https://rivage.example\nDomain platform: Northstar Domains\nMeta Business Manager: 987654\nFacebook Page: facebook.com/rivagestudio\nInstagram: @rivagestudio\nCurrent business phone: +1 438 555 0199\nEmail: team@rivage.example\nBusiness address: 72 Harbour Road, Quebec City"
+    },
+    "expected": {"missing_fields": [], "conflict_fields": ["phone_number"], "conflict_values": {"phone_number": ["+1 438 555 0142", "+1 438 555 0199"]}}
+  },
+  {
+    "id": "equivalent_phone_formatting",
+    "documents": {
+      "transcript": "Business: Rivage Studio\nBusiness number: NEQ-987654321\nWebsite: https://rivage.example\nDomain platform: Northstar Domains\nMeta Business Manager: 987654\nFacebook Page: facebook.com/rivagestudio\nInstagram: @rivagestudio\nPhone: +1 (438) 555-0142\nEmail: team@rivage.example\nBusiness address: 72 Harbour Road, Quebec City",
+      "intake": "Business: Rivage Studio\nBusiness number: NEQ-987654321\nWebsite: https://rivage.example\nDomain platform: Northstar Domains\nMeta Business Manager: 987654\nFacebook Page: facebook.com/rivagestudio\nInstagram: @rivagestudio\nPhone: +1 438 555 0142\nEmail: team@rivage.example\nBusiness address: 72 Harbour Road, Quebec City"
+    },
+    "expected": {"missing_fields": [], "conflict_fields": [], "conflict_values": {}}
+  },
+  {
+    "id": "intake_adds_no_information",
+    "documents": {
+      "transcript": "Business: Rivage Studio\nBusiness number: NEQ-987654321\nWebsite: https://rivage.example\nDomain platform: Northstar Domains\nMeta Business Manager: 987654\nFacebook Page: facebook.com/rivagestudio\nInstagram: @rivagestudio\nPhone: +1 438 555 0142\nEmail: team@rivage.example\nBusiness address: 72 Harbour Road, Quebec City",
+      "intake": "The client has no additional onboarding information to add. Use the factual details stated in the discovery call."
+    },
+    "expected": {"missing_fields": [], "conflict_fields": [], "conflict_values": {}}
+  }
+]

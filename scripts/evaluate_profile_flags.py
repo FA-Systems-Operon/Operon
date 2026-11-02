@@ -7,23 +7,47 @@ A passing report is a small regression sample, not a general accuracy guarantee.
 
 import hashlib
 import json
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from src.ai.provider import ProviderError, get_provider
+from src.ai.provider import ModelProvider, ModelResponse, ProviderError, get_provider
 from src.ai.source_prompt import (
     SourceInput,
     build_source_profile_prompt,
-    parse_source_profile,
+    generate_source_profile,
+    source_profile_schema,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def load_cases() -> list[dict]:
+    directory = ROOT / "tests/fixtures/onboarding_flags"
+    return [
+        case
+        for filename in ("cases.json", "additional_cases.json")
+        for case in json.loads((directory / filename).read_text())
+    ]
+
+
+class EvaluationProvider:
+    """Observe the production generation path without replacing its behavior."""
+
+    def __init__(self, provider: ModelProvider):
+        self.provider = provider
+        self.responses: list[ModelResponse] = []
+        self.prompt_hashes: list[str] = []
+
+    def generate(self, prompt: str, **kwargs) -> ModelResponse:
+        self.prompt_hashes.append(hashlib.sha256(prompt.encode()).hexdigest())
+        response = self.provider.generate(prompt, **kwargs)
+        self.responses.append(response)
+        return response
+
+
 def main() -> int:
-    cases = json.loads(
-        (ROOT / "tests/fixtures/onboarding_flags/cases.json").read_text()
-    )
+    cases = load_cases()
     report = {
         "evaluated_at": datetime.now(timezone.utc).isoformat(),
         "status": "completed",
@@ -37,23 +61,28 @@ def main() -> int:
         return 1
     for case in cases:
         sources = [
-            SourceInput(document_id=kind, kind=kind, text=text)
+            SourceInput(
+                document_id=str(
+                    uuid.uuid5(uuid.NAMESPACE_URL, case["id"] + "/" + kind)
+                ),
+                kind=kind,
+                text=text,
+            )
             for kind, text in case["documents"].items()
         ]
         prompt = build_source_profile_prompt(sources)
+        observed = EvaluationProvider(provider)
         result = {
             "case": case["id"],
             "prompt_sha256": hashlib.sha256(prompt.encode()).hexdigest(),
             "expected": case["expected"],
+            "sources": [source.model_dump() for source in sources],
+            "schema_sha256": hashlib.sha256(
+                json.dumps(source_profile_schema(sources), sort_keys=True).encode()
+            ).hexdigest(),
         }
         try:
-            reply = provider.generate(prompt, json_output=True)
-            result.update(
-                provider=reply.provider,
-                model=reply.model,
-                duration_ms=reply.duration_ms,
-            )
-            draft = parse_source_profile(reply.text, sources)
+            draft = generate_source_profile(sources, observed)
             actual_missing = set(draft.assessment.missing_fields)
             actual_conflicts = {conflict.field for conflict in draft.conflicts}
             expected_missing = set(case["expected"]["missing_fields"])
@@ -65,15 +94,18 @@ def main() -> int:
                 false_conflicts=sorted(actual_conflicts - expected_conflicts),
                 draft=draft.model_dump(),
             )
-            actual_email_values = {
-                alternative.value
+            actual_values = {
+                conflict.field: sorted(
+                    alternative.value for alternative in conflict.alternatives
+                )
                 for conflict in draft.conflicts
-                if conflict.field == "email"
-                for alternative in conflict.alternatives
             }
-            result["alternative_values_match"] = actual_email_values == set(
-                case["expected"]["email_values"]
-            )
+            expected_values = case["expected"].get("conflict_values", {})
+            if case["expected"].get("email_values"):
+                expected_values = {"email": case["expected"]["email_values"]}
+            result["alternative_values_match"] = actual_values == {
+                field: sorted(values) for field, values in expected_values.items()
+            }
             result["passed"] = result["alternative_values_match"] and not any(
                 result[key]
                 for key in (
@@ -87,6 +119,17 @@ def main() -> int:
             # No raw response/error body is logged. Only controlled synthetic
             # successful drafts are included in this local report.
             result.update(passed=False, error=type(error).__name__)
+        result["model_calls"] = len(observed.prompt_hashes)
+        result["attempt_prompt_sha256"] = observed.prompt_hashes
+        if observed.responses:
+            last = observed.responses[-1]
+            result.update(
+                provider=last.provider,
+                model=last.model,
+                duration_ms=sum(
+                    response.duration_ms for response in observed.responses
+                ),
+            )
         report["cases"].append(result)
     report["passed"] = all(case["passed"] for case in report["cases"])
     print(json.dumps(report, indent=2))

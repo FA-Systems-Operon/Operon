@@ -145,8 +145,9 @@ npm test
 npm run build
 ```
 
-These tests use a fake provider, so they verify validation and integration, not
-actual semantic detection. The UI is tested at component level: the full review
+The default suite uses a fake provider for deterministic validation and
+integration checks. Three opt-in tests run the actual local provider through
+uploads, job execution, persistence, and API retrieval. The UI is tested at component level: the full review
 page and source-navigation implementation remain #57. The existing production
 App does not yet display this component.
 
@@ -154,15 +155,36 @@ For real-model evaluation, start/configure the project's Ollama provider and run
 from the repository root with the backend dependencies installed:
 
 ```bash
-OLLAMA_MODEL='<installed-model>' PYTHONPATH=backend .venv/bin/python \
+OLLAMA_MODEL=qwen2.5:14b PYTHONPATH=backend .venv/bin/python \
   scripts/evaluate_profile_flags.py > /tmp/operon-flags-evaluation.json
 ```
 
 Set `OLLAMA_BASE_URL` if the endpoint differs from `http://localhost:11434`.
 The command does not automatically load `.env`. The report records the model,
-provider, each prompt hash, duration, validated synthetic draft, missing/extra
-flags, and expected alternatives. A nonzero exit signals unavailable provider,
+provider, source UUIDs, initial and repair prompt hashes, schema hash, model-call
+count, duration, validated synthetic draft, missing/extra flags, and expected
+alternatives. The evaluator uses the production generation/repair path. A nonzero exit signals unavailable provider,
 invalid output or an answer-key mismatch. Manually inspect interpretation and
-quotes as well; these five cases are a regression sample, not a general accuracy
+quotes as well; these eight cases are a regression sample, not a general accuracy
 threshold or sponsor sign-off. See `docs/evaluation/us-3.3-status.md` for the
 current evaluation status.
+
+
+The additional cases in `tests/fixtures/onboarding_flags/additional_cases.json`
+cover a phone conflict in prose, equivalent phone formatting, and completeness
+when all facts come from one source. They were used during development and are
+regression cases, not an independent held-out accuracy study. The evaluator runs
+both fixed case files; it does not accept arbitrary source files.
+
+To run the three live job/database checks against an isolated test database:
+
+```bash
+OLLAMA_MODEL=qwen2.5:14b OLLAMA_BASE_URL=http://127.0.0.1:11434 \
+OLLAMA_TIMEOUT_SECONDS=180 RUN_OLLAMA_TESTS=1 \
+TEST_DATABASE_URL='<dedicated PostgreSQL URL ending in _test>' \
+  .venv/bin/python -m pytest tests/test_profile_flags_acceptance.py -k real_provider -q
+```
+
+As with the existing baseline live-model test, these opt-in functions are
+excluded from CI coverage because CI has no Ollama service. They are run
+separately and their results are documented in the evaluation status.

@@ -18,25 +18,36 @@ def test_evaluation_records_observed_results_and_exit_status(monkeypatch, capsys
     )
 
     class Provider:
-        def generate(self, prompt, *, json_output):
+        def generate(self, prompt, *, json_output, output_schema):
             assert json_output
             if mode == "unavailable":
                 raise ProviderUnavailable("offline")
             sources = json.loads(prompt.split("Source documents (JSON):\n", 1)[1])
             documents = {source["kind"]: source["text"] for source in sources}
             case = next(case for case in cases if case["documents"] == documents)
-            payload = {**case["reply"]}
+            from tests.test_profile_flags_acceptance import bind_documents
+
+            payload = bind_documents(
+                case["reply"],
+                {source["kind"]: source["document_id"] for source in sources},
+            )
+            assert output_schema["required"]
             if mode == "missed_conflict":
                 payload["conflicts"] = []
             text = "invalid JSON" if mode == "invalid_output" else json.dumps(payload)
             return ModelResponse(text, "fake", "evaluation-test", 1)
 
+    monkeypatch.setattr(evaluation, "load_cases", lambda: cases)
     monkeypatch.setattr(evaluation, "get_provider", lambda: Provider())
     code = evaluation.main()
     report = json.loads(capsys.readouterr().out)
     assert code == (0 if mode == "correct" else 1)
     assert report["passed"] is (mode == "correct")
     assert len(report["cases"]) == 5
+    assert all(
+        case["model_calls"] == (2 if mode == "invalid_output" else 1)
+        for case in report["cases"]
+    )
     if mode == "missed_conflict":
         assert report["cases"][0]["missed_conflicts"] == ["email"]
         assert report["cases"][0]["alternative_values_match"] is False
@@ -72,3 +83,13 @@ def test_command_entrypoint_reports_unavailable_provider(monkeypatch, capsys):
         )
     assert error.value.code == 1
     assert json.loads(capsys.readouterr().out)["status"] == "unavailable"
+
+
+def test_fixed_evaluation_set_includes_independent_prose_and_formatting_cases():
+    cases = evaluation.load_cases()
+    assert len(cases) == 8
+    assert {case["id"] for case in cases} >= {
+        "phone_conflict_prose",
+        "equivalent_phone_formatting",
+        "intake_adds_no_information",
+    }
