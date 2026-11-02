@@ -303,3 +303,34 @@ def test_one_repair_can_correct_a_quote_without_weakening_validation(evidence_ca
         repair_call.args[0].split("Source documents (JSON):\n", 1)[1]
     ) == [s.model_dump() for s in sources]
     assert repair_call.kwargs["output_schema"] == source_profile_schema(sources)
+
+
+def test_generation_aligns_added_terminal_punctuation_to_exact_source_text():
+    sources = [
+        SourceInput(
+            document_id="call",
+            kind="transcript",
+            text="Our page is facebook.com/river and Instagram is @river.",
+        )
+    ]
+    payload = {
+        "name": None,
+        "needs": [],
+        "goals": [],
+        "facebook_page": "facebook.com/river",
+        "source_references": [
+            {
+                "field": "facebook_page",
+                "document_id": "call",
+                "quote": "Our page is facebook.com/river.",
+            }
+        ],
+    }
+    with pytest.raises(ValueError, match="occur exactly"):
+        parse_source_profile(json.dumps(payload), sources)
+    draft = validate_generated_profile(json.dumps(payload), sources)
+    assert draft.source_references[0].quote == "Our page is facebook.com/river"
+    assert draft.source_references[0].quote in sources[0].text
+    payload["source_references"][0]["quote"] = "Our page IS facebook.com/river."
+    with pytest.raises(ValueError, match="occur exactly"):
+        validate_generated_profile(json.dumps(payload), sources)

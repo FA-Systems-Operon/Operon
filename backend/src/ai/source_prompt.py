@@ -191,6 +191,47 @@ def validate_generated_profile(
     is left intact for rejection. Conflict evidence stays in alternatives.
     """
     profile = SourceLinkedProfile.model_validate_json(text)
+    documents = {source.document_id: source.text for source in sources}
+
+    def exact_quote(document_id: str, quote: str) -> str:
+        text = documents.get(document_id, "")
+        if quote in text:
+            return quote
+        # Models sometimes finish an excerpt with punctuation absent from the
+        # source. Only trim it if the result is an exact substring of that same
+        # document; never use fuzzy matching or change an unsupported passage.
+        trimmed = quote.rstrip(".!?")
+        return trimmed if trimmed and trimmed in text else quote
+
+    profile = profile.model_copy(
+        update={
+            "source_references": [
+                reference.model_copy(
+                    update={
+                        "quote": exact_quote(reference.document_id, reference.quote)
+                    }
+                )
+                for reference in profile.source_references
+            ],
+            "conflicts": [
+                conflict.model_copy(
+                    update={
+                        "alternatives": [
+                            alternative.model_copy(
+                                update={
+                                    "quote": exact_quote(
+                                        alternative.document_id, alternative.quote
+                                    )
+                                }
+                            )
+                            for alternative in conflict.alternatives
+                        ]
+                    }
+                )
+                for conflict in profile.conflicts
+            ],
+        }
+    )
     populated = {
         *(field for field in SCALAR_FIELDS if getattr(profile, field) is not None),
         *(f"needs/{i}" for i in range(len(profile.needs))),

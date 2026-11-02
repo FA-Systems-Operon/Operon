@@ -387,8 +387,9 @@ this job's document IDs. Strict validation still applies to every response.
 Ordinary text/JSON provider calls retain their existing behavior.
 
 During generation only, missing scalar references may be completed from exact
-literal value occurrences in the supplied sources. This never invents a quote or
-replaces invalid existing evidence. References redundantly repeated for a null
+literal value occurrences in the supplied sources. An added terminal period/question/exclamation mark may be removed only when
+the remaining quote occurs exactly in the same document. Unsupported text and
+changes inside a quote are never matched approximately. References redundantly repeated for a null
 conflicted scalar are removed only when they exactly duplicate already validated
 conflict alternatives; both claims remain preserved there. Paraphrased values
 still require model-supplied evidence. The direct source-draft API remains strict
