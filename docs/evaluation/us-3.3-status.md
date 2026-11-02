@@ -73,7 +73,9 @@ resolve potential conflicts and assess the source interpretation.
 UI tests verify the reusable component and keyboard navigation. The user reviewed
 the desktop preview and supplied screenshots showing the styled fields and a
 source passage opened with the selected quote highlighted. This is manual
-component-level review, not automated browser testing. Narrow-window layout and
-manual keyboard behavior have not been confirmed in a browser. The full
-review-page workflow and its styled evidence panel remain #57.
+component-level review, not automated browser testing. On November 2, 2026, the
+user also confirmed that both guided browser checks passed: narrow-window layout
+across all three scenarios, and keyboard navigation/focus, source activation and
+return to the scenario selector. The full review-page workflow and its styled
+evidence panel remain #57.
 PR review and stakeholder sign-off are not replaced by these test results.
