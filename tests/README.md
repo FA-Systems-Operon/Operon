@@ -155,7 +155,7 @@ from the repository root with the backend dependencies installed:
 
 ```bash
 OLLAMA_MODEL='<installed-model>' PYTHONPATH=backend .venv/bin/python \
-  scripts/evaluate_profile_flags.py --output /tmp/operon-flags-evaluation.json
+  scripts/evaluate_profile_flags.py > /tmp/operon-flags-evaluation.json
 ```
 
 Set `OLLAMA_BASE_URL` if the endpoint differs from `http://localhost:11434`.

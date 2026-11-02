@@ -1,11 +1,10 @@
 """Run the #49 synthetic cases against the configured provider, outside CI.
 
-PYTHONPATH=backend .venv/bin/python scripts/evaluate_profile_flags.py --output /tmp/flags-evaluation.json
+PYTHONPATH=backend .venv/bin/python scripts/evaluate_profile_flags.py > /tmp/flags-evaluation.json
 Only synthetic documents are sent. Nonzero exit means errors or answer-key mismatches.
 A passing report is a small regression sample, not a general accuracy guarantee.
 """
 
-import argparse
 import hashlib
 import json
 from datetime import datetime, timezone
@@ -22,9 +21,6 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", type=Path, required=True)
-    args = parser.parse_args()
     cases = json.loads(
         (ROOT / "tests/fixtures/onboarding_flags/cases.json").read_text()
     )
@@ -37,7 +33,7 @@ def main() -> int:
         provider = get_provider()
     except ProviderError as error:
         report.update(status="unavailable", error=type(error).__name__)
-        args.output.write_text(json.dumps(report, indent=2) + "\n")
+        print(json.dumps(report, indent=2))
         return 1
     for case in cases:
         sources = [
@@ -93,10 +89,7 @@ def main() -> int:
             result.update(passed=False, error=type(error).__name__)
         report["cases"].append(result)
     report["passed"] = all(case["passed"] for case in report["cases"])
-    args.output.write_text(json.dumps(report, indent=2) + "\n")
-    print(
-        f"{sum(case['passed'] for case in report['cases'])}/{len(cases)} cases passed"
-    )
+    print(json.dumps(report, indent=2))
     return 0 if report["passed"] else 1
 
 

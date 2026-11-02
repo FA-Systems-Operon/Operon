@@ -1,7 +1,7 @@
 """The optional model evaluation must distinguish success, mismatch and outage."""
 
 import json
-import sys
+import runpy
 
 import pytest
 from scripts import evaluate_profile_flags as evaluation
@@ -12,9 +12,7 @@ from src.ai.provider import ModelResponse, ProviderConfigError, ProviderUnavaila
 @pytest.mark.parametrize(
     "mode", ["correct", "missed_conflict", "invalid_output", "unavailable"]
 )
-def test_evaluation_records_observed_results_and_exit_status(
-    monkeypatch, tmp_path, mode
-):
+def test_evaluation_records_observed_results_and_exit_status(monkeypatch, capsys, mode):
     cases = json.loads(
         (evaluation.ROOT / "tests/fixtures/onboarding_flags/cases.json").read_text()
     )
@@ -34,12 +32,8 @@ def test_evaluation_records_observed_results_and_exit_status(
             return ModelResponse(text, "fake", "evaluation-test", 1)
 
     monkeypatch.setattr(evaluation, "get_provider", lambda: Provider())
-    output = tmp_path / "evaluation.json"
-    monkeypatch.setattr(
-        sys, "argv", ["evaluate_profile_flags", "--output", str(output)]
-    )
     code = evaluation.main()
-    report = json.loads(output.read_text())
+    report = json.loads(capsys.readouterr().out)
     assert code == (0 if mode == "correct" else 1)
     assert report["passed"] is (mode == "correct")
     assert len(report["cases"]) == 5
@@ -54,19 +48,27 @@ def test_evaluation_records_observed_results_and_exit_status(
         assert all(case["model"] == "evaluation-test" for case in report["cases"])
 
 
-def test_missing_provider_configuration_is_reported_as_unavailable(
-    monkeypatch, tmp_path
-):
+def test_missing_provider_configuration_is_reported_as_unavailable(monkeypatch, capsys):
     def unconfigured():
         raise ProviderConfigError("no model")
 
     monkeypatch.setattr(evaluation, "get_provider", unconfigured)
-    output = tmp_path / "evaluation.json"
-    monkeypatch.setattr(
-        sys, "argv", ["evaluate_profile_flags", "--output", str(output)]
-    )
     assert evaluation.main() == 1
-    report = json.loads(output.read_text())
+    report = json.loads(capsys.readouterr().out)
     assert report["status"] == "unavailable"
     assert report["error"] == "ProviderConfigError"
     assert report["cases"] == []
+
+
+def test_command_entrypoint_reports_unavailable_provider(monkeypatch, capsys):
+    def unconfigured():
+        raise ProviderConfigError("no model")
+
+    monkeypatch.setattr("src.ai.provider.get_provider", unconfigured)
+    with pytest.raises(SystemExit) as error:
+        runpy.run_path(
+            str(evaluation.ROOT / "scripts/evaluate_profile_flags.py"),
+            run_name="__main__",
+        )
+    assert error.value.code == 1
+    assert json.loads(capsys.readouterr().out)["status"] == "unavailable"
