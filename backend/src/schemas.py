@@ -58,14 +58,22 @@ class ExtractedTextOut(BaseModel):
     extracted_at: datetime
 
 
+class OnboardingJobIn(BaseModel):
+    """Start a draft from a client's uploaded transcript and intake answers."""
+
+    transcript_document_id: uuid.UUID
+    intake_document_id: uuid.UUID
+
+
 class OnboardingJobOut(BaseModel):
-    """Status of the onboarding-agent run started by a document upload."""
+    """Status of an onboarding-agent run on one transcript/intake pair."""
 
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
     client_id: uuid.UUID
-    document_id: uuid.UUID
+    transcript_document_id: uuid.UUID
+    intake_document_id: uuid.UUID
     status: JobStatus
     error: str | None
     result_version_id: uuid.UUID | None

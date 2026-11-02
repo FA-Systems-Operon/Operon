@@ -4,16 +4,7 @@ import hashlib
 import uuid
 from typing import Annotated
 
-from fastapi import (
-    APIRouter,
-    BackgroundTasks,
-    Depends,
-    Form,
-    HTTPException,
-    Query,
-    UploadFile,
-    status,
-)
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -25,15 +16,8 @@ from src.document_extraction import (
     extract_document,
     validate_document,
 )
-from src.models import (
-    Client,
-    DocumentKind,
-    ExtractedText,
-    OnboardingJob,
-    SourceDocument,
-)
-from src.onboarding_jobs import run_onboarding_job
-from src.schemas import ExtractedTextOut, OnboardingJobOut, SourceDocumentOut
+from src.models import Client, DocumentKind, ExtractedText, SourceDocument
+from src.schemas import ExtractedTextOut, SourceDocumentOut
 from src.storage import DocumentStorage, get_storage
 
 router = APIRouter(prefix="/api/v1/clients/{client_id}/documents", tags=["documents"])
@@ -64,15 +48,9 @@ def upload_document(
     file: UploadFile,
     db: DbSession,
     storage: Storage,
-    background_tasks: BackgroundTasks,
     kind: Annotated[DocumentKind | None, Form()] = None,
 ) -> SourceDocument:
-    """Store an uploaded file, record its metadata and start the onboarding agent.
-
-    The pending job is committed together with the document, so an upload that
-    succeeded always has a job. The agent runs after the response is sent; poll
-    GET .../{document_id}/onboarding-job for its status.
-    """
+    """Store an uploaded file against a client and record its metadata."""
     if db.get(Client, client_id) is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Client not found")
 
@@ -109,18 +87,14 @@ def upload_document(
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
 
     storage.save(storage_key, data)
-    job = OnboardingJob(client_id=client_id, document_id=document_id)
+    db.add(document)
     try:
-        db.add(document)
-        db.flush()  # the job's foreign key needs the document row first
-        db.add(job)
         db.commit()
     except Exception:
         # Don't leave a file in storage that no database row points to.
         storage.delete(storage_key)
         raise
     db.refresh(document)  # loads uploaded_at, which Postgres fills in
-    background_tasks.add_task(run_onboarding_job, job.id, storage)
     return document
 
 
@@ -172,25 +146,6 @@ def get_document_text(
     if result is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Extracted text not found")
     return result
-
-
-@router.get("/{document_id}/onboarding-job", response_model=OnboardingJobOut)
-def get_onboarding_job(
-    client_id: uuid.UUID, document_id: uuid.UUID, db: DbSession
-) -> OnboardingJob:
-    """Return the latest onboarding-agent run for a client's document."""
-    job = db.scalar(
-        select(OnboardingJob)
-        .where(
-            OnboardingJob.document_id == document_id,
-            OnboardingJob.client_id == client_id,
-        )
-        .order_by(OnboardingJob.created_at.desc(), OnboardingJob.id.desc())
-        .limit(1)
-    )
-    if job is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Onboarding job not found")
-    return job
 
 
 @router.get("/{document_id}", response_model=SourceDocumentOut)

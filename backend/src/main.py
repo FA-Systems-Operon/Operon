@@ -14,7 +14,14 @@ from src.ai import (
 from src.ai.ollama import OllamaProvider
 from src.config import settings
 from src.db import Base, engine
-from src.routers import artifacts, client_profiles, clients, documents, playbooks
+from src.routers import (
+    artifacts,
+    client_profiles,
+    clients,
+    documents,
+    onboarding_jobs,
+    playbooks,
+)
 
 
 @asynccontextmanager
@@ -43,6 +50,7 @@ print(
 app.include_router(artifacts.router)
 app.include_router(clients.router)
 app.include_router(documents.router)
+app.include_router(onboarding_jobs.router)
 app.include_router(client_profiles.router)
 app.include_router(playbooks.router)
 
