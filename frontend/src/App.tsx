@@ -1,73 +1,51 @@
-import { useEffect, useState } from 'react'
+import type { ReactNode } from 'react'
+import './App.css'
+import TopNav, { type Tab } from './components/TopNav'
+import AddSourcesPage from './pages/AddSourcesPage'
+import CommandPage from './pages/CommandPage'
+import PlaceholderPage from './pages/PlaceholderPage'
+import StatusPage from './pages/StatusPage'
+import { useRoute } from './router'
 
-type OllamaStatus = {
-  status?: string
-  url?: string
-  models?: string[]
-  configured_model?: string | null
-  model_installed?: boolean
+type Page = {
+  tab: Tab | null
+  content: ReactNode
 }
 
-type ApiStatus = {
-  api?: string
-  db?: string
-  ollama?: OllamaStatus
+// To add a page: add a case here, and a tab in TopNav if it belongs in the menu.
+function pageFor(path: string, query: URLSearchParams): Page {
+  switch (path) {
+    case '/':
+      return { tab: 'command', content: <CommandPage /> }
+    case '/brain':
+      return { tab: 'brain', content: <PlaceholderPage title="Brain" /> }
+    case '/workforce':
+      return { tab: 'workforce', content: <PlaceholderPage title="Workforce" /> }
+    case '/reviews':
+      return { tab: 'reviews', content: <PlaceholderPage title="Reviews" /> }
+    case '/sources/new': {
+      const clientId = query.get('client')
+      // The key starts a fresh form when the chosen client in the link changes.
+      return {
+        tab: 'brain',
+        content: <AddSourcesPage key={clientId ?? ''} initialClientId={clientId} />,
+      }
+    }
+    case '/status':
+      return { tab: null, content: <StatusPage /> }
+    default:
+      return { tab: null, content: <PlaceholderPage title="Page not found" /> }
+  }
 }
 
 export default function App() {
-  const [status, setStatus] = useState<ApiStatus | string>('checking...')
-  const [reply, setReply] = useState('')
-
-  useEffect(() => {
-    fetch('/api/v1/status')
-      .then((response) => response.json())
-      .then(setStatus)
-      .catch(() => setStatus('API unreachable'))
-  }, [])
-
-  async function testModel() {
-    setReply('Waiting for the model...')
-    try {
-      const response = await fetch('/api/v1/ollama/test')
-      const data = await response.json()
-      if (response.ok) {
-        setReply(`${data.model}: ${data.response}`)
-      } else {
-        setReply(data.detail ?? 'Request failed')
-      }
-    } catch {
-      setReply('API unreachable')
-    }
-  }
-
-  const ollama = typeof status === 'object' ? status.ollama : undefined
+  const { path, query } = useRoute()
+  const page = pageFor(path, query)
 
   return (
-    <main>
-      <h1>Operon</h1>
-      {typeof status === 'string' ? (
-        <p>{status}</p>
-      ) : (
-        <section>
-          <p>
-            <strong>Configured model:</strong>{' '}
-            {ollama?.configured_model ?? 'not set (add OLLAMA_MODEL to .env)'}
-          </p>
-          <p>
-            <strong>Ollama URL:</strong> {ollama?.url ?? 'unknown'}
-          </p>
-          <p>
-            <strong>Reachable from API:</strong> {ollama?.status ?? 'unknown'}
-          </p>
-          <p>
-            <strong>Installed on host:</strong>{' '}
-            {ollama?.models?.length ? ollama.models.join(', ') : 'none reported'}
-          </p>
-        </section>
-      )}
-      <button onClick={testModel}>Test the model via the API</button>
-      <p>{reply}</p>
-      <pre>{JSON.stringify(status, null, 2)}</pre>
-    </main>
+    <div className="app">
+      <TopNav active={page.tab} />
+      <main className="page">{page.content}</main>
+    </div>
   )
 }
