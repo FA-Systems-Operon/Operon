@@ -152,7 +152,7 @@ def test_generation_returns_validated_profile(evidence_case):
     )
 
 
-def test_generation_rejects_invalid_evidence_without_retry(evidence_case):
+def test_generation_rejects_invalid_evidence_after_one_repair(evidence_case):
     sources, profile = evidence_case
     profile["source_references"][0]["quote"] = "Invented quote"
     provider = Mock()
@@ -161,7 +161,7 @@ def test_generation_rejects_invalid_evidence_without_retry(evidence_case):
     )
     with pytest.raises(ValueError, match="occur exactly"):
         generate_source_profile(sources, provider)
-    provider.generate.assert_called_once()
+    assert provider.generate.call_count == 2
 
 
 def test_generation_propagates_provider_failure(evidence_case):
@@ -283,3 +283,23 @@ def test_generated_redundant_conflict_references_are_deduplicated_only_after_val
     payload["conflicts"][0]["alternatives"][0]["quote"] = "Invented quote"
     with pytest.raises(ValueError, match="occur exactly"):
         validate_generated_profile(json.dumps(payload), sources)
+
+
+def test_one_repair_can_correct_a_quote_without_weakening_validation(evidence_case):
+    sources, payload = evidence_case
+    valid = json.dumps(payload)
+    payload["source_references"][0]["quote"] = "Non-verbatim name quote"
+    provider = Mock()
+    provider.generate.side_effect = [
+        ModelResponse(json.dumps(payload), "fake", "fake", 1),
+        ModelResponse(valid, "fake", "fake", 1),
+    ]
+    draft = generate_source_profile(sources, provider)
+    assert draft.name == "Maya"
+    assert provider.generate.call_count == 2
+    repair_call = provider.generate.call_args_list[1]
+    assert "Copy quotes verbatim" in repair_call.args[0]
+    assert json.loads(
+        repair_call.args[0].split("Source documents (JSON):\n", 1)[1]
+    ) == [s.model_dump() for s in sources]
+    assert repair_call.kwargs["output_schema"] == source_profile_schema(sources)

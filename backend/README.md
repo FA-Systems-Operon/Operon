@@ -421,5 +421,9 @@ edits. The source-draft endpoint validates the supplied evidence; it does not sc
 all documents a client owns. The onboarding job compares its exact pinned pair.
 
 Resolution and approval blocking are follow-up review-flow work, as described in
-the architecture; this change does not implement those controls. No extra model
-call, model-repair retry, or new retry policy is introduced.
+the architecture; this change does not implement those controls. The agent makes at most one additional model call when structured output or
+evidence validation fails, following the architecture's bounded repair rule.
+The original documents, failed reply and validation error are supplied as data;
+the repaired response must pass the same full validator. A second invalid reply
+fails the job with no draft saved. Provider failures still use the existing job
+retry policy; they do not trigger this validation repair.
