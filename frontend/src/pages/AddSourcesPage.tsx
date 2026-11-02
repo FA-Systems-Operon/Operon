@@ -89,6 +89,8 @@ export default function AddSourcesPage({ initialClientId, onDraftStarted }: AddS
     }
   }, [initialClientId])
 
+  const selected = clients?.find((client) => client.id === clientId)
+
   function updateSlot(kind: DocumentKind, change: Partial<Slot>) {
     setSlots((previous) => ({ ...previous, [kind]: { ...previous[kind], ...change } }))
   }
@@ -111,6 +113,9 @@ export default function AddSourcesPage({ initialClientId, onDraftStarted }: AddS
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
+    // The ID from the server's client list, not the raw value from the page, so only a
+    // real client ID ever goes into a request address. The button needs a client.
+    const id = selected!.id
     setUploading(true)
     const saved: Partial<Record<DocumentKind, SourceDocument>> = {}
     for (const { kind } of SLOTS) {
@@ -120,7 +125,7 @@ export default function AddSourcesPage({ initialClientId, onDraftStarted }: AddS
         continue
       }
       try {
-        const document = await uploadDocument(clientId, slot.file!, kind)
+        const document = await uploadDocument(id, slot.file!, kind)
         saved[kind] = document
         updateSlot(kind, { document, error: null })
       } catch (error) {
@@ -130,7 +135,7 @@ export default function AddSourcesPage({ initialClientId, onDraftStarted }: AddS
     // Only start the draft once both files are saved, so it never drafts from one alone.
     if (saved.transcript && saved.intake) {
       try {
-        const started = await startOnboardingJob(clientId, saved.transcript.id, saved.intake.id)
+        const started = await startOnboardingJob(id, saved.transcript.id, saved.intake.id)
         setJob(started)
         setStartFailed(false)
         onDraftStarted?.(started)
@@ -141,7 +146,6 @@ export default function AddSourcesPage({ initialClientId, onDraftStarted }: AddS
     setUploading(false)
   }
 
-  const selected = clients?.find((client) => client.id === clientId)
   const initialMissing =
     clients !== null &&
     initialClientId !== null &&
