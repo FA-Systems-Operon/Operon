@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, test, vi } from 'vitest'
 import AddSourcesPage, { initials } from './AddSourcesPage'
@@ -152,26 +152,40 @@ test('says when there are no clients yet', async () => {
   expect(screen.getByRole('combobox', { name: 'Client' })).toBeDisabled()
 })
 
-test('ignores a client list that arrives after the page closed', async () => {
-  let answer!: (response: Response) => void
-  let fail!: (error: Error) => void
+// The first request (for c1) is still waiting when the link changes to c2. When it
+// finally answers, it must not undo the newer page.
+async function openThenSwitchToC2(firstRequest: Promise<Response>) {
   vi.stubGlobal(
     'fetch',
-    vi
-      .fn()
-      .mockReturnValueOnce(new Promise((resolve) => (answer = resolve)))
-      .mockReturnValueOnce(new Promise((_, reject) => (fail = reject))),
+    vi.fn().mockReturnValueOnce(firstRequest).mockImplementationOnce(() => reply([200, CLIENTS])),
   )
-  const first = render(<AddSourcesPage initialClientId="c1" />)
-  first.unmount()
-  const second = render(<AddSourcesPage initialClientId="c1" />)
-  second.unmount()
+  const { rerender } = render(<AddSourcesPage initialClientId="c1" />)
+  rerender(<AddSourcesPage initialClientId="c2" />)
+  const picker = screen.getByRole('combobox', { name: 'Client' })
+  await waitFor(() => expect(picker).toHaveValue('c2'))
+  return picker
+}
 
-  answer({ ok: true, status: 200, json: () => Promise.resolve(CLIENTS) } as Response)
-  fail(new Error('network down'))
+test('ignores a client list from an earlier link that arrives late', async () => {
+  let answer!: (response: Response) => void
+  const picker = await openThenSwitchToC2(new Promise((resolve) => (answer = resolve)))
 
-  // Nothing to see: React would warn about updating a closed page if it tried.
-  await new Promise((resolve) => setTimeout(resolve, 0))
+  await act(async () => {
+    answer({ ok: true, status: 200, json: () => Promise.resolve(CLIENTS) } as Response)
+  })
+
+  expect(picker).toHaveValue('c2')
+})
+
+test('ignores a failure from an earlier link that arrives late', async () => {
+  let fail!: (error: Error) => void
+  await openThenSwitchToC2(new Promise((_, reject) => (fail = reject)))
+
+  await act(async () => {
+    fail(new Error('network down'))
+  })
+
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument()
 })
 
 test('shows a chosen file with its name and size, and Remove takes it out', async () => {
