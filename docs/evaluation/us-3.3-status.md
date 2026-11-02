@@ -38,7 +38,11 @@ configured by these tests.
 ## Checks and reproduction
 
 - Default backend suite: 585 passed, five live tests skipped in the CI-style run.
-- Frontend: 29 tests passed and the TypeScript/Vite build passed.
+- Frontend: 31 tests passed and the TypeScript/Vite build passed.
+  The component now has scoped dark styles matching the UI branch tokens,
+  responsive field rows, attributed citations via host-provided document labels,
+  and distinct wording for unresolved conflicts. Both source links are preserved.
+  The user approved the desktop appearance from a manual browser preview.
 - Repository Ruff lint and formatting passed.
 - Three live job tests were run explicitly, separately from model-free CI.
 
@@ -66,6 +70,10 @@ independent held-out accuracy study or a guarantee for arbitrary client document
 Quote matching proves provenance, not semantic correctness. Reviewers still
 resolve potential conflicts and assess the source interpretation.
 
-UI tests verify the reusable component and keyboard navigation. Browser visual
-inspection has not been completed; the full review-page workflow remains #57.
+UI tests verify the reusable component and keyboard navigation. The user reviewed
+the desktop preview and supplied screenshots showing the styled fields and a
+source passage opened with the selected quote highlighted. This is manual
+component-level review, not automated browser testing. Narrow-window layout and
+manual keyboard behavior have not been confirmed in a browser. The full
+review-page workflow and its styled evidence panel remain #57.
 PR review and stakeholder sign-off are not replaced by these test results.
