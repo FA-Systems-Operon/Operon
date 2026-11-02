@@ -42,6 +42,9 @@ from src.models import (
     Client,
     ClientProfile,
     ClientProfileVersion,
+    DocumentKind,
+    JobStatus,
+    OnboardingJob,
     Playbook,
     PlaybookVersion,
     ReviewStatus,
@@ -311,3 +314,29 @@ class OperonApi:
 @pytest.fixture
 def api(client):
     return OperonApi(client)
+
+
+@pytest.fixture
+def make_pair(db_session, stored_document, demo_client):
+    """A stored transcript and intake for a client, plus a pending onboarding job
+    pinned to them (#36). Returns the OnboardingJob."""
+
+    def create(owner=None, *, status=JobStatus.PENDING):
+        owner = owner or demo_client
+        transcript = stored_document(
+            data=b"Maya Chen: I need more bookings.", owner=owner
+        )
+        intake = stored_document(data=b"Contact name: Maya Chen", owner=owner)
+        transcript.kind = DocumentKind.TRANSCRIPT
+        intake.kind = DocumentKind.INTAKE
+        job = OnboardingJob(
+            client_id=owner.id,
+            transcript_document_id=transcript.id,
+            intake_document_id=intake.id,
+            status=status,
+        )
+        db_session.add(job)
+        db_session.commit()
+        return job
+
+    return create

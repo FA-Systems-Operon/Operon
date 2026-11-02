@@ -133,7 +133,12 @@ class JobStatus(str, enum.Enum):
 
 
 class OnboardingJob(Base):
-    """One onboarding-agent run, created in the same commit as its upload (#36).
+    """One onboarding-agent run on a client's transcript and intake answers (#36).
+
+    A job is started once both files are uploaded, never on a single upload, so
+    the agent always drafts from a complete set. The two documents are pinned
+    on the job: the agent reads exactly these, not whatever else the client has.
+    One job per transcript/intake pair, so asking again returns the same job.
 
     The row is committed as pending before anything runs, so a crash can't lose
     it (#37). A runner claims it with a lease; if the lease runs out before the
@@ -141,11 +146,14 @@ class OnboardingJob(Base):
     """
 
     __tablename__ = "onboarding_jobs"
+    __table_args__ = (UniqueConstraint("transcript_document_id", "intake_document_id"),)
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     client_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("clients.id"), index=True)
-    # The upload that triggered the run. The agent reads all of the client's text.
-    document_id: Mapped[uuid.UUID] = mapped_column(
+    transcript_document_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("source_documents.id"), index=True
+    )
+    intake_document_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("source_documents.id"), index=True
     )
     status: Mapped[JobStatus] = mapped_column(

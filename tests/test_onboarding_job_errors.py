@@ -66,39 +66,29 @@ def test_errors_are_described_without_internal_details(error, expected):
     assert _describe(error) == expected
 
 
-def make_job(db_session, stored_document, demo_client, data=b"Alice: Hello."):
-    document = stored_document(data=data)
-    job = OnboardingJob(client_id=demo_client.id, document_id=document.id)
-    db_session.add(job)
-    db_session.commit()
-    return job
-
-
 def reload(db_session, job):
     db_session.expire_all()
     return db_session.get(OnboardingJob, job.id)
 
 
-def test_client_without_extracted_text_fails_the_job(
-    db_session, storage, stored_document, demo_client, monkeypatch
+def test_missing_extracted_text_fails_the_job(
+    db_session, storage, make_pair, monkeypatch
 ):
-    job = make_job(db_session, stored_document, demo_client)
-    # Extraction "succeeds" without saving any text for the client.
+    job = make_pair()
+    # Extraction "succeeds" without saving any text, so the set is incomplete.
     monkeypatch.setattr("src.onboarding_jobs.extract_document", lambda *a, **k: None)
 
     run_onboarding_job(job.id, storage)
 
     job = reload(db_session, job)
     assert job.status == JobStatus.FAILED
-    assert job.error == (
-        "Draft could not be saved: No extracted text is available for this client"
-    )
+    assert job.error == "Draft could not be saved: The transcript has no extracted text"
 
 
 def test_unexpected_error_fails_the_job_without_details(
-    db_session, storage, stored_document, demo_client, monkeypatch
+    db_session, storage, make_pair, monkeypatch
 ):
-    job = make_job(db_session, stored_document, demo_client)
+    job = make_pair()
 
     def broken():
         raise RuntimeError("internal detail that must not reach the app")
@@ -113,10 +103,8 @@ def test_unexpected_error_fails_the_job_without_details(
     assert job.finished_at is not None
 
 
-def test_storage_failure_fails_the_job(
-    db_session, storage, stored_document, demo_client, monkeypatch
-):
-    job = make_job(db_session, stored_document, demo_client)
+def test_storage_failure_fails_the_job(db_session, storage, make_pair, monkeypatch):
+    job = make_pair()
 
     def unreadable(key):
         raise PermissionError(f"/code/storage/{key}")
@@ -132,10 +120,8 @@ def test_storage_failure_fails_the_job(
     assert job.error == "Document storage is unavailable"
 
 
-def test_long_error_messages_are_truncated(
-    db_session, storage, stored_document, demo_client, monkeypatch
-):
-    job = make_job(db_session, stored_document, demo_client)
+def test_long_error_messages_are_truncated(db_session, storage, make_pair, monkeypatch):
+    job = make_pair()
     monkeypatch.setattr("src.onboarding_jobs.extract_document", lambda *a, **k: None)
     monkeypatch.setattr("src.onboarding_jobs._describe", lambda error: "x" * 2000)
 

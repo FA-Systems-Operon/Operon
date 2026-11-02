@@ -13,10 +13,9 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from sqlalchemy import func, select, update
 from tests.test_onboarding_jobs import (
-    TRANSCRIPT,
     SourceAwareProvider,
     combined_draft,
-    upload,
+    start_draft,
 )
 
 from src.ai.provider import ProviderTimeout, ProviderUnavailable
@@ -59,9 +58,11 @@ def provider(monkeypatch):
 
 
 @pytest.fixture
-def no_runner_on_upload(monkeypatch):
-    """Uploads save their pending job but nothing runs it, as after a crash."""
-    monkeypatch.setattr("src.routers.documents.run_onboarding_job", lambda *a: None)
+def no_runner_on_start(monkeypatch):
+    """Starting a draft saves its pending job but nothing runs it, as after a crash."""
+    monkeypatch.setattr(
+        "src.routers.onboarding_jobs.run_onboarding_job", lambda *a: None
+    )
 
 
 @pytest.fixture
@@ -73,13 +74,9 @@ def now():
     return datetime.now(timezone.utc)
 
 
-def job_of(db, document):
+def job_of(db, job):
     db.expire_all()
-    return db.scalar(
-        select(OnboardingJob).where(
-            OnboardingJob.document_id == uuid.UUID(document["id"])
-        )
-    )
+    return db.get(OnboardingJob, uuid.UUID(job["id"]))
 
 
 def version_count(db):
@@ -95,17 +92,17 @@ def set_job(db, job, **values):
 
 
 def test_job_saved_before_a_crash_is_run_later(
-    client, db_session, demo_client, provider, no_runner_on_upload, storage
+    client, db_session, demo_client, provider, no_runner_on_start, storage
 ):
     provider()
-    document = upload(client, demo_client, TRANSCRIPT, "transcript")
-    job = job_of(db_session, document)
+    _, _, started = start_draft(client, demo_client)
+    job = job_of(db_session, started)
     assert job.status == JobStatus.PENDING and job.attempts == 0
 
-    # The API "restarts": the upload's task never ran, the worker finds the job.
+    # The API "restarts": the start call's task never ran; the worker finds the job.
     assert run_next_job(storage) is True
 
-    job = job_of(db_session, document)
+    job = job_of(db_session, started)
     assert job.status == JobStatus.SUCCEEDED
     assert job.attempts == 1
     assert version_count(db_session) == 1
@@ -122,9 +119,9 @@ def test_temporary_failure_is_retried_later(
     provider(failures=1)
     before = now()
 
-    document = upload(client, demo_client, TRANSCRIPT, "transcript")
+    _, _, started = start_draft(client, demo_client)
 
-    job = job_of(db_session, document)
+    job = job_of(db_session, started)
     assert job.status == JobStatus.PENDING
     assert job.attempts == 1
     assert job.error == "AI provider failed: ProviderUnavailable"
@@ -135,7 +132,7 @@ def test_temporary_failure_is_retried_later(
     assert run_next_job(storage) is False
 
     response = client.get(
-        f"/api/v1/clients/{demo_client.id}/documents/{document['id']}/onboarding-job"
+        f"/api/v1/clients/{demo_client.id}/onboarding-jobs/{started['id']}"
     )
     assert response.json()["attempts"] == 1
     assert response.json()["next_attempt_at"] is not None
@@ -145,11 +142,11 @@ def test_retry_succeeds_once_due(
     client, db_session, demo_client, provider, no_retry_delay, storage
 ):
     fake = provider(failures=1, error=ProviderTimeout)
-    document = upload(client, demo_client, TRANSCRIPT, "transcript")
+    _, _, started = start_draft(client, demo_client)
 
     assert run_next_job(storage) is True
 
-    job = job_of(db_session, document)
+    job = job_of(db_session, started)
     assert job.status == JobStatus.SUCCEEDED
     assert job.attempts == 2
     assert job.error is None
@@ -162,12 +159,12 @@ def test_job_fails_when_retries_are_used_up(
 ):
     monkeypatch.setattr(settings, "JOB_RETRY_ATTEMPTS", 2)
     fake = provider(failures=99)
-    document = upload(client, demo_client, TRANSCRIPT, "transcript")
+    _, _, started = start_draft(client, demo_client)
 
     while run_next_job(storage):
         pass
 
-    job = job_of(db_session, document)
+    job = job_of(db_session, started)
     assert job.status == JobStatus.FAILED
     assert job.attempts == 3  # first try + 2 retries
     assert fake.calls == 3
@@ -181,9 +178,9 @@ def test_bad_model_output_is_not_retried(
     fake = SourceAwareProvider(lambda ids: {"name": 42})
     monkeypatch.setattr("src.onboarding_jobs.get_provider", lambda: fake)
 
-    document = upload(client, demo_client, TRANSCRIPT, "transcript")
+    _, _, started = start_draft(client, demo_client)
 
-    job = job_of(db_session, document)
+    job = job_of(db_session, started)
     assert job.status == JobStatus.FAILED
     assert job.attempts == 1
     assert run_next_job(storage) is False
@@ -193,11 +190,11 @@ def test_bad_model_output_is_not_retried(
 
 
 def test_job_abandoned_mid_run_is_requeued_and_finished(
-    client, db_session, demo_client, provider, no_runner_on_upload, storage
+    client, db_session, demo_client, provider, no_runner_on_start, storage
 ):
     provider()
-    document = upload(client, demo_client, TRANSCRIPT, "transcript")
-    job = job_of(db_session, document)
+    _, _, started = start_draft(client, demo_client)
+    job = job_of(db_session, started)
     # The runner claimed it and then the process died.
     set_job(
         db_session,
@@ -210,24 +207,24 @@ def test_job_abandoned_mid_run_is_requeued_and_finished(
 
     assert recover_abandoned_jobs() == 1
 
-    job = job_of(db_session, document)
+    job = job_of(db_session, started)
     assert job.status == JobStatus.PENDING
     assert job.error == "Previous attempt stopped before finishing"
     assert run_next_job(storage) is True
-    job = job_of(db_session, document)
+    job = job_of(db_session, started)
     assert job.status == JobStatus.SUCCEEDED
     assert job.attempts == 2
     assert version_count(db_session) == 1
 
 
 def test_abandoned_job_without_attempts_left_is_failed(
-    client, db_session, demo_client, no_runner_on_upload, monkeypatch
+    client, db_session, demo_client, no_runner_on_start, monkeypatch
 ):
     monkeypatch.setattr(settings, "JOB_RETRY_ATTEMPTS", 1)
-    document = upload(client, demo_client, TRANSCRIPT, "transcript")
+    _, _, started = start_draft(client, demo_client)
     set_job(
         db_session,
-        job_of(db_session, document),
+        job_of(db_session, started),
         status=JobStatus.RUNNING,
         attempts=2,
         lease_expires_at=now() - timedelta(seconds=1),
@@ -235,35 +232,35 @@ def test_abandoned_job_without_attempts_left_is_failed(
 
     assert recover_abandoned_jobs() == 1
 
-    job = job_of(db_session, document)
+    job = job_of(db_session, started)
     assert job.status == JobStatus.FAILED
     assert "no attempts left" in job.error
     assert job.finished_at is not None
 
 
 def test_running_job_with_a_live_lease_is_left_alone(
-    client, db_session, demo_client, no_runner_on_upload, storage
+    client, db_session, demo_client, no_runner_on_start, storage
 ):
-    document = upload(client, demo_client, TRANSCRIPT, "transcript")
+    _, _, started = start_draft(client, demo_client)
     set_job(
         db_session,
-        job_of(db_session, document),
+        job_of(db_session, started),
         status=JobStatus.RUNNING,
         attempts=1,
         lease_expires_at=now() + timedelta(minutes=5),
     )
 
     assert recover_abandoned_jobs() == 0
-    assert job_of(db_session, document).status == JobStatus.RUNNING
+    assert job_of(db_session, started).status == JobStatus.RUNNING
     assert run_next_job(storage) is False
 
 
 def test_run_that_lost_its_claim_does_not_save_a_second_draft(
-    client, db_session, demo_client, no_runner_on_upload, monkeypatch, storage
+    client, db_session, demo_client, no_runner_on_start, monkeypatch, storage
 ):
     """A slow run whose lease ran out and was claimed again must not save."""
-    document = upload(client, demo_client, TRANSCRIPT, "transcript")
-    job = job_of(db_session, document)
+    _, _, started = start_draft(client, demo_client)
+    job = job_of(db_session, started)
 
     def slow_reply(ids):
         # While the model "thinks", recovery hands the job to a new attempt.
@@ -281,7 +278,7 @@ def test_run_that_lost_its_claim_does_not_save_a_second_draft(
 
     run_onboarding_job(job.id, storage)
 
-    job = job_of(db_session, document)
+    job = job_of(db_session, started)
     assert job.status == JobStatus.RUNNING  # still owned by the newer attempt
     assert job.attempts == 2
     assert job.result_version_id is None
@@ -292,11 +289,11 @@ def test_run_that_lost_its_claim_does_not_save_a_second_draft(
 
 
 def test_job_locked_by_another_runner_is_skipped(
-    client, db_session, demo_client, provider, no_runner_on_upload, storage
+    client, db_session, demo_client, provider, no_runner_on_start, storage
 ):
     provider()
-    document = upload(client, demo_client, TRANSCRIPT, "transcript")
-    job = job_of(db_session, document)
+    _, _, started = start_draft(client, demo_client)
+    job = job_of(db_session, started)
 
     with SessionLocal() as other:
         # Another runner is in the middle of claiming this row.
@@ -309,30 +306,30 @@ def test_job_locked_by_another_runner_is_skipped(
     assert run_next_job(storage) is True
 
 
-def test_upload_task_and_worker_never_both_run_a_job(
-    client, db_session, demo_client, provider, no_runner_on_upload, storage
+def test_start_task_and_worker_never_both_run_a_job(
+    client, db_session, demo_client, provider, no_runner_on_start, storage
 ):
     fake = provider()
-    document = upload(client, demo_client, TRANSCRIPT, "transcript")
-    job = job_of(db_session, document)
+    _, _, started = start_draft(client, demo_client)
+    job = job_of(db_session, started)
 
     assert run_next_job(storage) is True
-    run_onboarding_job(job.id, storage)  # the upload's task arrives late
+    run_onboarding_job(job.id, storage)  # the start call's task arrives late
 
     assert fake.calls == 1
-    assert job_of(db_session, document).attempts == 1
+    assert job_of(db_session, started).attempts == 1
 
 
 # --- Worker thread ------------------------------------------------------------
 
 
 def test_worker_thread_recovers_and_runs_pending_jobs(
-    client, db_session, demo_client, provider, no_runner_on_upload, monkeypatch, storage
+    client, db_session, demo_client, provider, no_runner_on_start, monkeypatch, storage
 ):
     provider()
     monkeypatch.setattr(settings, "JOB_POLL_SECONDS", 0.05)
-    fresh = upload(client, demo_client, TRANSCRIPT, "transcript")
-    crashed = upload(client, demo_client, TRANSCRIPT, "transcript", "second.txt")
+    _, _, fresh = start_draft(client, demo_client)
+    _, _, crashed = start_draft(client, demo_client)
     set_job(
         db_session,
         job_of(db_session, crashed),
@@ -380,14 +377,14 @@ def test_worker_keeps_going_after_a_failed_round(
     db_session,
     demo_client,
     provider,
-    no_runner_on_upload,
+    no_runner_on_start,
     monkeypatch,
     storage,
     caplog,
 ):
     provider()
     monkeypatch.setattr(settings, "JOB_POLL_SECONDS", 0.05)
-    document = upload(client, demo_client, TRANSCRIPT, "transcript")
+    _, _, started = start_draft(client, demo_client)
     rounds = {"count": 0}
     real_recover = recover_abandoned_jobs
 
@@ -403,28 +400,28 @@ def test_worker_keeps_going_after_a_failed_round(
     try:
         deadline = time.monotonic() + 10
         while time.monotonic() < deadline:
-            if job_of(db_session, document).status == JobStatus.SUCCEEDED:
+            if job_of(db_session, started).status == JobStatus.SUCCEEDED:
                 break
             time.sleep(0.05)
     finally:
         stop()
 
-    assert job_of(db_session, document).status == JobStatus.SUCCEEDED
+    assert job_of(db_session, started).status == JobStatus.SUCCEEDED
     assert "Onboarding worker round failed" in caplog.text
 
 
 def test_failure_from_a_run_that_lost_its_claim_changes_nothing(
-    client, db_session, demo_client, no_runner_on_upload, caplog
+    client, db_session, demo_client, no_runner_on_start, caplog
 ):
-    document = upload(client, demo_client, TRANSCRIPT, "transcript")
-    job = job_of(db_session, document)
+    _, _, started = start_draft(client, demo_client)
+    job = job_of(db_session, started)
     set_job(db_session, job, status=JobStatus.RUNNING, attempts=2)
 
     with SessionLocal() as db:
         # Attempt 1 reports its failure after attempt 2 took over.
         _record_failure(db, job.id, 1, ProviderUnavailable("refused"))
 
-    job = job_of(db_session, document)
+    job = job_of(db_session, started)
     assert job.status == JobStatus.RUNNING
     assert job.attempts == 2
     assert job.error is None
@@ -436,13 +433,40 @@ def test_job_taken_between_selecting_and_claiming_is_not_run(
     db_session,
     demo_client,
     provider,
-    no_runner_on_upload,
+    no_runner_on_start,
     monkeypatch,
     storage,
 ):
     fake = provider()
-    upload(client, demo_client, TRANSCRIPT, "transcript")
+    start_draft(client, demo_client)
     monkeypatch.setattr("src.onboarding_jobs._claim", lambda db, job_id: None)
 
     assert run_next_job(storage) is True
     assert fake.calls == 0
+
+
+def test_starting_a_failed_pair_again_resets_its_attempts(
+    client, db_session, demo_client, provider, no_retry_delay, monkeypatch, storage
+):
+    monkeypatch.setattr(settings, "JOB_RETRY_ATTEMPTS", 1)
+    fake = provider(failures=2)
+    transcript, intake, started = start_draft(client, demo_client)
+    while run_next_job(storage):
+        pass
+    assert job_of(db_session, started).status == JobStatus.FAILED
+    assert job_of(db_session, started).attempts == 2
+
+    again = client.post(
+        f"/api/v1/clients/{demo_client.id}/onboarding-jobs",
+        json={
+            "transcript_document_id": transcript["id"],
+            "intake_document_id": intake["id"],
+        },
+    )
+
+    assert again.status_code == 200
+    job = job_of(db_session, started)
+    assert job.status == JobStatus.SUCCEEDED
+    assert job.attempts == 1
+    assert job.error is None
+    assert fake.calls == 3

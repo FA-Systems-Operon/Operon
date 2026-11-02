@@ -1,9 +1,12 @@
-"""Run the onboarding agent on a client's documents after an upload (#36, #37).
+"""Run the onboarding agent on a client's transcript and intake (#36, #37).
 
-The upload endpoint commits a pending OnboardingJob together with the document,
-before anything runs, so a crash can't lose it. Two things then run jobs:
+Uploading a file only saves it. Once both files are in, the client calls
+POST /api/v1/clients/{client_id}/onboarding-jobs with the two document IDs (the
+upload page does this from its onUploaded hook). That commits a pending
+OnboardingJob pinned to exactly those two documents, before anything runs, so
+a crash can't lose it. Two things then run jobs:
 
-- a FastAPI background task started by the upload, so new jobs start at once;
+- a FastAPI background task started by that call, so new jobs start at once;
 - a single worker thread (start_worker) that picks up pending jobs, including
   ones left behind by a crash or restart, and retries temporary failures.
 
@@ -35,6 +38,7 @@ from src.db import SessionLocal
 from src.document_extraction import UnsupportedDocumentTypeError, extract_document
 from src.models import (
     ClientProfile,
+    DocumentKind,
     ExtractedText,
     JobStatus,
     OnboardingJob,
@@ -191,8 +195,10 @@ def _execute(db: Session, job: OnboardingJob, storage: DocumentStorage) -> None:
     """Run a claimed job and record the outcome of this attempt."""
     job_id, attempt = job.id, job.attempts
     try:
-        extract_document(job.client_id, job.document_id, db, storage)
-        sources = _client_sources(db, job.client_id)
+        for document_id in _document_ids(job):
+            # Reuses text that was already extracted.
+            extract_document(job.client_id, document_id, db, storage)
+        sources = _job_sources(db, job)
         # The model call happens outside any transaction, so no row locks
         # are held while a local model takes its time.
         draft = generate_source_profile(sources, get_provider())
@@ -276,26 +282,35 @@ def _is_due(now: datetime | None = None):
     )
 
 
-def _client_sources(db: Session, client_id: uuid.UUID) -> list[SourceInput]:
-    """Every extracted document for the client, so transcript and intake combine."""
+def _document_ids(job: OnboardingJob) -> tuple[uuid.UUID, uuid.UUID]:
+    return job.transcript_document_id, job.intake_document_id
+
+
+def _job_sources(db: Session, job: OnboardingJob) -> list[SourceInput]:
+    """The job's transcript and intake text, and nothing else the client has.
+
+    Both must have text; a draft from only one of them would be incomplete.
+    """
     rows = db.execute(
         select(SourceDocument, ExtractedText)
         .join(ExtractedText, ExtractedText.document_id == SourceDocument.id)
-        .where(SourceDocument.client_id == client_id)
-        .order_by(SourceDocument.uploaded_at, SourceDocument.id)
-    ).all()
-    sources = [
-        SourceInput(
-            document_id=str(document.id),
-            # Same fallback as profile_sources for documents uploaded without a kind.
-            kind=document.kind.value if document.kind else "transcript",
-            text=extracted.text,
+        .where(
+            SourceDocument.id.in_(_document_ids(job)),
+            SourceDocument.client_id == job.client_id,
         )
-        for document, extracted in rows
-        if extracted.text.strip()  # SourceInput rejects empty text
-    ]
-    if not sources:
-        raise ValueError("No extracted text is available for this client")
+    ).all()
+    texts = {document.id: (document, extracted.text) for document, extracted in rows}
+    sources = []
+    for document_id, kind in (
+        (job.transcript_document_id, DocumentKind.TRANSCRIPT),
+        (job.intake_document_id, DocumentKind.INTAKE),
+    ):
+        document, text = texts.get(document_id, (None, ""))
+        if document is None or document.kind != kind or not text.strip():
+            raise ValueError(f"The {kind.value} has no extracted text")
+        sources.append(
+            SourceInput(document_id=str(document_id), kind=kind.value, text=text)
+        )
     return sources
 
 
