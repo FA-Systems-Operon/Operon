@@ -1,10 +1,13 @@
 import { Fragment } from 'react'
+import './DraftSourceView.css'
 import { mapSourceReferences, ONBOARDING_FIELDS, type DraftField, type SourceLinkedDraft } from './draftSources'
 
 type DraftSourceViewProps = {
   draft: Partial<SourceLinkedDraft>
   // The review page (#57) decides where a source link points.
   getSourceHref: (documentId: string, quote: string) => string
+  // Use document metadata from the host page; never infer kind from quote text.
+  getSourceLabel?: (documentId: string) => string | undefined
 }
 
 const GROUPS = [
@@ -14,7 +17,7 @@ const GROUPS = [
   ...ONBOARDING_FIELDS.map((field) => ({ ...field, empty: 'Not extracted' })),
 ]
 
-export default function DraftSourceView({ draft, getSourceHref }: DraftSourceViewProps) {
+export default function DraftSourceView({ draft, getSourceHref, getSourceLabel }: DraftSourceViewProps) {
   const fields = mapSourceReferences(draft)
   const assessment = draft.assessment
   const assessed = assessment?.rules_version === 1
@@ -23,19 +26,29 @@ export default function DraftSourceView({ draft, getSourceHref }: DraftSourceVie
   const unsupported = conflicts.some((conflict) => !knownKeys.has(conflict.field))
     || (assessment?.missing_fields ?? []).some((field) => !ONBOARDING_FIELDS.some(({ key }) => key === field))
 
+  const documentIds = [...new Set([
+    ...(draft.source_references ?? []).map((reference) => reference.document_id),
+    ...conflicts.flatMap((conflict) => conflict.alternatives.map((alternative) => alternative.document_id)),
+  ])]
+  const sourceLabel = (id: string) => getSourceLabel?.(id) || `Source ${documentIds.indexOf(id) + 1}`
+  const rowClass = (key: string) => `draft-source-view__row${conflicts.some((conflict) => conflict.field === key)
+    ? ' draft-source-view__row--conflict'
+    : assessed && assessment.missing_fields.includes(key) ? ' draft-source-view__row--missing' : ''}`
+
   function renderWarnings(key: string, label: string) {
     return (
       <>
         {assessed && assessment.missing_fields.includes(key) && (
-          <p><strong>Missing information:</strong> {label} was not extracted from the supplied sources.</p>
+          <p><strong><span aria-hidden="true">◌ </span>Missing information:</strong> {label} was not extracted from the supplied sources.</p>
         )}
         {conflicts.filter((conflict) => conflict.field === key).map((conflict, index) => (
           <section key={index} aria-label={`Potential conflict for ${label}`}>
-            <p><strong>Potential conflict:</strong> {conflict.explanation}</p>
+            <p><strong><span aria-hidden="true">▲ </span>Potential conflict:</strong> {conflict.explanation}</p>
             <p>Both claims are preserved for review. Neither source has been selected.</p>
             <ul>
               {conflict.alternatives.map((alternative, alternativeIndex) => (
                 <li key={alternativeIndex}>
+                  <span className="draft-source-view__source-label">{sourceLabel(alternative.document_id)}</span>
                   <strong>{alternative.value}</strong> — <q>{alternative.quote}</q>{' '}
                   <a
                     href={getSourceHref(alternative.document_id, alternative.quote)}
@@ -52,10 +65,10 @@ export default function DraftSourceView({ draft, getSourceHref }: DraftSourceVie
 
   function renderField(field: DraftField) {
     return (
-      <div key={field.key}>
+      <div key={field.key} className={rowClass(field.key)}>
         <dt>{field.label}</dt>
         <dd>
-          {field.value}
+          <span className="draft-source-view__value">{field.value}</span>
           {renderWarnings(field.key, field.label)}
           {field.references.length === 0 ? (
             <p>No source linked</p>
@@ -63,6 +76,7 @@ export default function DraftSourceView({ draft, getSourceHref }: DraftSourceVie
             <ul>
               {field.references.map((reference, index) => (
                 <li key={index}>
+                  <span className="draft-source-view__source-label">{sourceLabel(reference.document_id)}</span>
                   <q>{reference.quote}</q>{' '}
                   <a
                     href={getSourceHref(reference.document_id, reference.quote)}
@@ -78,7 +92,7 @@ export default function DraftSourceView({ draft, getSourceHref }: DraftSourceVie
   }
 
   return (
-    <section aria-label="Draft profile">
+    <section className="draft-source-view" aria-label="Draft profile">
       {!assessed && <p>Information checks were not recorded for this draft.</p>}
       {unsupported && <p>Some information warnings could not be displayed. Review the saved draft data.</p>}
       {assessed && !unsupported && assessment.missing_fields.length === 0 && conflicts.length === 0 && (
@@ -94,14 +108,14 @@ export default function DraftSourceView({ draft, getSourceHref }: DraftSourceVie
           return rows.length > 0 ? (
             <Fragment key={group.key}>
               {groupConflict && (group.key === 'needs' || group.key === 'goals') && (
-                <div><dt>{group.label}</dt><dd>{renderWarnings(group.key, group.label)}</dd></div>
+                <div className={rowClass(group.key)}><dt>{group.label}</dt><dd>{renderWarnings(group.key, group.label)}</dd></div>
               )}
               {rows.map(renderField)}
             </Fragment>
           ) : (
-            <div key={group.key}>
+            <div key={group.key} className={rowClass(group.key)}>
               <dt>{group.label}</dt>
-              <dd>{group.empty}{renderWarnings(group.key, group.label)}</dd>
+              <dd><span className="draft-source-view__empty">{groupConflict ? 'Conflicting values' : group.empty}</span>{renderWarnings(group.key, group.label)}</dd>
             </div>
           )
         })}

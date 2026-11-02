@@ -17,3 +17,14 @@ verify the reusable component, not a complete browser workflow. The production
 App does not mount this component yet; #57 must supply the saved version and
 client-scoped source-link destination. Generic draft edits must invalidate or
 recompute completeness before presenting a current assessment.
+
+Supply optional `getSourceLabel(documentId)` using the host page's document
+metadata (for example, “Sales call transcript” and “Intake answers”). Without
+metadata, stable numbered source labels distinguish separate documents. Identical
+quotes in different documents retain separate links. Conflicting scalar values
+are labelled “Conflicting values”, rather than “Not extracted”.
+
+Scoped dark styles use the upload UI branch's theme variables with matching
+fallbacks. Field rows stack below 600px; warning text and symbols supplement
+color, and links have a visible keyboard focus outline. The temporary preview's
+source passage panel is test scaffolding, not the #57 evidence panel.
