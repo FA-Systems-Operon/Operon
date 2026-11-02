@@ -26,7 +26,7 @@ class SourceInput(BaseModel):
 
 
 class SourceReference(BaseModel):
-    """Evidence for name, needs/N or goals/N (zero-based list indexes)."""
+    """Evidence for scalar fields, needs/N or goals/N (zero-based indexes)."""
 
     model_config = ConfigDict(extra="forbid", strict=True)
     field: str = Field(pattern=REFERENCE_FIELD_PATTERN)

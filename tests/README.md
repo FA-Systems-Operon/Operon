@@ -112,3 +112,57 @@ cd frontend && npm test
 example copies the backend's saved data, so update both if the example changes.
 Exact quote matching proves provenance, not that the passage supports the value;
 that stays a reviewer judgement.
+
+## Missing/conflicting onboarding information (AT 3.3, #49)
+
+The nine mandatory fields are business number, website, domain platform, Meta
+Business Manager account, Facebook Page, Instagram, phone number, email, and
+business address. Name, needs, and goals remain optional for completeness.
+Either document can supply a field; conflicting scalar fields retain both
+alternatives and a null value instead of silently choosing a winner.
+
+| Requirement | Evidence |
+| --- | --- |
+| Server computes missing fields and validates every populated field's references | `test_profile_flags.py` |
+| Both conflict values have exact quotes in this client's transcript/intake | `test_profile_flags.py` |
+| Wrong client, unknown paths, wrong kinds, duplicate or fabricated evidence cannot save a draft | `test_profile_flags.py`, existing source validation tests |
+| Generation through the pinned onboarding job saves flags and returns them through version retrieval | `test_profile_flags_acceptance.py` |
+| Failed conflict validation saves no draft; approved history is preserved | same acceptance suite and #43 tests |
+| Missing fields and both conflict claims appear beside their fields with correct source links | `frontend/src/components/DraftFlags.acceptance.test.tsx` |
+| Legacy/unknown assessment handling, escaped text, group/item warnings, keyboard navigation | `frontend/src/components/DraftFlags.test.tsx` |
+
+The five synthetic cases in `tests/fixtures/onboarding_flags/cases.json` are shared
+by backend and frontend tests: a clear conflict, missing information, matching
+values, complementary goals, and an uncertain potential disagreement. The reply
+is controlled and the expected field lists are written in the fixture. The
+backend replaces symbolic source names with stored document UUIDs; the component
+checks source navigation through the host callback.
+
+```bash
+python -m pytest tests/test_profile_flags.py tests/test_profile_flags_acceptance.py -q
+cd frontend
+npm test
+npm run build
+```
+
+These tests use a fake provider, so they verify validation and integration, not
+actual semantic detection. The UI is tested at component level: the full review
+page and source-navigation implementation remain #57. The existing production
+App does not yet display this component.
+
+For real-model evaluation, start/configure the project's Ollama provider and run
+from the repository root with the backend dependencies installed:
+
+```bash
+OLLAMA_MODEL='<installed-model>' PYTHONPATH=backend .venv/bin/python \
+  scripts/evaluate_profile_flags.py --output /tmp/operon-flags-evaluation.json
+```
+
+Set `OLLAMA_BASE_URL` if the endpoint differs from `http://localhost:11434`.
+The command does not automatically load `.env`. The report records the model,
+provider, each prompt hash, duration, validated synthetic draft, missing/extra
+flags, and expected alternatives. A nonzero exit signals unavailable provider,
+invalid output or an answer-key mismatch. Manually inspect interpretation and
+quotes as well; these five cases are a regression sample, not a general accuracy
+threshold or sponsor sign-off. See `docs/evaluation/us-3.3-status.md` for the
+current evaluation status.
