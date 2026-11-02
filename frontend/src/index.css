@@ -1,8 +1,32 @@
+/* Colors and fonts from the Operon mockups (dark theme only). */
+:root {
+  --bg: #0e0f12;
+  --surface: #171920;
+  --surface-raised: #20232b;
+  --border: #2b2e37;
+  --text: #f4f4f5;
+  --muted: #9b9da6;
+  --faint: #6b6e78;
+  --accent: #d7ff5f;
+  --accent-text: #111214;
+  --danger: #ff8a80;
+  --font: Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
 body {
   margin: 0;
   padding: 0;
-  font-family: sans-serif;
-  background-color: #f5f5f5;
+  font-family: var(--font);
+  background-color: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
 }
 
 #root {
