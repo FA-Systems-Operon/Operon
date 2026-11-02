@@ -1,122 +1,106 @@
-import { fireEvent, render, screen, waitFor, cleanup } from '@testing-library/react'
-import { describe, it, expect, vi, beforeEach, afterEach, test } from 'vitest'
-import userEvent from '@testing-library/user-event'
+import { render, screen, within } from '@testing-library/react'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import App from './App'
+
+function jsonResponse(body: unknown) {
+  return Promise.resolve({ ok: true, json: () => Promise.resolve(body) } as Response)
+}
+
+beforeEach(() => {
+  vi.stubGlobal('fetch', vi.fn().mockImplementation(() => jsonResponse([])))
+})
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  window.location.hash = ''
 })
 
-function jsonResponse(body: unknown, ok = true) {
-  return Promise.resolve({
-    ok,
-    json: () => Promise.resolve(body),
-  } as Response)
+function openAt(hash: string) {
+  window.location.hash = hash
+  render(<App />)
 }
 
-test('renders checking then the mocked /api/v1/status payload', async () => {
+function activeTab() {
+  const menu = screen.getByRole('navigation', { name: 'Main' })
+  return within(menu).queryByRole('link', { current: 'page' })
+}
+
+test('opens on Command with the New intake entry point', () => {
+  openAt('')
+
+  expect(screen.getByRole('heading', { name: 'Command' })).toBeInTheDocument()
+  expect(activeTab()).toHaveTextContent('Command')
+  expect(screen.getByRole('link', { name: 'New intake' })).toHaveAttribute(
+    'href',
+    '#/sources/new',
+  )
+})
+
+test('shows every menu item with its link', () => {
+  openAt('#/')
+
+  const menu = within(screen.getByRole('navigation', { name: 'Main' }))
+  expect(menu.getByRole('link', { name: 'Command' })).toHaveAttribute('href', '#/')
+  expect(menu.getByRole('link', { name: 'Brain' })).toHaveAttribute('href', '#/brain')
+  expect(menu.getByRole('link', { name: 'Workforce' })).toHaveAttribute('href', '#/workforce')
+  expect(screen.getByRole('link', { name: 'Reviews' })).toHaveAttribute('href', '#/reviews')
+  expect(screen.getByRole('link', { name: 'Operon' })).toHaveAttribute('href', '#/')
+})
+
+test.each([
+  ['#/brain', 'Brain'],
+  ['#/workforce', 'Workforce'],
+])('%s is an empty page with its tab marked', (hash, title) => {
+  openAt(hash)
+
+  expect(screen.getByRole('heading', { name: title })).toBeInTheDocument()
+  expect(activeTab()).toHaveTextContent(title)
+  // The only text is the title kept for screen readers.
+  expect(screen.getByRole('main').textContent).toBe(title)
+})
+
+test('Reviews is an empty page and marks the Reviews link', () => {
+  openAt('#/reviews')
+
+  expect(screen.getByRole('heading', { name: 'Reviews' })).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Reviews' })).toHaveAttribute('aria-current', 'page')
+  expect(activeTab()).toBeNull()
+})
+
+test('Add sources opens under the Brain tab with the client from the link', async () => {
   vi.stubGlobal(
     'fetch',
-    vi.fn().mockResolvedValue(
-      jsonResponse({
-        api: 'ok',
-        db: 'ok',
-        ollama: {
-          status: 'ok',
-          url: 'http://status.test:11434',
-          models: ['fixture-model'],
-          configured_model: 'fixture-model',
-        },
-      }),
+    vi.fn().mockImplementation(() =>
+      jsonResponse([{ id: 'c1', name: 'Plateau Basements', created_at: '' }]),
     ),
   )
+  openAt('#/sources/new?client=c1')
 
-  render(<App />)
-  expect(screen.getByText('checking...')).toBeInTheDocument()
-
-expect(await screen.findByText('Configured model:')).toBeInTheDocument()
-expect(screen.getByText('Configured model:').closest('p')).toHaveTextContent(
-  'Configured model: fixture-model',
-)
-expect(screen.getByText('Ollama URL:').closest('p')).toHaveTextContent(
-  'http://status.test:11434',
-)
-expect(screen.getByText('Installed on host:').closest('p')).toHaveTextContent(
-  'fixture-model',
-)
+  expect(screen.getByRole('heading', { name: 'Add sources' })).toBeInTheDocument()
+  expect(activeTab()).toHaveTextContent('Brain')
+  expect(await screen.findByRole('combobox', { name: 'Client' })).toHaveValue('c1')
 })
 
-test('renders fallbacks when the status payload has no ollama fields', async () => {
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ api: 'ok' })))
+test('following New intake opens Add sources with no client chosen', async () => {
+  openAt('#/')
 
-  render(<App />)
+  window.location.hash = '#/sources/new'
+  window.dispatchEvent(new HashChangeEvent('hashchange'))
 
-  expect(await screen.findByText(/not set/)).toBeInTheDocument()
-  expect(screen.getAllByText(/unknown/).length).toBeGreaterThan(0)
-  expect(screen.getByText(/none reported/)).toBeInTheDocument()
+  expect(await screen.findByRole('heading', { name: 'Add sources' })).toBeInTheDocument()
+  expect(screen.getByRole('combobox', { name: 'Client' })).toHaveValue('')
 })
 
-test('renders API unreachable when /api/v1/status fails', async () => {
-  vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')))
+test('the status page is still reachable for developers', () => {
+  openAt('#/status')
 
-  render(<App />)
-
-  expect(await screen.findByText('API unreachable')).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: 'Status' })).toBeInTheDocument()
+  expect(activeTab()).toBeNull()
 })
-test('shows a waiting message while the model request is pending', async () => {
-  let resolveModel!: (r: Response) => void
-  vi.stubGlobal(
-    'fetch',
-    vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse({ api: 'ok', ollama: {} }))
-      .mockReturnValueOnce(
-        new Promise<Response>((resolve) => {
-          resolveModel = resolve
-        }),
-      ),
-  )
-  render(<App />)
 
-  fireEvent.click(screen.getByRole('button', { name: 'Test the model via the API' }))
-  expect(await screen.findByText('Waiting for the model...')).toBeInTheDocument()
+test('an unknown address shows an empty Page not found', () => {
+  openAt('#/nowhere')
 
-  resolveModel({
-    ok: true,
-    json: () => Promise.resolve({ model: 'm', response: 'r' }),
-  } as Response)
-  expect(await screen.findByText('m: r')).toBeInTheDocument()
-  expect(screen.queryByText('Waiting for the model...')).not.toBeInTheDocument()
-})
-test('test button displays whatever /api/v1/ollama/test returns', async () => {
-  const fetchMock = vi
-    .fn()
-    .mockResolvedValueOnce(jsonResponse({ api: 'ok', ollama: {} }))
-    .mockResolvedValueOnce(
-      jsonResponse({
-        model: 'from-api',
-        response: 'from-api-body',
-      }),
-    )
-    .mockResolvedValueOnce(jsonResponse({ detail: 'from-api-error' }, false))
-    .mockResolvedValueOnce(jsonResponse({}, false))
-    .mockRejectedValueOnce(new Error('network down'))
-
-  vi.stubGlobal('fetch', fetchMock)
-  render(<App />)
-  await screen.findByRole('button', { name: 'Test the model via the API' })
-
-  fireEvent.click(screen.getByRole('button', { name: 'Test the model via the API' }))
-  expect(await screen.findByText('from-api: from-api-body')).toBeInTheDocument()
-
-  fireEvent.click(screen.getByRole('button', { name: 'Test the model via the API' }))
-  expect(await screen.findByText('from-api-error')).toBeInTheDocument()
-
-  fireEvent.click(screen.getByRole('button', { name: 'Test the model via the API' }))
-  expect(await screen.findByText('Request failed')).toBeInTheDocument()
-
-  fireEvent.click(screen.getByRole('button', { name: 'Test the model via the API' }))
-  await waitFor(() => {
-    expect(screen.getByText('API unreachable')).toBeInTheDocument()
-  })
+  expect(screen.getByRole('heading', { name: 'Page not found' })).toBeInTheDocument()
+  expect(activeTab()).toBeNull()
 })
