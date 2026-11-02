@@ -47,7 +47,12 @@ class ModelProvider(Protocol):
     """Anything that can turn a prompt into a ModelResponse."""
 
     def generate(
-        self, prompt: str, *, system: str | None = None, json_output: bool = False
+        self,
+        prompt: str,
+        *,
+        system: str | None = None,
+        json_output: bool = False,
+        output_schema: dict | None = None,
     ) -> ModelResponse: ...
 
 

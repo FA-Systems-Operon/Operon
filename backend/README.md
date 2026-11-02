@@ -380,6 +380,20 @@ and `goals` remain supported but are not mandatory. No restrictive business-numb
 URL, or domain-platform format rules are assumed. Account values are IDs, URLs, or
 handles, never passwords. Either source may supply a field.
 
+The generation prompt uses a compact JSON output contract, compares both sources
+before selecting values, and keeps list values separate from their evidence.
+The provider receives the Pydantic JSON schema to constrain decoding, including
+this job's document IDs. Strict validation still applies to every response.
+Ordinary text/JSON provider calls retain their existing behavior.
+
+During generation only, missing scalar references may be completed from exact
+literal value occurrences in the supplied sources. This never invents a quote or
+replaces invalid existing evidence. References redundantly repeated for a null
+conflicted scalar are removed only when they exactly duplicate already validated
+conflict alternatives; both claims remain preserved there. Paraphrased values
+still require model-supplied evidence. The direct source-draft API remains strict
+and does not apply this generation normalization.
+
 The generation prompt proposes `conflicts`, each with `field`, `explanation`, and
 exactly two `alternatives` containing `value`, `document_id`, and an exact `quote`.
 One alternative must cite a stored transcript and the other a stored intake for
@@ -408,4 +422,4 @@ all documents a client owns. The onboarding job compares its exact pinned pair.
 
 Resolution and approval blocking are follow-up review-flow work, as described in
 the architecture; this change does not implement those controls. No extra model
-call, automatic repair, or new retry policy is introduced.
+call, model-repair retry, or new retry policy is introduced.

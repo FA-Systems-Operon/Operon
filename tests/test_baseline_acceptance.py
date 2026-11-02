@@ -27,7 +27,7 @@ class FakeProvider:
         self.text = text
         self.calls = []
 
-    def generate(self, prompt, *, system=None, json_output=False):
+    def generate(self, prompt, *, system=None, json_output=False, output_schema=None):
         self.calls.append({"prompt": prompt, "json_output": json_output})
         return ModelResponse(
             text=self.text, provider="fake", model="fake-model", duration_ms=5

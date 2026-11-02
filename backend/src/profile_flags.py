@@ -27,11 +27,9 @@ MANDATORY_FIELDS: tuple[MandatoryField, ...] = (
     "business_address",
 )
 SCALAR_FIELDS = ("name", *MANDATORY_FIELDS)
-FIELD_PATTERN = (
-    r"^("
-    + "|".join(SCALAR_FIELDS)
-    + r"|needs|goals|needs/(0|[1-9][0-9]*)|goals/(0|[1-9][0-9]*))$"
-)
+_ITEM_PATH = r"(needs|goals)/(0|[1-9][0-9]*)"
+REFERENCE_FIELD_PATTERN = r"^(" + "|".join(SCALAR_FIELDS) + "|" + _ITEM_PATH + r")$"
+FIELD_PATTERN = r"^(" + "|".join(SCALAR_FIELDS) + r"|needs|goals|" + _ITEM_PATH + r")$"
 NonBlank = Annotated[str, StringConstraints(pattern=r"\S")]
 
 

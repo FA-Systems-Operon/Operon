@@ -35,7 +35,12 @@ class OllamaProvider:
         self.client = client or _default_client
 
     def generate(
-        self, prompt: str, *, system: str | None = None, json_output: bool = False
+        self,
+        prompt: str,
+        *,
+        system: str | None = None,
+        json_output: bool = False,
+        output_schema: dict | None = None,
     ) -> ModelResponse:
         payload = {
             "model": self.model,
@@ -46,7 +51,9 @@ class OllamaProvider:
         }
         if system is not None:
             payload["system"] = system
-        if json_output:
+        if output_schema is not None:
+            payload["format"] = output_schema
+        elif json_output:
             payload["format"] = "json"
 
         start = time.perf_counter()
