@@ -87,7 +87,9 @@ def evidence_case():
 
 def test_parser_accepts_evidence_from_transcript_and_intake(evidence_case):
     sources, profile = evidence_case
-    assert parse_source_profile(json.dumps(profile), sources).model_dump() == profile
+    result = parse_source_profile(json.dumps(profile), sources).model_dump()
+    assert {key: result[key] for key in profile} == profile
+    assert len(result["assessment"]["missing_fields"]) == 9
 
 
 @pytest.mark.parametrize(
@@ -140,7 +142,7 @@ def test_generation_returns_validated_profile(evidence_case):
         json.dumps(profile), "fake", "fake", 1
     )
     result = generate_source_profile(sources, provider, "Context only")
-    assert result.model_dump() == profile
+    assert {key: result.model_dump()[key] for key in profile} == profile
     provider.generate.assert_called_once_with(
         build_source_profile_prompt(sources, "Context only"), json_output=True
     )

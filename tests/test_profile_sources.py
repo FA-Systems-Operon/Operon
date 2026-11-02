@@ -7,6 +7,7 @@ from sqlalchemy import func, select
 
 from src.ai.source_prompt import SourceLinkedProfile
 from src.models import ClientProfileVersion, ExtractedText, ReviewStatus
+from src.profile_flags import assess_missing
 from src.profile_sources import save_source_profile
 
 
@@ -40,11 +41,13 @@ def test_draft_round_trip_preserves_evidence_and_old_version(
     db_session.expire_all()
     assert version.status == ReviewStatus.DRAFT
     assert version.version_number == 2
-    assert version.data == draft.model_dump()
+    expected = draft.model_dump()
+    expected["assessment"] = assess_missing(expected, []).model_dump()
+    assert version.data == expected
     assert original.data == {"name": "Old"}
     response = client.get(f"/client-profiles/{original.client_profile_id}/versions")
     assert response.status_code == 200
-    assert response.json()[-1]["data"] == draft.model_dump()
+    assert response.json()[-1]["data"] == expected
     approved = client.get(
         f"/client-profiles/{original.client_profile_id}/latest-approved"
     )
