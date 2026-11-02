@@ -21,17 +21,22 @@ function reply([status, body]: Reply) {
   } as Response)
 }
 
-// Fakes the two endpoints the page calls. `upload` can return a reply (or a promise
-// of one) to override the normal "201 Created" for a given kind.
+// Fakes the three endpoints the page calls. `upload` can return a reply (or a promise
+// of one) to override the normal "201 Created" for a given kind, and `start` does the
+// same for starting the draft.
 function mockApi(
   options: {
     clients?: Reply
     upload?: (kind: string) => Reply | Promise<Response> | undefined
+    start?: () => Reply | undefined
   } = {},
 ) {
   const fetchMock = vi.fn((url: string, init?: RequestInit) => {
     if (url === '/api/v1/clients') {
       return reply(options.clients ?? [200, CLIENTS])
+    }
+    if (url.endsWith('/onboarding-jobs')) {
+      return reply(options.start?.() ?? [201, { id: 'job1', status: 'pending' }])
     }
     const form = init!.body as FormData
     const kind = form.get('kind') as string
@@ -49,10 +54,20 @@ function mockApi(
 // The uploads sent so far, as [client, kind, file name].
 function uploadsSent(fetchMock: ReturnType<typeof mockApi>) {
   return fetchMock.mock.calls
-    .filter(([, init]) => init?.method === 'POST')
+    .filter(([url]) => url.endsWith('/documents'))
     .map(([url, init]) => {
       const form = init!.body as FormData
       return [url.split('/')[4], form.get('kind'), (form.get('file') as File).name]
+    })
+}
+
+// The draft starts asked for so far, as [client, transcript ID, intake ID].
+function startsSent(fetchMock: ReturnType<typeof mockApi>) {
+  return fetchMock.mock.calls
+    .filter(([url]) => url.endsWith('/onboarding-jobs'))
+    .map(([url, init]) => {
+      const body = JSON.parse(init!.body as string)
+      return [url.split('/')[4], body.transcript_document_id, body.intake_document_id]
     })
 }
 
@@ -72,11 +87,11 @@ function status() {
   return screen.getByRole('status')
 }
 
-async function renderPage(initialClientId: string | null = null, onUploaded = vi.fn()) {
-  render(<AddSourcesPage initialClientId={initialClientId} onUploaded={onUploaded} />)
+async function renderPage(initialClientId: string | null = null, onDraftStarted = vi.fn()) {
+  render(<AddSourcesPage initialClientId={initialClientId} onDraftStarted={onDraftStarted} />)
   const picker = screen.getByRole('combobox', { name: 'Client' })
   await waitFor(() => expect(picker).toBeEnabled())
-  return { picker, onUploaded }
+  return { picker, onDraftStarted }
 }
 
 async function chooseEverything(clientId = 'c1') {
@@ -248,9 +263,9 @@ test('accepts a file dropped on its box', async () => {
   expect(box(INTAKE_BOX).getByText('answers.pdf')).toBeInTheDocument()
 })
 
-test('uploads both files with their kinds, then reports success', async () => {
+test('uploads both files with their kinds, then starts the draft from both', async () => {
   const fetchMock = mockApi()
-  const { onUploaded } = await renderPage()
+  const { onDraftStarted } = await renderPage()
   const user = await chooseEverything('c2')
 
   expect(screen.getByText('AP')).toBeInTheDocument()
@@ -259,15 +274,15 @@ test('uploads both files with their kinds, then reports success', async () => {
 
   await user.click(submitButton())
 
-  expect(await screen.findByText('Both files are uploaded to acme plumbing.')).toBeInTheDocument()
+  expect(
+    await screen.findByText('Draft started for acme plumbing. It takes about a minute.'),
+  ).toBeInTheDocument()
   expect(uploadsSent(fetchMock)).toEqual([
     ['c2', 'transcript', 'call.txt'],
     ['c2', 'intake', 'answers.md'],
   ])
-  expect(onUploaded).toHaveBeenCalledWith('c2', [
-    { id: 'c2-transcript', client_id: 'c2', kind: 'transcript' },
-    { id: 'c2-intake', client_id: 'c2', kind: 'intake' },
-  ])
+  expect(startsSent(fetchMock)).toEqual([['c2', 'c2-transcript', 'c2-intake']])
+  expect(onDraftStarted).toHaveBeenCalledWith({ id: 'job1', status: 'pending' })
   expect(submitButton()).toBeDisabled()
   expect(screen.getAllByText(/^Uploaded · /)).toHaveLength(2)
   expect(screen.queryByRole('button', { name: /^Remove/ })).not.toBeInTheDocument()
@@ -289,7 +304,7 @@ test('locks the form while the files are being sent', async () => {
 
   finish({ ok: true, status: 201, json: () => Promise.resolve({ id: 't' }) } as Response)
   expect(
-    await screen.findByText('Both files are uploaded to Plateau Basements.'),
+    await screen.findByText('Draft started for Plateau Basements. It takes about a minute.'),
   ).toBeInTheDocument()
 })
 
@@ -299,7 +314,7 @@ test('shows a failed upload on its file and retries only that file', async () =>
     upload: (kind) =>
       kind === 'intake' && intakeFails ? [415, { detail: 'Unsupported' }] : undefined,
   })
-  const { onUploaded } = await renderPage('c1')
+  const { onDraftStarted } = await renderPage('c1')
   const user = await chooseEverything('c1')
 
   await user.click(submitButton())
@@ -308,21 +323,23 @@ test('shows a failed upload on its file and retries only that file', async () =>
     'Use a TXT, MD or PDF file.',
   )
   expect(box(TRANSCRIPT_BOX).getByText(/^Uploaded · /)).toBeInTheDocument()
-  expect(onUploaded).not.toHaveBeenCalled()
+  expect(startsSent(fetchMock)).toEqual([])
+  expect(onDraftStarted).not.toHaveBeenCalled()
   expect(submitButton()).toBeEnabled()
 
   intakeFails = false
   await user.click(submitButton())
 
   expect(
-    await screen.findByText('Both files are uploaded to Plateau Basements.'),
+    await screen.findByText('Draft started for Plateau Basements. It takes about a minute.'),
   ).toBeInTheDocument()
   expect(uploadsSent(fetchMock)).toEqual([
     ['c1', 'transcript', 'call.txt'],
     ['c1', 'intake', 'answers.md'],
     ['c1', 'intake', 'answers.md'],
   ])
-  expect(onUploaded).toHaveBeenCalledTimes(1)
+  expect(startsSent(fetchMock)).toHaveLength(1)
+  expect(onDraftStarted).toHaveBeenCalledTimes(1)
   expect(screen.queryByRole('alert')).not.toBeInTheDocument()
 })
 
@@ -351,7 +368,7 @@ test('switching client after a partial upload sends both files to the new client
   ])
 })
 
-test('works without an onUploaded handler', async () => {
+test('works without an onDraftStarted handler', async () => {
   mockApi()
   render(<AddSourcesPage initialClientId="c1" />)
   await waitFor(() => expect(screen.getByRole('combobox', { name: 'Client' })).toHaveValue('c1'))
@@ -360,6 +377,54 @@ test('works without an onUploaded handler', async () => {
   await user.click(submitButton())
 
   expect(
-    await screen.findByText('Both files are uploaded to Plateau Basements.'),
+    await screen.findByText('Draft started for Plateau Basements. It takes about a minute.'),
   ).toBeInTheDocument()
+})
+
+test('if the draft cannot start, keeps the files and retries only the start', async () => {
+  let startFails = true
+  const fetchMock = mockApi({ start: () => (startFails ? [500, { detail: 'boom' }] : undefined) })
+  const { onDraftStarted } = await renderPage('c1')
+  const user = await chooseEverything('c1')
+
+  await user.click(submitButton())
+
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    "Both files are saved, but the draft couldn't start. Try again.",
+  )
+  expect(screen.getAllByText(/^Uploaded · /)).toHaveLength(2)
+  expect(onDraftStarted).not.toHaveBeenCalled()
+  expect(submitButton()).toBeEnabled()
+
+  startFails = false
+  await user.click(submitButton())
+
+  expect(
+    await screen.findByText('Draft started for Plateau Basements. It takes about a minute.'),
+  ).toBeInTheDocument()
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  expect(uploadsSent(fetchMock)).toHaveLength(2)
+  expect(startsSent(fetchMock)).toEqual([
+    ['c1', 'c1-transcript', 'c1-intake'],
+    ['c1', 'c1-transcript', 'c1-intake'],
+  ])
+})
+
+test('switching client after the draft started allows a new upload', async () => {
+  const fetchMock = mockApi()
+  await renderPage('c1')
+  const user = await chooseEverything('c1')
+  await user.click(submitButton())
+  expect(await screen.findByText(/^Draft started for Plateau Basements/)).toBeInTheDocument()
+  expect(submitButton()).toBeDisabled()
+
+  await user.selectOptions(screen.getByRole('combobox', { name: 'Client' }), 'c2')
+
+  expect(status()).toHaveTextContent(/^The draft takes about a minute\.$/)
+  await user.click(submitButton())
+  expect(await screen.findByText(/^Draft started for acme plumbing/)).toBeInTheDocument()
+  expect(startsSent(fetchMock)).toEqual([
+    ['c1', 'c1-transcript', 'c1-intake'],
+    ['c2', 'c2-transcript', 'c2-intake'],
+  ])
 })

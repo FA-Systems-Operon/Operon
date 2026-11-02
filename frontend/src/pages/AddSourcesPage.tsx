@@ -1,9 +1,11 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import {
   listClients,
+  startOnboardingJob,
   uploadDocument,
   type Client,
   type DocumentKind,
+  type OnboardingJob,
   type SourceDocument,
 } from '../api'
 import FileSlot from '../components/FileSlot'
@@ -27,8 +29,8 @@ const SLOTS: { kind: DocumentKind; title: string; missing: string }[] = [
 type AddSourcesPageProps = {
   // Already chosen when opened from a client's Brain page; null from Command.
   initialClientId: string | null
-  // Called once both files are saved.
-  onUploaded?: (clientId: string, documents: SourceDocument[]) => void
+  // Called once both files are saved and the draft has started.
+  onDraftStarted?: (job: OnboardingJob) => void
 }
 
 export function initials(name: string): string {
@@ -56,7 +58,7 @@ function nextStep(clientChosen: boolean, missingFiles: string[]): string {
   return `${capitalized} to continue. The draft takes about a minute.`
 }
 
-export default function AddSourcesPage({ initialClientId, onUploaded }: AddSourcesPageProps) {
+export default function AddSourcesPage({ initialClientId, onDraftStarted }: AddSourcesPageProps) {
   const [clients, setClients] = useState<Client[] | null>(null)
   const [loadFailed, setLoadFailed] = useState(false)
   const [clientId, setClientId] = useState('')
@@ -65,6 +67,8 @@ export default function AddSourcesPage({ initialClientId, onUploaded }: AddSourc
     intake: EMPTY_SLOT,
   })
   const [uploading, setUploading] = useState(false)
+  const [job, setJob] = useState<OnboardingJob | null>(null)
+  const [startFailed, setStartFailed] = useState(false)
 
   useEffect(() => {
     // Ignore a reply that arrives after the page has closed.
@@ -91,6 +95,8 @@ export default function AddSourcesPage({ initialClientId, onUploaded }: AddSourc
 
   function handleClientChange(id: string) {
     setClientId(id)
+    setJob(null)
+    setStartFailed(false)
     // Files already saved belong to the previous client, so upload them again.
     setSlots((previous) => ({
       transcript: { ...previous.transcript, document: null, error: null },
@@ -106,25 +112,33 @@ export default function AddSourcesPage({ initialClientId, onUploaded }: AddSourc
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
     setUploading(true)
-    const documents: SourceDocument[] = []
+    const saved: Partial<Record<DocumentKind, SourceDocument>> = {}
     for (const { kind } of SLOTS) {
       const slot = slots[kind]
       if (slot.document) {
-        documents.push(slot.document)
+        saved[kind] = slot.document
         continue
       }
       try {
         const document = await uploadDocument(clientId, slot.file!, kind)
-        documents.push(document)
+        saved[kind] = document
         updateSlot(kind, { document, error: null })
       } catch (error) {
         updateSlot(kind, { error: describeUploadError(error) })
       }
     }
-    setUploading(false)
-    if (documents.length === SLOTS.length) {
-      onUploaded?.(clientId, documents)
+    // Only start the draft once both files are saved, so it never drafts from one alone.
+    if (saved.transcript && saved.intake) {
+      try {
+        const started = await startOnboardingJob(clientId, saved.transcript.id, saved.intake.id)
+        setJob(started)
+        setStartFailed(false)
+        onDraftStarted?.(started)
+      } catch {
+        setStartFailed(true)
+      }
     }
+    setUploading(false)
   }
 
   const selected = clients?.find((client) => client.id === clientId)
@@ -133,14 +147,14 @@ export default function AddSourcesPage({ initialClientId, onUploaded }: AddSourc
     initialClientId !== null &&
     !clients.some((client) => client.id === initialClientId)
   const missingFiles = SLOTS.filter(({ kind }) => !slots[kind].file).map(({ missing }) => missing)
-  const allUploaded = SLOTS.every(({ kind }) => slots[kind].document)
-  const ready = Boolean(selected) && missingFiles.length === 0 && !allUploaded
+  // Still clickable after a failed start, to try starting the draft again.
+  const ready = Boolean(selected) && missingFiles.length === 0 && !job
 
   let status = nextStep(Boolean(selected), missingFiles)
   if (uploading) {
     status = 'Uploading…'
-  } else if (allUploaded && selected) {
-    status = `Both files are uploaded to ${selected.name}.`
+  } else if (job && selected) {
+    status = `Draft started for ${selected.name}. It takes about a minute.`
   }
 
   return (
@@ -213,6 +227,11 @@ export default function AddSourcesPage({ initialClientId, onUploaded }: AddSourc
           {status}
         </p>
       </div>
+      {startFailed && (
+        <p className="field-error" role="alert">
+          Both files are saved, but the draft couldn't start. Try again.
+        </p>
+      )}
     </form>
   )
 }

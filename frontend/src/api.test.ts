@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from 'vitest'
-import { ApiError, listClients, uploadDocument } from './api'
+import { ApiError, listClients, startOnboardingJob, uploadDocument } from './api'
 
 function response(status: number, body: unknown) {
   return {
@@ -72,4 +72,28 @@ test('uploadDocument ignores validation details that are not a sentence', async 
 
   expect(error.status).toBe(422)
   expect(error.detail).toBeUndefined()
+})
+
+test('startOnboardingJob posts both document IDs as JSON', async () => {
+  const job = { id: 'j1', status: 'pending' }
+  const fetchMock = vi.fn().mockResolvedValue(response(201, job))
+  vi.stubGlobal('fetch', fetchMock)
+
+  await expect(startOnboardingJob('c1', 'd1', 'd2')).resolves.toEqual(job)
+
+  const [url, init] = fetchMock.mock.calls[0]
+  expect(url).toBe('/api/v1/clients/c1/onboarding-jobs')
+  expect(init.method).toBe('POST')
+  expect(init.headers).toEqual({ 'Content-Type': 'application/json' })
+  expect(JSON.parse(init.body)).toEqual({ transcript_document_id: 'd1', intake_document_id: 'd2' })
+})
+
+test('startOnboardingJob throws an ApiError with the reason on failure', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(404, { detail: 'Intake not found' })))
+
+  const error = await startOnboardingJob('c1', 'd1', 'd2').catch((caught) => caught)
+
+  expect(error).toBeInstanceOf(ApiError)
+  expect(error.status).toBe(404)
+  expect(error.detail).toBe('Intake not found')
 })

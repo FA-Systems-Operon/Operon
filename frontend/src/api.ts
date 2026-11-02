@@ -17,6 +17,18 @@ export type SourceDocument = {
   uploaded_at: string
 }
 
+// One run of the Onboarding agent on a client's transcript and intake answers.
+export type OnboardingJob = {
+  id: string
+  client_id: string
+  transcript_document_id: string
+  intake_document_id: string
+  status: 'pending' | 'running' | 'succeeded' | 'failed'
+  error: string | null
+  result_version_id: string | null
+  created_at: string
+}
+
 // A response the API answered with an error status (as opposed to no answer at all).
 export class ApiError extends Error {
   status: number
@@ -61,6 +73,27 @@ export async function uploadDocument(
   const response = await fetch(`/api/v1/clients/${encodeURIComponent(clientId)}/documents`, {
     method: 'POST',
     body,
+  })
+  if (!response.ok) {
+    throw new ApiError(response.status, await readDetail(response))
+  }
+  return response.json()
+}
+
+// Uploading only saves the files. This tells the backend to start the draft from
+// both of them. Asking again for the same pair returns the same job.
+export async function startOnboardingJob(
+  clientId: string,
+  transcriptDocumentId: string,
+  intakeDocumentId: string,
+): Promise<OnboardingJob> {
+  const response = await fetch(`/api/v1/clients/${encodeURIComponent(clientId)}/onboarding-jobs`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      transcript_document_id: transcriptDocumentId,
+      intake_document_id: intakeDocumentId,
+    }),
   })
   if (!response.ok) {
     throw new ApiError(response.status, await readDetail(response))
