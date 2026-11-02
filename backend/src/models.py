@@ -123,6 +123,63 @@ class ExtractedText(Base):
     document: Mapped[SourceDocument] = relationship(back_populates="extracted_text")
 
 
+class JobStatus(str, enum.Enum):
+    """Where an onboarding-agent run is. #37 adds recovery and retries on top."""
+
+    PENDING = "pending"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+
+
+class OnboardingJob(Base):
+    """One onboarding-agent run on a client's transcript and intake answers (#36).
+
+    A job is started once both files are uploaded, never on a single upload, so
+    the agent always drafts from a complete set. The two documents are pinned
+    on the job: the agent reads exactly these, not whatever else the client has.
+    One job per transcript/intake pair, so asking again returns the same job.
+    """
+
+    __tablename__ = "onboarding_jobs"
+    __table_args__ = (UniqueConstraint("transcript_document_id", "intake_document_id"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    client_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("clients.id"), index=True)
+    transcript_document_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("source_documents.id"), index=True
+    )
+    intake_document_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("source_documents.id"), index=True
+    )
+    status: Mapped[JobStatus] = mapped_column(
+        Enum(
+            JobStatus,
+            native_enum=False,
+            length=20,
+            values_callable=lambda e: [member.value for member in e],
+        ),
+        default=JobStatus.PENDING,
+        nullable=False,
+        index=True,
+    )
+    # Short, user-safe reason when status is failed; details go to the server log.
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # The draft profile version this run produced, when it succeeded.
+    result_version_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("client_profile_versions.id"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
 class ClientProfile(Base):
     """A profile associated with a client. Versioned — never mutate, always append."""
 

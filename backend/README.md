@@ -284,3 +284,49 @@ through `GET /client-profiles/{profile_id}/versions` in each version's `data`.
 The existing latest-approved endpoint continues to return only approved versions.
 This follows the existing profile route prefix; frontend proxy integration is
 separate. Existing generic profile endpoints keep their current behavior.
+
+## Onboarding draft job (#36)
+
+Uploading a document only saves it. The onboarding agent needs both of a
+client's sources, so a draft starts in a separate call once the transcript and
+the intake answers are uploaded (the upload page makes it from `onUploaded`):
+
+`POST /api/v1/clients/{client_id}/onboarding-jobs`
+
+```json
+{"transcript_document_id": "<uuid>", "intake_document_id": "<uuid>"}
+```
+
+Both documents must belong to the client (404 otherwise) and have the matching
+`kind`, `transcript` and `intake` (422 otherwise). The call saves a `pending`
+job pinned to those two documents and returns `201`. After the response is
+sent, a FastAPI background task:
+
+1. extracts both documents' text, reusing text that was already extracted,
+2. sends exactly those two documents to the source-linked profile prompt (#39);
+   other documents the client has are never included,
+3. saves the validated result as a new draft version of the client's newest
+   profile, creating a profile if the client has none (#40).
+
+There is one job per transcript/intake pair. Calling again with the same pair
+returns the existing job with `200` and starts nothing new; if that job had
+failed, it is queued again. A new pair (for example a corrected transcript)
+gets its own job.
+
+The status moves `pending` → `running` → `succeeded` or `failed`, and each step
+is committed so it can be watched while the model runs. Check it with
+`GET /api/v1/clients/{client_id}/onboarding-jobs/{job_id}`: `status`, a short
+`error` on failure, `result_version_id` on success, and timestamps. Another
+client's job returns 404.
+
+Failures are recorded on the job and never undo the uploads or their extracted
+text. Model errors, unsupported evidence, malformed replies, or a document
+without text save no profile version. The full traceback goes to the server
+log; `error` stays short and does not include model output.
+
+The job runs inside the API process. If the API stops mid-job, the row stays
+`pending` or `running`; recovering and retrying those jobs is #37. A job runs
+only when it is `pending`, so running the same job twice does nothing.
+
+New databases get the table from `create_all`. For an existing database, apply
+`backend/migrations/004_add_onboarding_jobs.sql`.
