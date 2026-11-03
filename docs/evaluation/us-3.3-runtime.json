@@ -1,0 +1,28 @@
+{
+  "ollama_version": "0.40.13",
+  "model": "qwen2.5:14b",
+  "model_digest": "7cdf5a0187d5c58cc5d369b255592f7841d1c4696d45a8c8a9489440385b22f6",
+  "details": {
+    "parent_model": "",
+    "format": "gguf",
+    "family": "qwen2",
+    "families": [
+      "qwen2"
+    ],
+    "parameter_size": "14.8B",
+    "quantization_level": "Q4_K_M",
+    "context_length": 32768,
+    "embedding_length": 5120,
+    "runner": "ggml"
+  },
+  "context_length": 8192,
+  "temperature": 0,
+  "seed": 42,
+  "cloud_enabled": false,
+  "source_generation_commit": "05c7487ff8cf471c515470b13d035f8bb23c2ae4",
+  "cases": [
+    "cases.json",
+    "additional_cases.json"
+  ],
+  "base_url": "http://127.0.0.1:11434"
+}

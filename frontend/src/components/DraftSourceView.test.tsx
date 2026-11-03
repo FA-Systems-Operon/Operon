@@ -73,3 +73,33 @@ test.each([
   expect(screen.queryByRole('link')).not.toBeInTheDocument()
   expect(screen.queryByText('No source linked')).not.toBeInTheDocument()
 })
+
+test('distinguishes identical quotes from different documents using source metadata', () => {
+  render(<DraftSourceView draft={{ ...draft, source_references: [
+    { field: 'name', document_id: TRANSCRIPT, quote: 'Name: Ada Lovelace' },
+    { field: 'name', document_id: INTAKE, quote: 'Name: Ada Lovelace' },
+  ] }} getSourceHref={getSourceHref}
+    getSourceLabel={(id) => id === TRANSCRIPT ? 'Sales call transcript' : 'Intake answers'} />)
+
+  expect(row('Name').getByText('Sales call transcript')).toBeInTheDocument()
+  expect(row('Name').getByText('Intake answers')).toBeInTheDocument()
+  expect(row('Name').getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual([
+    getSourceHref(TRANSCRIPT, 'Name: Ada Lovelace'),
+    getSourceHref(INTAKE, 'Name: Ada Lovelace'),
+  ])
+})
+
+test('describes unresolved conflicts without calling them unextracted', () => {
+  render(<DraftSourceView draft={{ email: null,
+    assessment: { rules_version: 1, missing_fields: [] },
+    conflicts: [{ field: 'email', explanation: 'Sources give different emails.', alternatives: [
+      { value: 'sales@example.test', document_id: TRANSCRIPT, quote: 'sales@example.test' },
+      { value: 'hello@example.test', document_id: INTAKE, quote: 'hello@example.test' },
+    ] }],
+  }} getSourceHref={getSourceHref} />)
+
+  expect(row('Email').getByText('Conflicting values')).toBeInTheDocument()
+  expect(row('Email').queryByText('Not extracted')).not.toBeInTheDocument()
+  expect(row('Email').getByText('Source 1')).toBeInTheDocument()
+  expect(row('Email').getByText('Source 2')).toBeInTheDocument()
+})
