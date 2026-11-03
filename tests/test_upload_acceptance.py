@@ -11,7 +11,7 @@ The model is faked so CI needs no Ollama. The page side (it sends those three
 requests) is frontend/src/AddSources.acceptance.test.tsx.
 """
 
-import time
+import threading
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -26,7 +26,7 @@ from src.config import settings
 from src.db import SessionLocal
 from src.main import app
 from src.models import ClientProfile, JobStatus, OnboardingJob
-from src.onboarding_jobs import run_next_job, run_onboarding_job
+from src.onboarding_jobs import _execute, run_next_job, run_onboarding_job
 
 
 @pytest.fixture
@@ -133,20 +133,25 @@ def test_job_left_by_a_restart_is_drafted_when_the_api_starts_again(
         db_session.commit()
     assert drafts_of(client, db_session, demo_client) == []
 
+    # Signals when a run has finished and saved its result.
+    finished = threading.Event()
+
+    def execute_and_signal(*args):
+        _execute(*args)
+        finished.set()
+
+    monkeypatch.setattr("src.onboarding_jobs._execute", execute_and_signal)
+
     # Start the API again. Its background worker finds the job on its own.
     monkeypatch.setattr(settings, "BACKGROUND_WORKER_ENABLED", True)
     monkeypatch.setattr(settings, "JOB_POLL_SECONDS", 0.05)
     # Where the uploaded files were saved in this test.
     monkeypatch.setattr(settings, "STORAGE_DIR", str(tmp_path))
-    with TestClient(app) as restarted:
-        deadline = time.monotonic() + 10
-        while time.monotonic() < deadline:
-            db_session.expire_all()
-            job = get_job(restarted, demo_client, started)
-            if job["status"] == "succeeded":
-                break
-            time.sleep(0.05)
+    with TestClient(app):
+        assert finished.wait(timeout=10), "the worker did not run the job"
 
+    db_session.expire_all()
+    job = get_job(client, demo_client, started)
     drafts = drafts_of(client, db_session, demo_client)
     assert_draft_from(job, drafts, transcript, intake)
 
