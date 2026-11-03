@@ -1,0 +1,1086 @@
+{
+  "evaluated_at": "2026-11-03T02:55:49.341435+00:00",
+  "status": "completed",
+  "cases": [
+    {
+      "case": "clear_conflict",
+      "prompt_sha256": "dafc1bc1b4e789fa272420324b13e5d4c23dc0e3311231f148685b8b44e72f92",
+      "expected": {
+        "missing_fields": [],
+        "conflict_fields": [
+          "email"
+        ],
+        "email_values": [
+          "sales@example.test",
+          "hello@example.test"
+        ]
+      },
+      "sources": [
+        {
+          "document_id": "9c7d5bd8-6889-5c0e-9561-301c89e4bf30",
+          "kind": "transcript",
+          "text": "Discovery call\nBusiness number: BN-123456789\nWebsite: https://example.test\nDomain platform: Example Registrar\nMeta Business Manager: BM-12345\nFacebook Page: https://facebook.com/example\nInstagram: @example\nPhone: +1 514 555 0100\nEmail: sales@example.test\nBusiness address: 123 Example Street, Montreal"
+        },
+        {
+          "document_id": "32fa201f-8f65-5e31-a217-a66cfd3bb809",
+          "kind": "intake",
+          "text": "Intake form\nBusiness number: BN-123456789\nWebsite: https://example.test\nDomain platform: Example Registrar\nMeta Business Manager: BM-12345\nFacebook Page: https://facebook.com/example\nInstagram: @example\nPhone: +1 514 555 0100\nEmail: hello@example.test\nBusiness address: 123 Example Street, Montreal"
+        }
+      ],
+      "schema_sha256": "1627fe4d1c7c3c0047a9cda5270aac2de24d03c8ddd595a79cd297fe8b00d5ef",
+      "missed_missing": [],
+      "false_missing": [],
+      "missed_conflicts": [],
+      "false_conflicts": [],
+      "draft": {
+        "business_number": "BN-123456789",
+        "website": "https://example.test",
+        "domain_platform": "Example Registrar",
+        "meta_business_manager": "BM-12345",
+        "facebook_page": "https://facebook.com/example",
+        "instagram": "@example",
+        "phone_number": "+1 514 555 0100",
+        "email": null,
+        "business_address": "123 Example Street, Montreal",
+        "name": null,
+        "needs": [],
+        "goals": [],
+        "source_references": [
+          {
+            "field": "business_number",
+            "document_id": "9c7d5bd8-6889-5c0e-9561-301c89e4bf30",
+            "quote": "Business number: BN-123456789"
+          },
+          {
+            "field": "website",
+            "document_id": "9c7d5bd8-6889-5c0e-9561-301c89e4bf30",
+            "quote": "Website: https://example.test"
+          },
+          {
+            "field": "domain_platform",
+            "document_id": "9c7d5bd8-6889-5c0e-9561-301c89e4bf30",
+            "quote": "Domain platform: Example Registrar"
+          },
+          {
+            "field": "meta_business_manager",
+            "document_id": "9c7d5bd8-6889-5c0e-9561-301c89e4bf30",
+            "quote": "Meta Business Manager: BM-12345"
+          },
+          {
+            "field": "facebook_page",
+            "document_id": "9c7d5bd8-6889-5c0e-9561-301c89e4bf30",
+            "quote": "Facebook Page: https://facebook.com/example"
+          },
+          {
+            "field": "instagram",
+            "document_id": "9c7d5bd8-6889-5c0e-9561-301c89e4bf30",
+            "quote": "Instagram: @example"
+          },
+          {
+            "field": "phone_number",
+            "document_id": "9c7d5bd8-6889-5c0e-9561-301c89e4bf30",
+            "quote": "Phone: +1 514 555 0100"
+          },
+          {
+            "field": "business_address",
+            "document_id": "9c7d5bd8-6889-5c0e-9561-301c89e4bf30",
+            "quote": "Business address: 123 Example Street, Montreal"
+          }
+        ],
+        "conflicts": [
+          {
+            "field": "email",
+            "explanation": "The email addresses provided in the discovery call and intake form are different.",
+            "alternatives": [
+              {
+                "value": "sales@example.test",
+                "document_id": "9c7d5bd8-6889-5c0e-9561-301c89e4bf30",
+                "quote": "Email: sales@example.test"
+              },
+              {
+                "value": "hello@example.test",
+                "document_id": "32fa201f-8f65-5e31-a217-a66cfd3bb809",
+                "quote": "Email: hello@example.test"
+              }
+            ]
+          }
+        ],
+        "assessment": {
+          "rules_version": 1,
+          "missing_fields": []
+        }
+      },
+      "alternative_values_match": true,
+      "passed": true,
+      "model_calls": 1,
+      "attempt_prompt_sha256": [
+        "dafc1bc1b4e789fa272420324b13e5d4c23dc0e3311231f148685b8b44e72f92"
+      ],
+      "provider": "ollama",
+      "model": "qwen2.5:14b",
+      "duration_ms": 74271
+    },
+    {
+      "case": "missing_information",
+      "prompt_sha256": "46b1ed75e14b6516331bad0b6000c0b310cc73ee1e4237d6a103a6e4806068a6",
+      "expected": {
+        "missing_fields": [
+          "business_number",
+          "phone_number"
+        ],
+        "conflict_fields": [],
+        "email_values": []
+      },
+      "sources": [
+        {
+          "document_id": "2f25d764-5b90-53fb-96d5-5c185257bd8a",
+          "kind": "transcript",
+          "text": "Discovery call\nWebsite: https://example.test\nDomain platform: Example Registrar\nMeta Business Manager: BM-12345\nFacebook Page: https://facebook.com/example\nInstagram: @example\nEmail: sales@example.test\nBusiness address: 123 Example Street, Montreal"
+        },
+        {
+          "document_id": "abbe2d5f-eb71-5e1b-be87-db0a07a416a4",
+          "kind": "intake",
+          "text": "Intake form\nWebsite: https://example.test\nDomain platform: Example Registrar\nMeta Business Manager: BM-12345\nFacebook Page: https://facebook.com/example\nInstagram: @example\nEmail: sales@example.test\nBusiness address: 123 Example Street, Montreal"
+        }
+      ],
+      "schema_sha256": "c50b10ad8d56c4c7f5433e7868b5db5eeab501fe2078616191a3926c3b9eadff",
+      "missed_missing": [],
+      "false_missing": [],
+      "missed_conflicts": [],
+      "false_conflicts": [],
+      "draft": {
+        "business_number": null,
+        "website": "https://example.test",
+        "domain_platform": "Example Registrar",
+        "meta_business_manager": "BM-12345",
+        "facebook_page": "https://facebook.com/example",
+        "instagram": "@example",
+        "phone_number": null,
+        "email": "sales@example.test",
+        "business_address": "123 Example Street, Montreal",
+        "name": null,
+        "needs": [],
+        "goals": [],
+        "source_references": [
+          {
+            "field": "website",
+            "document_id": "2f25d764-5b90-53fb-96d5-5c185257bd8a",
+            "quote": "Website: https://example.test"
+          },
+          {
+            "field": "domain_platform",
+            "document_id": "2f25d764-5b90-53fb-96d5-5c185257bd8a",
+            "quote": "Domain platform: Example Registrar"
+          },
+          {
+            "field": "meta_business_manager",
+            "document_id": "2f25d764-5b90-53fb-96d5-5c185257bd8a",
+            "quote": "Meta Business Manager: BM-12345"
+          },
+          {
+            "field": "facebook_page",
+            "document_id": "2f25d764-5b90-53fb-96d5-5c185257bd8a",
+            "quote": "Facebook Page: https://facebook.com/example"
+          },
+          {
+            "field": "instagram",
+            "document_id": "2f25d764-5b90-53fb-96d5-5c185257bd8a",
+            "quote": "Instagram: @example"
+          },
+          {
+            "field": "email",
+            "document_id": "2f25d764-5b90-53fb-96d5-5c185257bd8a",
+            "quote": "Email: sales@example.test"
+          },
+          {
+            "field": "business_address",
+            "document_id": "2f25d764-5b90-53fb-96d5-5c185257bd8a",
+            "quote": "Business address: 123 Example Street, Montreal"
+          },
+          {
+            "field": "website",
+            "document_id": "abbe2d5f-eb71-5e1b-be87-db0a07a416a4",
+            "quote": "Website: https://example.test"
+          },
+          {
+            "field": "domain_platform",
+            "document_id": "abbe2d5f-eb71-5e1b-be87-db0a07a416a4",
+            "quote": "Domain platform: Example Registrar"
+          },
+          {
+            "field": "meta_business_manager",
+            "document_id": "abbe2d5f-eb71-5e1b-be87-db0a07a416a4",
+            "quote": "Meta Business Manager: BM-12345"
+          },
+          {
+            "field": "facebook_page",
+            "document_id": "abbe2d5f-eb71-5e1b-be87-db0a07a416a4",
+            "quote": "Facebook Page: https://facebook.com/example"
+          },
+          {
+            "field": "instagram",
+            "document_id": "abbe2d5f-eb71-5e1b-be87-db0a07a416a4",
+            "quote": "Instagram: @example"
+          },
+          {
+            "field": "email",
+            "document_id": "abbe2d5f-eb71-5e1b-be87-db0a07a416a4",
+            "quote": "Email: sales@example.test"
+          },
+          {
+            "field": "business_address",
+            "document_id": "abbe2d5f-eb71-5e1b-be87-db0a07a416a4",
+            "quote": "Business address: 123 Example Street, Montreal"
+          }
+        ],
+        "conflicts": [],
+        "assessment": {
+          "rules_version": 1,
+          "missing_fields": [
+            "business_number",
+            "phone_number"
+          ]
+        }
+      },
+      "alternative_values_match": true,
+      "passed": true,
+      "model_calls": 1,
+      "attempt_prompt_sha256": [
+        "46b1ed75e14b6516331bad0b6000c0b310cc73ee1e4237d6a103a6e4806068a6"
+      ],
+      "provider": "ollama",
+      "model": "qwen2.5:14b",
+      "duration_ms": 75179
+    },
+    {
+      "case": "matching",
+      "prompt_sha256": "702252256d39568d4f1ccb345f06317724daf75d784a146d4d2636dae2896481",
+      "expected": {
+        "missing_fields": [],
+        "conflict_fields": [],
+        "email_values": []
+      },
+      "sources": [
+        {
+          "document_id": "b07961bd-8fba-5ac8-a1f6-1e104171f6bc",
+          "kind": "transcript",
+          "text": "Discovery call\nBusiness number: BN-123456789\nWebsite: https://example.test\nDomain platform: Example Registrar\nMeta Business Manager: BM-12345\nFacebook Page: https://facebook.com/example\nInstagram: @example\nPhone: +1 514 555 0100\nEmail: sales@example.test\nBusiness address: 123 Example Street, Montreal"
+        },
+        {
+          "document_id": "d561d24f-2280-58c2-b9a5-528754487f5f",
+          "kind": "intake",
+          "text": "Intake form\nBusiness number: BN-123456789\nWebsite: https://example.test\nDomain platform: Example Registrar\nMeta Business Manager: BM-12345\nFacebook Page: https://facebook.com/example\nInstagram: @example\nPhone: +1 514 555 0100\nEmail: sales@example.test\nBusiness address: 123 Example Street, Montreal"
+        }
+      ],
+      "schema_sha256": "52c175c8853e185071a445d6d94820d273eeead56b88fd4db4c3dfe03095f0c1",
+      "missed_missing": [],
+      "false_missing": [],
+      "missed_conflicts": [],
+      "false_conflicts": [],
+      "draft": {
+        "business_number": "BN-123456789",
+        "website": "https://example.test",
+        "domain_platform": "Example Registrar",
+        "meta_business_manager": "BM-12345",
+        "facebook_page": "https://facebook.com/example",
+        "instagram": "@example",
+        "phone_number": "+1 514 555 0100",
+        "email": "sales@example.test",
+        "business_address": "123 Example Street, Montreal",
+        "name": null,
+        "needs": [],
+        "goals": [],
+        "source_references": [
+          {
+            "field": "business_number",
+            "document_id": "b07961bd-8fba-5ac8-a1f6-1e104171f6bc",
+            "quote": "Business number: BN-123456789"
+          },
+          {
+            "field": "website",
+            "document_id": "b07961bd-8fba-5ac8-a1f6-1e104171f6bc",
+            "quote": "Website: https://example.test"
+          },
+          {
+            "field": "domain_platform",
+            "document_id": "b07961bd-8fba-5ac8-a1f6-1e104171f6bc",
+            "quote": "Domain platform: Example Registrar"
+          },
+          {
+            "field": "meta_business_manager",
+            "document_id": "b07961bd-8fba-5ac8-a1f6-1e104171f6bc",
+            "quote": "Meta Business Manager: BM-12345"
+          },
+          {
+            "field": "facebook_page",
+            "document_id": "b07961bd-8fba-5ac8-a1f6-1e104171f6bc",
+            "quote": "Facebook Page: https://facebook.com/example"
+          },
+          {
+            "field": "instagram",
+            "document_id": "b07961bd-8fba-5ac8-a1f6-1e104171f6bc",
+            "quote": "Instagram: @example"
+          },
+          {
+            "field": "phone_number",
+            "document_id": "b07961bd-8fba-5ac8-a1f6-1e104171f6bc",
+            "quote": "Phone: +1 514 555 0100"
+          },
+          {
+            "field": "email",
+            "document_id": "b07961bd-8fba-5ac8-a1f6-1e104171f6bc",
+            "quote": "Email: sales@example.test"
+          },
+          {
+            "field": "business_address",
+            "document_id": "b07961bd-8fba-5ac8-a1f6-1e104171f6bc",
+            "quote": "Business address: 123 Example Street, Montreal"
+          }
+        ],
+        "conflicts": [],
+        "assessment": {
+          "rules_version": 1,
+          "missing_fields": []
+        }
+      },
+      "alternative_values_match": true,
+      "passed": true,
+      "model_calls": 1,
+      "attempt_prompt_sha256": [
+        "702252256d39568d4f1ccb345f06317724daf75d784a146d4d2636dae2896481"
+      ],
+      "provider": "ollama",
+      "model": "qwen2.5:14b",
+      "duration_ms": 56357
+    },
+    {
+      "case": "complementary",
+      "prompt_sha256": "556df722ab6b5483e4d71c79f35ea84409ff56e5a5029453060afceac8d71cd1",
+      "expected": {
+        "missing_fields": [],
+        "conflict_fields": [],
+        "email_values": []
+      },
+      "sources": [
+        {
+          "document_id": "30a7650a-0f61-5eb4-8795-f6cda1583569",
+          "kind": "transcript",
+          "text": "Discovery call\nBusiness number: BN-123456789\nWebsite: https://example.test\nDomain platform: Example Registrar\nMeta Business Manager: BM-12345\nFacebook Page: https://facebook.com/example\nInstagram: @example\nPhone: +1 514 555 0100\nEmail: sales@example.test\nBusiness address: 123 Example Street, Montreal\nGoal: Increase bookings"
+        },
+        {
+          "document_id": "e3f2ea28-3e68-5603-8dbf-5b8bd5718623",
+          "kind": "intake",
+          "text": "Intake form\nBusiness number: BN-123456789\nWebsite: https://example.test\nDomain platform: Example Registrar\nMeta Business Manager: BM-12345\nFacebook Page: https://facebook.com/example\nInstagram: @example\nPhone: +1 514 555 0100\nEmail: sales@example.test\nBusiness address: 123 Example Street, Montreal\nGoal: Launch a referral program"
+        }
+      ],
+      "schema_sha256": "74f423ec3b8c71ae2d08ca62951aaa310275622c5ccc88d46ab9e4280141a55a",
+      "missed_missing": [],
+      "false_missing": [],
+      "missed_conflicts": [],
+      "false_conflicts": [],
+      "draft": {
+        "business_number": "BN-123456789",
+        "website": "https://example.test",
+        "domain_platform": "Example Registrar",
+        "meta_business_manager": "BM-12345",
+        "facebook_page": "https://facebook.com/example",
+        "instagram": "@example",
+        "phone_number": "+1 514 555 0100",
+        "email": "sales@example.test",
+        "business_address": "123 Example Street, Montreal",
+        "name": null,
+        "needs": [],
+        "goals": [
+          "Increase bookings",
+          "Launch a referral program"
+        ],
+        "source_references": [
+          {
+            "field": "business_number",
+            "document_id": "30a7650a-0f61-5eb4-8795-f6cda1583569",
+            "quote": "Business number: BN-123456789"
+          },
+          {
+            "field": "website",
+            "document_id": "30a7650a-0f61-5eb4-8795-f6cda1583569",
+            "quote": "Website: https://example.test"
+          },
+          {
+            "field": "domain_platform",
+            "document_id": "30a7650a-0f61-5eb4-8795-f6cda1583569",
+            "quote": "Domain platform: Example Registrar"
+          },
+          {
+            "field": "meta_business_manager",
+            "document_id": "30a7650a-0f61-5eb4-8795-f6cda1583569",
+            "quote": "Meta Business Manager: BM-12345"
+          },
+          {
+            "field": "facebook_page",
+            "document_id": "30a7650a-0f61-5eb4-8795-f6cda1583569",
+            "quote": "Facebook Page: https://facebook.com/example"
+          },
+          {
+            "field": "instagram",
+            "document_id": "30a7650a-0f61-5eb4-8795-f6cda1583569",
+            "quote": "Instagram: @example"
+          },
+          {
+            "field": "phone_number",
+            "document_id": "30a7650a-0f61-5eb4-8795-f6cda1583569",
+            "quote": "Phone: +1 514 555 0100"
+          },
+          {
+            "field": "email",
+            "document_id": "30a7650a-0f61-5eb4-8795-f6cda1583569",
+            "quote": "Email: sales@example.test"
+          },
+          {
+            "field": "business_address",
+            "document_id": "30a7650a-0f61-5eb4-8795-f6cda1583569",
+            "quote": "Business address: 123 Example Street, Montreal"
+          },
+          {
+            "field": "goals/0",
+            "document_id": "30a7650a-0f61-5eb4-8795-f6cda1583569",
+            "quote": "Goal: Increase bookings"
+          },
+          {
+            "field": "goals/1",
+            "document_id": "e3f2ea28-3e68-5603-8dbf-5b8bd5718623",
+            "quote": "Goal: Launch a referral program"
+          }
+        ],
+        "conflicts": [],
+        "assessment": {
+          "rules_version": 1,
+          "missing_fields": []
+        }
+      },
+      "alternative_values_match": true,
+      "passed": true,
+      "model_calls": 1,
+      "attempt_prompt_sha256": [
+        "556df722ab6b5483e4d71c79f35ea84409ff56e5a5029453060afceac8d71cd1"
+      ],
+      "provider": "ollama",
+      "model": "qwen2.5:14b",
+      "duration_ms": 75761
+    },
+    {
+      "case": "ambiguous",
+      "prompt_sha256": "cdcdda169488e9bb17fe6814bc2e518c00d362294eba28d7fb2cfeeb1f95681b",
+      "expected": {
+        "missing_fields": [],
+        "conflict_fields": [
+          "email"
+        ],
+        "email_values": [
+          "sales@example.test",
+          "hello@example.test"
+        ]
+      },
+      "sources": [
+        {
+          "document_id": "b9c29515-5210-5a30-8c5e-92340a83456b",
+          "kind": "transcript",
+          "text": "Discovery call\nBusiness number: BN-123456789\nWebsite: https://example.test\nDomain platform: Example Registrar\nMeta Business Manager: BM-12345\nFacebook Page: https://facebook.com/example\nInstagram: @example\nPhone: +1 514 555 0100\nEmail: sales@example.test (I think this is current)\nBusiness address: 123 Example Street, Montreal"
+        },
+        {
+          "document_id": "f1f982e7-dc4d-5253-85ef-e90e655be011",
+          "kind": "intake",
+          "text": "Intake form\nBusiness number: BN-123456789\nWebsite: https://example.test\nDomain platform: Example Registrar\nMeta Business Manager: BM-12345\nFacebook Page: https://facebook.com/example\nInstagram: @example\nPhone: +1 514 555 0100\nEmail: hello@example.test (pending confirmation)\nBusiness address: 123 Example Street, Montreal"
+        }
+      ],
+      "schema_sha256": "6bc904fe9a84e3352e94d94c0a70ec94bbc631bedc4d2c55f1f160376f6f08c1",
+      "missed_missing": [],
+      "false_missing": [],
+      "missed_conflicts": [],
+      "false_conflicts": [],
+      "draft": {
+        "business_number": "BN-123456789",
+        "website": "https://example.test",
+        "domain_platform": "Example Registrar",
+        "meta_business_manager": "BM-12345",
+        "facebook_page": "https://facebook.com/example",
+        "instagram": "@example",
+        "phone_number": "+1 514 555 0100",
+        "email": null,
+        "business_address": "123 Example Street, Montreal",
+        "name": null,
+        "needs": [],
+        "goals": [],
+        "source_references": [
+          {
+            "field": "business_number",
+            "document_id": "b9c29515-5210-5a30-8c5e-92340a83456b",
+            "quote": "Business number: BN-123456789"
+          },
+          {
+            "field": "website",
+            "document_id": "b9c29515-5210-5a30-8c5e-92340a83456b",
+            "quote": "Website: https://example.test"
+          },
+          {
+            "field": "domain_platform",
+            "document_id": "b9c29515-5210-5a30-8c5e-92340a83456b",
+            "quote": "Domain platform: Example Registrar"
+          },
+          {
+            "field": "meta_business_manager",
+            "document_id": "b9c29515-5210-5a30-8c5e-92340a83456b",
+            "quote": "Meta Business Manager: BM-12345"
+          },
+          {
+            "field": "facebook_page",
+            "document_id": "b9c29515-5210-5a30-8c5e-92340a83456b",
+            "quote": "Facebook Page: https://facebook.com/example"
+          },
+          {
+            "field": "instagram",
+            "document_id": "b9c29515-5210-5a30-8c5e-92340a83456b",
+            "quote": "Instagram: @example"
+          },
+          {
+            "field": "phone_number",
+            "document_id": "b9c29515-5210-5a30-8c5e-92340a83456b",
+            "quote": "Phone: +1 514 555 0100"
+          },
+          {
+            "field": "business_address",
+            "document_id": "b9c29515-5210-5a30-8c5e-92340a83456b",
+            "quote": "Business address: 123 Example Street, Montreal"
+          },
+          {
+            "field": "business_number",
+            "document_id": "f1f982e7-dc4d-5253-85ef-e90e655be011",
+            "quote": "Business number: BN-123456789"
+          },
+          {
+            "field": "website",
+            "document_id": "f1f982e7-dc4d-5253-85ef-e90e655be011",
+            "quote": "Website: https://example.test"
+          },
+          {
+            "field": "domain_platform",
+            "document_id": "f1f982e7-dc4d-5253-85ef-e90e655be011",
+            "quote": "Domain platform: Example Registrar"
+          },
+          {
+            "field": "meta_business_manager",
+            "document_id": "f1f982e7-dc4d-5253-85ef-e90e655be011",
+            "quote": "Meta Business Manager: BM-12345"
+          },
+          {
+            "field": "facebook_page",
+            "document_id": "f1f982e7-dc4d-5253-85ef-e90e655be011",
+            "quote": "Facebook Page: https://facebook.com/example"
+          },
+          {
+            "field": "instagram",
+            "document_id": "f1f982e7-dc4d-5253-85ef-e90e655be011",
+            "quote": "Instagram: @example"
+          },
+          {
+            "field": "phone_number",
+            "document_id": "f1f982e7-dc4d-5253-85ef-e90e655be011",
+            "quote": "Phone: +1 514 555 0100"
+          },
+          {
+            "field": "business_address",
+            "document_id": "f1f982e7-dc4d-5253-85ef-e90e655be011",
+            "quote": "Business address: 123 Example Street, Montreal"
+          }
+        ],
+        "conflicts": [
+          {
+            "field": "email",
+            "explanation": "The email addresses provided in the discovery call and intake form are different.",
+            "alternatives": [
+              {
+                "value": "sales@example.test",
+                "document_id": "b9c29515-5210-5a30-8c5e-92340a83456b",
+                "quote": "Email: sales@example.test (I think this is current)"
+              },
+              {
+                "value": "hello@example.test",
+                "document_id": "f1f982e7-dc4d-5253-85ef-e90e655be011",
+                "quote": "Email: hello@example.test (pending confirmation)"
+              }
+            ]
+          }
+        ],
+        "assessment": {
+          "rules_version": 1,
+          "missing_fields": []
+        }
+      },
+      "alternative_values_match": true,
+      "passed": true,
+      "model_calls": 1,
+      "attempt_prompt_sha256": [
+        "cdcdda169488e9bb17fe6814bc2e518c00d362294eba28d7fb2cfeeb1f95681b"
+      ],
+      "provider": "ollama",
+      "model": "qwen2.5:14b",
+      "duration_ms": 113538
+    },
+    {
+      "case": "phone_conflict_prose",
+      "prompt_sha256": "d3313d6e1ba10d16dba790b0a5769277b47e92cd70d7b3327d725bc20a55fb06",
+      "expected": {
+        "missing_fields": [],
+        "conflict_fields": [
+          "phone_number"
+        ],
+        "conflict_values": {
+          "phone_number": [
+            "+1 438 555 0142",
+            "+1 438 555 0199"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "document_id": "3ebeaf3d-57c2-5ac7-b2a3-7a27ff13d50a",
+          "kind": "transcript",
+          "text": "Owner of Rivage Studio: Our business number is NEQ-987654321. Our website is https://rivage.example. The domain is managed through Northstar Domains. Our Meta Business Manager ID is 987654. Our Facebook page is facebook.com/rivagestudio and Instagram is @rivagestudio. The current business phone is +1 438 555 0142. For email, use team@rivage.example. Our business address is 72 Harbour Road, Quebec City."
+        },
+        {
+          "document_id": "eeb0e2b7-6eaf-5b9e-850e-dea48fee138a",
+          "kind": "intake",
+          "text": "Business: Rivage Studio\nBusiness number: NEQ-987654321\nWebsite: https://rivage.example\nDomain platform: Northstar Domains\nMeta Business Manager: 987654\nFacebook Page: facebook.com/rivagestudio\nInstagram: @rivagestudio\nCurrent business phone: +1 438 555 0199\nEmail: team@rivage.example\nBusiness address: 72 Harbour Road, Quebec City"
+        }
+      ],
+      "schema_sha256": "c38390967e0561ab9ada988877b4975dfe10a8f02f1f75039a71e8a3a097ed8e",
+      "missed_missing": [],
+      "false_missing": [],
+      "missed_conflicts": [],
+      "false_conflicts": [],
+      "draft": {
+        "business_number": "NEQ-987654321",
+        "website": "https://rivage.example",
+        "domain_platform": "Northstar Domains",
+        "meta_business_manager": "987654",
+        "facebook_page": "facebook.com/rivagestudio",
+        "instagram": "@rivagestudio",
+        "phone_number": null,
+        "email": "team@rivage.example",
+        "business_address": "72 Harbour Road, Quebec City",
+        "name": "Rivage Studio",
+        "needs": [],
+        "goals": [],
+        "source_references": [
+          {
+            "field": "business_number",
+            "document_id": "3ebeaf3d-57c2-5ac7-b2a3-7a27ff13d50a",
+            "quote": "Our business number is NEQ-987654321."
+          },
+          {
+            "field": "website",
+            "document_id": "3ebeaf3d-57c2-5ac7-b2a3-7a27ff13d50a",
+            "quote": "Our website is https://rivage.example."
+          },
+          {
+            "field": "domain_platform",
+            "document_id": "3ebeaf3d-57c2-5ac7-b2a3-7a27ff13d50a",
+            "quote": "The domain is managed through Northstar Domains."
+          },
+          {
+            "field": "meta_business_manager",
+            "document_id": "3ebeaf3d-57c2-5ac7-b2a3-7a27ff13d50a",
+            "quote": "Our Meta Business Manager ID is 987654."
+          },
+          {
+            "field": "facebook_page",
+            "document_id": "3ebeaf3d-57c2-5ac7-b2a3-7a27ff13d50a",
+            "quote": "Our Facebook page is facebook.com/rivagestudio"
+          },
+          {
+            "field": "instagram",
+            "document_id": "3ebeaf3d-57c2-5ac7-b2a3-7a27ff13d50a",
+            "quote": "Instagram is @rivagestudio."
+          },
+          {
+            "field": "email",
+            "document_id": "3ebeaf3d-57c2-5ac7-b2a3-7a27ff13d50a",
+            "quote": "For email, use team@rivage.example."
+          },
+          {
+            "field": "business_address",
+            "document_id": "3ebeaf3d-57c2-5ac7-b2a3-7a27ff13d50a",
+            "quote": "Our business address is 72 Harbour Road, Quebec City."
+          },
+          {
+            "field": "name",
+            "document_id": "3ebeaf3d-57c2-5ac7-b2a3-7a27ff13d50a",
+            "quote": "Owner of Rivage Studio:"
+          }
+        ],
+        "conflicts": [
+          {
+            "field": "phone_number",
+            "explanation": "The phone number is different in the intake and the transcript.",
+            "alternatives": [
+              {
+                "value": "+1 438 555 0142",
+                "document_id": "3ebeaf3d-57c2-5ac7-b2a3-7a27ff13d50a",
+                "quote": "The current business phone is +1 438 555 0142."
+              },
+              {
+                "value": "+1 438 555 0199",
+                "document_id": "eeb0e2b7-6eaf-5b9e-850e-dea48fee138a",
+                "quote": "Current business phone: +1 438 555 0199"
+              }
+            ]
+          }
+        ],
+        "assessment": {
+          "rules_version": 1,
+          "missing_fields": []
+        }
+      },
+      "alternative_values_match": true,
+      "passed": true,
+      "model_calls": 1,
+      "attempt_prompt_sha256": [
+        "d3313d6e1ba10d16dba790b0a5769277b47e92cd70d7b3327d725bc20a55fb06"
+      ],
+      "provider": "ollama",
+      "model": "qwen2.5:14b",
+      "duration_ms": 75856
+    },
+    {
+      "case": "equivalent_phone_formatting",
+      "prompt_sha256": "62d6f4eec3b789fb566730d2818806b04590028a9d0afa65f89db1e51ab8ca3d",
+      "expected": {
+        "missing_fields": [],
+        "conflict_fields": [],
+        "conflict_values": {}
+      },
+      "sources": [
+        {
+          "document_id": "71c574aa-a3c0-5260-a9dd-2b16af6b8fce",
+          "kind": "transcript",
+          "text": "Business: Rivage Studio\nBusiness number: NEQ-987654321\nWebsite: https://rivage.example\nDomain platform: Northstar Domains\nMeta Business Manager: 987654\nFacebook Page: facebook.com/rivagestudio\nInstagram: @rivagestudio\nPhone: +1 (438) 555-0142\nEmail: team@rivage.example\nBusiness address: 72 Harbour Road, Quebec City"
+        },
+        {
+          "document_id": "4221c39e-47be-51b6-bfa5-6e3ecd5e608e",
+          "kind": "intake",
+          "text": "Business: Rivage Studio\nBusiness number: NEQ-987654321\nWebsite: https://rivage.example\nDomain platform: Northstar Domains\nMeta Business Manager: 987654\nFacebook Page: facebook.com/rivagestudio\nInstagram: @rivagestudio\nPhone: +1 438 555 0142\nEmail: team@rivage.example\nBusiness address: 72 Harbour Road, Quebec City"
+        }
+      ],
+      "schema_sha256": "3abd747c2c5860db6d82e31c252ebc9f141ccc1abd36aafaabf97a6587f1f11c",
+      "missed_missing": [],
+      "false_missing": [],
+      "missed_conflicts": [],
+      "false_conflicts": [],
+      "draft": {
+        "business_number": "NEQ-987654321",
+        "website": "https://rivage.example",
+        "domain_platform": "Northstar Domains",
+        "meta_business_manager": "987654",
+        "facebook_page": "facebook.com/rivagestudio",
+        "instagram": "@rivagestudio",
+        "phone_number": "+1 (438) 555-0142",
+        "email": "team@rivage.example",
+        "business_address": "72 Harbour Road, Quebec City",
+        "name": "Rivage Studio",
+        "needs": [],
+        "goals": [],
+        "source_references": [
+          {
+            "field": "business_number",
+            "document_id": "71c574aa-a3c0-5260-a9dd-2b16af6b8fce",
+            "quote": "Business number: NEQ-987654321"
+          },
+          {
+            "field": "website",
+            "document_id": "71c574aa-a3c0-5260-a9dd-2b16af6b8fce",
+            "quote": "Website: https://rivage.example"
+          },
+          {
+            "field": "domain_platform",
+            "document_id": "71c574aa-a3c0-5260-a9dd-2b16af6b8fce",
+            "quote": "Domain platform: Northstar Domains"
+          },
+          {
+            "field": "meta_business_manager",
+            "document_id": "71c574aa-a3c0-5260-a9dd-2b16af6b8fce",
+            "quote": "Meta Business Manager: 987654"
+          },
+          {
+            "field": "facebook_page",
+            "document_id": "71c574aa-a3c0-5260-a9dd-2b16af6b8fce",
+            "quote": "Facebook Page: facebook.com/rivagestudio"
+          },
+          {
+            "field": "instagram",
+            "document_id": "71c574aa-a3c0-5260-a9dd-2b16af6b8fce",
+            "quote": "Instagram: @rivagestudio"
+          },
+          {
+            "field": "phone_number",
+            "document_id": "71c574aa-a3c0-5260-a9dd-2b16af6b8fce",
+            "quote": "Phone: +1 (438) 555-0142"
+          },
+          {
+            "field": "email",
+            "document_id": "71c574aa-a3c0-5260-a9dd-2b16af6b8fce",
+            "quote": "Email: team@rivage.example"
+          },
+          {
+            "field": "business_address",
+            "document_id": "71c574aa-a3c0-5260-a9dd-2b16af6b8fce",
+            "quote": "Business address: 72 Harbour Road, Quebec City"
+          },
+          {
+            "field": "name",
+            "document_id": "71c574aa-a3c0-5260-a9dd-2b16af6b8fce",
+            "quote": "Business: Rivage Studio"
+          }
+        ],
+        "conflicts": [],
+        "assessment": {
+          "rules_version": 1,
+          "missing_fields": []
+        }
+      },
+      "alternative_values_match": true,
+      "passed": true,
+      "model_calls": 1,
+      "attempt_prompt_sha256": [
+        "62d6f4eec3b789fb566730d2818806b04590028a9d0afa65f89db1e51ab8ca3d"
+      ],
+      "provider": "ollama",
+      "model": "qwen2.5:14b",
+      "duration_ms": 61501
+    },
+    {
+      "case": "intake_adds_no_information",
+      "prompt_sha256": "1bbe742d491a72271c48fc24a3e83626990ef0ce205349802ba934c1e5163d6e",
+      "expected": {
+        "missing_fields": [],
+        "conflict_fields": [],
+        "conflict_values": {}
+      },
+      "sources": [
+        {
+          "document_id": "cae67394-29de-5438-a91e-729dfd621fb8",
+          "kind": "transcript",
+          "text": "Business: Rivage Studio\nBusiness number: NEQ-987654321\nWebsite: https://rivage.example\nDomain platform: Northstar Domains\nMeta Business Manager: 987654\nFacebook Page: facebook.com/rivagestudio\nInstagram: @rivagestudio\nPhone: +1 438 555 0142\nEmail: team@rivage.example\nBusiness address: 72 Harbour Road, Quebec City"
+        },
+        {
+          "document_id": "d5d75ba3-2a27-5b55-b455-c6242650b022",
+          "kind": "intake",
+          "text": "The client has no additional onboarding information to add. Use the factual details stated in the discovery call."
+        }
+      ],
+      "schema_sha256": "f8d839b8ea0eee5fcf7dca065f4cc7af4d87ba3eaa258811e09575b0ced0a325",
+      "missed_missing": [],
+      "false_missing": [],
+      "missed_conflicts": [],
+      "false_conflicts": [],
+      "draft": {
+        "business_number": "NEQ-987654321",
+        "website": "https://rivage.example",
+        "domain_platform": "Northstar Domains",
+        "meta_business_manager": "987654",
+        "facebook_page": "facebook.com/rivagestudio",
+        "instagram": "@rivagestudio",
+        "phone_number": "+1 438 555 0142",
+        "email": "team@rivage.example",
+        "business_address": "72 Harbour Road, Quebec City",
+        "name": "Rivage Studio",
+        "needs": [],
+        "goals": [],
+        "source_references": [
+          {
+            "field": "business_number",
+            "document_id": "cae67394-29de-5438-a91e-729dfd621fb8",
+            "quote": "Business number: NEQ-987654321"
+          },
+          {
+            "field": "website",
+            "document_id": "cae67394-29de-5438-a91e-729dfd621fb8",
+            "quote": "Website: https://rivage.example"
+          },
+          {
+            "field": "domain_platform",
+            "document_id": "cae67394-29de-5438-a91e-729dfd621fb8",
+            "quote": "Domain platform: Northstar Domains"
+          },
+          {
+            "field": "meta_business_manager",
+            "document_id": "cae67394-29de-5438-a91e-729dfd621fb8",
+            "quote": "Meta Business Manager: 987654"
+          },
+          {
+            "field": "facebook_page",
+            "document_id": "cae67394-29de-5438-a91e-729dfd621fb8",
+            "quote": "Facebook Page: facebook.com/rivagestudio"
+          },
+          {
+            "field": "instagram",
+            "document_id": "cae67394-29de-5438-a91e-729dfd621fb8",
+            "quote": "Instagram: @rivagestudio"
+          },
+          {
+            "field": "phone_number",
+            "document_id": "cae67394-29de-5438-a91e-729dfd621fb8",
+            "quote": "Phone: +1 438 555 0142"
+          },
+          {
+            "field": "email",
+            "document_id": "cae67394-29de-5438-a91e-729dfd621fb8",
+            "quote": "Email: team@rivage.example"
+          },
+          {
+            "field": "business_address",
+            "document_id": "cae67394-29de-5438-a91e-729dfd621fb8",
+            "quote": "Business address: 72 Harbour Road, Quebec City"
+          },
+          {
+            "field": "name",
+            "document_id": "cae67394-29de-5438-a91e-729dfd621fb8",
+            "quote": "Business: Rivage Studio"
+          }
+        ],
+        "conflicts": [],
+        "assessment": {
+          "rules_version": 1,
+          "missing_fields": []
+        }
+      },
+      "alternative_values_match": true,
+      "passed": true,
+      "model_calls": 1,
+      "attempt_prompt_sha256": [
+        "1bbe742d491a72271c48fc24a3e83626990ef0ce205349802ba934c1e5163d6e"
+      ],
+      "provider": "ollama",
+      "model": "qwen2.5:14b",
+      "duration_ms": 60315
+    },
+    {
+      "case": "phone_conflict_without_business_number",
+      "prompt_sha256": "3724ee14a72173a7ff6b3ef3c303812682b5403690c568b7c3918c85cb93a512",
+      "expected": {
+        "missing_fields": [
+          "business_number"
+        ],
+        "conflict_fields": [
+          "phone_number"
+        ],
+        "conflict_values": {
+          "phone_number": [
+            "514-555-0100",
+            "514-555-0199"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "document_id": "18e54b81-82f0-5e51-a465-d4e817e196b5",
+          "kind": "transcript",
+          "text": "Owner of Maple Leaf Plumbing: We do residential repairs in Montreal. Our main line is 514-555-0100. Our website is mapleleafplumbing.example, built on Squarespace."
+        },
+        {
+          "document_id": "f342c812-9539-5213-a419-986e92f9ad89",
+          "kind": "intake",
+          "text": "Business name: Maple Leaf Plumbing\nPhone number: 514-555-0199\nEmail: hello@mapleleafplumbing.example\nWebsite: mapleleafplumbing.example\nDomain platform: Squarespace\nBusiness address: 123 Rue Example, Montreal, QC\nFacebook page: facebook.com/mapleleafplumbing.example\nInstagram: @mapleleafplumbing.example\nMeta Business Manager ID: 1234567890"
+        }
+      ],
+      "schema_sha256": "be73a147b7489d1d523f15e8d410ca286948c89192f4956b095e76e4f15b451a",
+      "missed_missing": [],
+      "false_missing": [
+        "business_address",
+        "email"
+      ],
+      "missed_conflicts": [],
+      "false_conflicts": [],
+      "draft": {
+        "business_number": null,
+        "website": "mapleleafplumbing.example",
+        "domain_platform": "Squarespace",
+        "meta_business_manager": "1234567890",
+        "facebook_page": "facebook.com/mapleleafplumbing.example",
+        "instagram": "@mapleleafplumbing.example",
+        "phone_number": null,
+        "email": null,
+        "business_address": null,
+        "name": "Maple Leaf Plumbing",
+        "needs": [],
+        "goals": [],
+        "source_references": [
+          {
+            "field": "website",
+            "document_id": "18e54b81-82f0-5e51-a465-d4e817e196b5",
+            "quote": "Our website is mapleleafplumbing.example, built on Squarespace."
+          },
+          {
+            "field": "domain_platform",
+            "document_id": "18e54b81-82f0-5e51-a465-d4e817e196b5",
+            "quote": "Our website is mapleleafplumbing.example, built on Squarespace."
+          },
+          {
+            "field": "meta_business_manager",
+            "document_id": "f342c812-9539-5213-a419-986e92f9ad89",
+            "quote": "Meta Business Manager ID: 1234567890"
+          },
+          {
+            "field": "facebook_page",
+            "document_id": "f342c812-9539-5213-a419-986e92f9ad89",
+            "quote": "Facebook page: facebook.com/mapleleafplumbing.example"
+          },
+          {
+            "field": "instagram",
+            "document_id": "f342c812-9539-5213-a419-986e92f9ad89",
+            "quote": "Instagram: @mapleleafplumbing.example"
+          },
+          {
+            "field": "name",
+            "document_id": "f342c812-9539-5213-a419-986e92f9ad89",
+            "quote": "Business name: Maple Leaf Plumbing"
+          }
+        ],
+        "conflicts": [
+          {
+            "field": "phone_number",
+            "explanation": "The phone number is different in the transcript and the intake.",
+            "alternatives": [
+              {
+                "value": "514-555-0100",
+                "document_id": "18e54b81-82f0-5e51-a465-d4e817e196b5",
+                "quote": "Our main line is 514-555-0100."
+              },
+              {
+                "value": "514-555-0199",
+                "document_id": "f342c812-9539-5213-a419-986e92f9ad89",
+                "quote": "Phone number: 514-555-0199"
+              }
+            ]
+          }
+        ],
+        "assessment": {
+          "rules_version": 1,
+          "missing_fields": [
+            "business_number",
+            "email",
+            "business_address"
+          ]
+        }
+      },
+      "alternative_values_match": true,
+      "passed": false,
+      "model_calls": 1,
+      "attempt_prompt_sha256": [
+        "3724ee14a72173a7ff6b3ef3c303812682b5403690c568b7c3918c85cb93a512"
+      ],
+      "provider": "ollama",
+      "model": "qwen2.5:14b",
+      "duration_ms": 58907
+    }
+  ],
+  "passed": false
+}

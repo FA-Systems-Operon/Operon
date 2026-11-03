@@ -87,9 +87,10 @@ def test_command_entrypoint_reports_unavailable_provider(monkeypatch, capsys):
 
 def test_fixed_evaluation_set_includes_independent_prose_and_formatting_cases():
     cases = evaluation.load_cases()
-    assert len(cases) == 8
+    assert len(cases) == 9
     assert {case["id"] for case in cases} >= {
         "phone_conflict_prose",
         "equivalent_phone_formatting",
         "intake_adds_no_information",
+        "phone_conflict_without_business_number",
     }

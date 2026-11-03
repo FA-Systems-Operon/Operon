@@ -22,5 +22,6 @@
       "intake": "The client has no additional onboarding information to add. Use the factual details stated in the discovery call."
     },
     "expected": {"missing_fields": [], "conflict_fields": [], "conflict_values": {}}
-  }
+  },
+  {"id": "phone_conflict_without_business_number", "documents": {"transcript": "Owner of Maple Leaf Plumbing: We do residential repairs in Montreal. Our main line is 514-555-0100. Our website is mapleleafplumbing.example, built on Squarespace.", "intake": "Business name: Maple Leaf Plumbing\nPhone number: 514-555-0199\nEmail: hello@mapleleafplumbing.example\nWebsite: mapleleafplumbing.example\nDomain platform: Squarespace\nBusiness address: 123 Rue Example, Montreal, QC\nFacebook page: facebook.com/mapleleafplumbing.example\nInstagram: @mapleleafplumbing.example\nMeta Business Manager ID: 1234567890"}, "expected": {"missing_fields": ["business_number"], "conflict_fields": ["phone_number"], "conflict_values": {"phone_number": ["514-555-0100", "514-555-0199"]}}}
 ]

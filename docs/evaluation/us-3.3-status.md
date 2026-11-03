@@ -6,7 +6,8 @@ The Ollama availability and real-model verification gap is resolved. The final
 production prompt/generation path passed all eight regression cases on November
 2, 2026. Every case used one model call, with no missed/extra missing-field flags,
 missed/extra conflict flags, or incorrect expected conflict alternatives. The
-original five cases' scalar values also match their reference facts.
+original five cases' scalar values also match their reference facts. A later
+ninth case currently fails; see the follow-up section below.
 
 Evidence:
 
@@ -20,6 +21,43 @@ Evidence:
 - `us-3.3-initial-live-summary.json`: the initial fresh run passed seven cases and
   falsely flagged compatible goals. The answer key was retained; the prompt was
   corrected to distinguish compatible list items from incompatible scalar claims.
+- `us-3.3-qwen25-14b-field-meanings-results.json`: the nine-case run after the
+  field-meaning correction below. The original eight cases passed again; the new
+  ninth case is a known failure.
+
+## Follow-up: ambiguous `business_number` (November 2, 2026)
+
+A manual end-to-end check through the running stack found a reproducible failure
+the eight cases did not cover. The transcript gave a main line of 514-555-0100,
+the intake gave `Phone number: 514-555-0199`, and neither document stated a
+business number. The onboarding job failed 4 of 4 times with no draft saved.
+
+Captured replies showed `qwen2.5:14b` read "business number" as the business's
+phone number. It filed the phone conflict under `business_number`, with both
+phone numbers as alternatives. The validator correctly rejected both the first
+reply and the repair, so no mislabeled draft was saved. The prompt previously
+named the fields without defining them. Every existing case uses `BN-…` or
+`NEQ-…` values, which cannot be mistaken for phone numbers.
+
+Correction: the prompt now gives a one-line meaning for the ambiguous fields.
+`business_number` is a government registration or tax number and never a phone
+number; `phone_number` includes main and business lines. A conflict must be
+filed under the field its alternative values belong to. The answer key of
+existing cases is unchanged. A ninth case, `phone_conflict_without_business_number`,
+covers this input.
+
+Result with `qwen2.5:14b`:
+
+- The original eight cases all passed again, each with one model call.
+- The ninth case now files the phone conflict under `phone_number` and correctly
+  reports `business_number` missing. It still **fails**: the model left `email`
+  and `business_address` null although the intake states both, so they are
+  falsely reported missing. In the equivalent uploaded-document job, the model
+  instead quoted `Our website is …`, which the transcript does not contain, and
+  validation rejected the draft. These are model accuracy gaps, not validator
+  defects. The case is kept as a known failure, so the evaluation script exits
+  nonzero until it passes.
+- Default backend suite: 585 passed, five live tests skipped.
 
 ## Scope and environment
 
@@ -65,7 +103,7 @@ Generation can complete references from exact scalar-value occurrences and align
 terminal punctuation only when the resulting quote is present in the same source.
 One model repair is allowed; a second invalid reply fails without saving a draft.
 
-The eight cases were used during development. They are regression cases, not an
+The nine cases were used during development. They are regression cases, not an
 independent held-out accuracy study or a guarantee for arbitrary client documents.
 Quote matching proves provenance, not semantic correctness. Reviewers still
 resolve potential conflicts and assess the source interpretation.
