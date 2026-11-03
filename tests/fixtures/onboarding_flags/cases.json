@@ -1,0 +1,412 @@
+[
+  {
+    "id": "clear_conflict",
+    "documents": {
+      "transcript": "Discovery call\nBusiness number: BN-123456789\nWebsite: https://example.test\nDomain platform: Example Registrar\nMeta Business Manager: BM-12345\nFacebook Page: https://facebook.com/example\nInstagram: @example\nPhone: +1 514 555 0100\nEmail: sales@example.test\nBusiness address: 123 Example Street, Montreal",
+      "intake": "Intake form\nBusiness number: BN-123456789\nWebsite: https://example.test\nDomain platform: Example Registrar\nMeta Business Manager: BM-12345\nFacebook Page: https://facebook.com/example\nInstagram: @example\nPhone: +1 514 555 0100\nEmail: hello@example.test\nBusiness address: 123 Example Street, Montreal"
+    },
+    "reply": {
+      "name": null,
+      "needs": [],
+      "goals": [],
+      "business_number": "BN-123456789",
+      "website": "https://example.test",
+      "domain_platform": "Example Registrar",
+      "meta_business_manager": "BM-12345",
+      "facebook_page": "https://facebook.com/example",
+      "instagram": "@example",
+      "phone_number": "+1 514 555 0100",
+      "email": null,
+      "business_address": "123 Example Street, Montreal",
+      "source_references": [
+        {
+          "field": "business_number",
+          "document_id": "transcript",
+          "quote": "Business number: BN-123456789"
+        },
+        {
+          "field": "website",
+          "document_id": "intake",
+          "quote": "Website: https://example.test"
+        },
+        {
+          "field": "domain_platform",
+          "document_id": "transcript",
+          "quote": "Domain platform: Example Registrar"
+        },
+        {
+          "field": "meta_business_manager",
+          "document_id": "intake",
+          "quote": "Meta Business Manager: BM-12345"
+        },
+        {
+          "field": "facebook_page",
+          "document_id": "transcript",
+          "quote": "Facebook Page: https://facebook.com/example"
+        },
+        {
+          "field": "instagram",
+          "document_id": "intake",
+          "quote": "Instagram: @example"
+        },
+        {
+          "field": "phone_number",
+          "document_id": "transcript",
+          "quote": "Phone: +1 514 555 0100"
+        },
+        {
+          "field": "business_address",
+          "document_id": "transcript",
+          "quote": "Business address: 123 Example Street, Montreal"
+        }
+      ],
+      "conflicts": [
+        {
+          "field": "email",
+          "explanation": "The sources give different current contact emails.",
+          "alternatives": [
+            {
+              "value": "sales@example.test",
+              "document_id": "transcript",
+              "quote": "Email: sales@example.test"
+            },
+            {
+              "value": "hello@example.test",
+              "document_id": "intake",
+              "quote": "Email: hello@example.test"
+            }
+          ]
+        }
+      ]
+    },
+    "expected": {
+      "missing_fields": [],
+      "conflict_fields": [
+        "email"
+      ],
+      "email_values": [
+        "sales@example.test",
+        "hello@example.test"
+      ]
+    }
+  },
+  {
+    "id": "missing_information",
+    "documents": {
+      "transcript": "Discovery call\nWebsite: https://example.test\nDomain platform: Example Registrar\nMeta Business Manager: BM-12345\nFacebook Page: https://facebook.com/example\nInstagram: @example\nEmail: sales@example.test\nBusiness address: 123 Example Street, Montreal",
+      "intake": "Intake form\nWebsite: https://example.test\nDomain platform: Example Registrar\nMeta Business Manager: BM-12345\nFacebook Page: https://facebook.com/example\nInstagram: @example\nEmail: sales@example.test\nBusiness address: 123 Example Street, Montreal"
+    },
+    "reply": {
+      "name": null,
+      "needs": [],
+      "goals": [],
+      "business_number": null,
+      "website": "https://example.test",
+      "domain_platform": "Example Registrar",
+      "meta_business_manager": "BM-12345",
+      "facebook_page": "https://facebook.com/example",
+      "instagram": "@example",
+      "phone_number": null,
+      "email": "sales@example.test",
+      "business_address": "123 Example Street, Montreal",
+      "source_references": [
+        {
+          "field": "website",
+          "document_id": "intake",
+          "quote": "Website: https://example.test"
+        },
+        {
+          "field": "domain_platform",
+          "document_id": "transcript",
+          "quote": "Domain platform: Example Registrar"
+        },
+        {
+          "field": "meta_business_manager",
+          "document_id": "intake",
+          "quote": "Meta Business Manager: BM-12345"
+        },
+        {
+          "field": "facebook_page",
+          "document_id": "transcript",
+          "quote": "Facebook Page: https://facebook.com/example"
+        },
+        {
+          "field": "instagram",
+          "document_id": "intake",
+          "quote": "Instagram: @example"
+        },
+        {
+          "field": "email",
+          "document_id": "intake",
+          "quote": "Email: sales@example.test"
+        },
+        {
+          "field": "business_address",
+          "document_id": "transcript",
+          "quote": "Business address: 123 Example Street, Montreal"
+        }
+      ],
+      "conflicts": []
+    },
+    "expected": {
+      "missing_fields": [
+        "business_number",
+        "phone_number"
+      ],
+      "conflict_fields": [],
+      "email_values": []
+    }
+  },
+  {
+    "id": "matching",
+    "documents": {
+      "transcript": "Discovery call\nBusiness number: BN-123456789\nWebsite: https://example.test\nDomain platform: Example Registrar\nMeta Business Manager: BM-12345\nFacebook Page: https://facebook.com/example\nInstagram: @example\nPhone: +1 514 555 0100\nEmail: sales@example.test\nBusiness address: 123 Example Street, Montreal",
+      "intake": "Intake form\nBusiness number: BN-123456789\nWebsite: https://example.test\nDomain platform: Example Registrar\nMeta Business Manager: BM-12345\nFacebook Page: https://facebook.com/example\nInstagram: @example\nPhone: +1 514 555 0100\nEmail: sales@example.test\nBusiness address: 123 Example Street, Montreal"
+    },
+    "reply": {
+      "name": null,
+      "needs": [],
+      "goals": [],
+      "business_number": "BN-123456789",
+      "website": "https://example.test",
+      "domain_platform": "Example Registrar",
+      "meta_business_manager": "BM-12345",
+      "facebook_page": "https://facebook.com/example",
+      "instagram": "@example",
+      "phone_number": "+1 514 555 0100",
+      "email": "sales@example.test",
+      "business_address": "123 Example Street, Montreal",
+      "source_references": [
+        {
+          "field": "business_number",
+          "document_id": "transcript",
+          "quote": "Business number: BN-123456789"
+        },
+        {
+          "field": "website",
+          "document_id": "intake",
+          "quote": "Website: https://example.test"
+        },
+        {
+          "field": "domain_platform",
+          "document_id": "transcript",
+          "quote": "Domain platform: Example Registrar"
+        },
+        {
+          "field": "meta_business_manager",
+          "document_id": "intake",
+          "quote": "Meta Business Manager: BM-12345"
+        },
+        {
+          "field": "facebook_page",
+          "document_id": "transcript",
+          "quote": "Facebook Page: https://facebook.com/example"
+        },
+        {
+          "field": "instagram",
+          "document_id": "intake",
+          "quote": "Instagram: @example"
+        },
+        {
+          "field": "phone_number",
+          "document_id": "transcript",
+          "quote": "Phone: +1 514 555 0100"
+        },
+        {
+          "field": "email",
+          "document_id": "intake",
+          "quote": "Email: sales@example.test"
+        },
+        {
+          "field": "business_address",
+          "document_id": "transcript",
+          "quote": "Business address: 123 Example Street, Montreal"
+        }
+      ],
+      "conflicts": []
+    },
+    "expected": {
+      "missing_fields": [],
+      "conflict_fields": [],
+      "email_values": []
+    }
+  },
+  {
+    "id": "complementary",
+    "documents": {
+      "transcript": "Discovery call\nBusiness number: BN-123456789\nWebsite: https://example.test\nDomain platform: Example Registrar\nMeta Business Manager: BM-12345\nFacebook Page: https://facebook.com/example\nInstagram: @example\nPhone: +1 514 555 0100\nEmail: sales@example.test\nBusiness address: 123 Example Street, Montreal\nGoal: Increase bookings",
+      "intake": "Intake form\nBusiness number: BN-123456789\nWebsite: https://example.test\nDomain platform: Example Registrar\nMeta Business Manager: BM-12345\nFacebook Page: https://facebook.com/example\nInstagram: @example\nPhone: +1 514 555 0100\nEmail: sales@example.test\nBusiness address: 123 Example Street, Montreal\nGoal: Launch a referral program"
+    },
+    "reply": {
+      "name": null,
+      "needs": [],
+      "goals": [
+        "Increase bookings",
+        "Launch a referral program"
+      ],
+      "business_number": "BN-123456789",
+      "website": "https://example.test",
+      "domain_platform": "Example Registrar",
+      "meta_business_manager": "BM-12345",
+      "facebook_page": "https://facebook.com/example",
+      "instagram": "@example",
+      "phone_number": "+1 514 555 0100",
+      "email": "sales@example.test",
+      "business_address": "123 Example Street, Montreal",
+      "source_references": [
+        {
+          "field": "business_number",
+          "document_id": "transcript",
+          "quote": "Business number: BN-123456789"
+        },
+        {
+          "field": "website",
+          "document_id": "intake",
+          "quote": "Website: https://example.test"
+        },
+        {
+          "field": "domain_platform",
+          "document_id": "transcript",
+          "quote": "Domain platform: Example Registrar"
+        },
+        {
+          "field": "meta_business_manager",
+          "document_id": "intake",
+          "quote": "Meta Business Manager: BM-12345"
+        },
+        {
+          "field": "facebook_page",
+          "document_id": "transcript",
+          "quote": "Facebook Page: https://facebook.com/example"
+        },
+        {
+          "field": "instagram",
+          "document_id": "intake",
+          "quote": "Instagram: @example"
+        },
+        {
+          "field": "phone_number",
+          "document_id": "transcript",
+          "quote": "Phone: +1 514 555 0100"
+        },
+        {
+          "field": "email",
+          "document_id": "intake",
+          "quote": "Email: sales@example.test"
+        },
+        {
+          "field": "business_address",
+          "document_id": "transcript",
+          "quote": "Business address: 123 Example Street, Montreal"
+        },
+        {
+          "field": "goals/0",
+          "document_id": "transcript",
+          "quote": "Goal: Increase bookings"
+        },
+        {
+          "field": "goals/1",
+          "document_id": "intake",
+          "quote": "Goal: Launch a referral program"
+        }
+      ],
+      "conflicts": []
+    },
+    "expected": {
+      "missing_fields": [],
+      "conflict_fields": [],
+      "email_values": []
+    }
+  },
+  {
+    "id": "ambiguous",
+    "documents": {
+      "transcript": "Discovery call\nBusiness number: BN-123456789\nWebsite: https://example.test\nDomain platform: Example Registrar\nMeta Business Manager: BM-12345\nFacebook Page: https://facebook.com/example\nInstagram: @example\nPhone: +1 514 555 0100\nEmail: sales@example.test (I think this is current)\nBusiness address: 123 Example Street, Montreal",
+      "intake": "Intake form\nBusiness number: BN-123456789\nWebsite: https://example.test\nDomain platform: Example Registrar\nMeta Business Manager: BM-12345\nFacebook Page: https://facebook.com/example\nInstagram: @example\nPhone: +1 514 555 0100\nEmail: hello@example.test (pending confirmation)\nBusiness address: 123 Example Street, Montreal"
+    },
+    "reply": {
+      "name": null,
+      "needs": [],
+      "goals": [],
+      "business_number": "BN-123456789",
+      "website": "https://example.test",
+      "domain_platform": "Example Registrar",
+      "meta_business_manager": "BM-12345",
+      "facebook_page": "https://facebook.com/example",
+      "instagram": "@example",
+      "phone_number": "+1 514 555 0100",
+      "email": null,
+      "business_address": "123 Example Street, Montreal",
+      "source_references": [
+        {
+          "field": "business_number",
+          "document_id": "transcript",
+          "quote": "Business number: BN-123456789"
+        },
+        {
+          "field": "website",
+          "document_id": "intake",
+          "quote": "Website: https://example.test"
+        },
+        {
+          "field": "domain_platform",
+          "document_id": "transcript",
+          "quote": "Domain platform: Example Registrar"
+        },
+        {
+          "field": "meta_business_manager",
+          "document_id": "intake",
+          "quote": "Meta Business Manager: BM-12345"
+        },
+        {
+          "field": "facebook_page",
+          "document_id": "transcript",
+          "quote": "Facebook Page: https://facebook.com/example"
+        },
+        {
+          "field": "instagram",
+          "document_id": "intake",
+          "quote": "Instagram: @example"
+        },
+        {
+          "field": "phone_number",
+          "document_id": "transcript",
+          "quote": "Phone: +1 514 555 0100"
+        },
+        {
+          "field": "business_address",
+          "document_id": "transcript",
+          "quote": "Business address: 123 Example Street, Montreal"
+        }
+      ],
+      "conflicts": [
+        {
+          "field": "email",
+          "explanation": "The contact emails may disagree; both need confirmation.",
+          "alternatives": [
+            {
+              "value": "sales@example.test",
+              "document_id": "transcript",
+              "quote": "Email: sales@example.test (I think this is current)"
+            },
+            {
+              "value": "hello@example.test",
+              "document_id": "intake",
+              "quote": "Email: hello@example.test (pending confirmation)"
+            }
+          ]
+        }
+      ]
+    },
+    "expected": {
+      "missing_fields": [],
+      "conflict_fields": [
+        "email"
+      ],
+      "email_values": [
+        "sales@example.test",
+        "hello@example.test"
+      ]
+    }
+  }
+]

@@ -26,7 +26,7 @@ class SourceInput(BaseModel):
 
 
 class SourceReference(BaseModel):
-    """Evidence for name, needs/N or goals/N (zero-based list indexes)."""
+    """Evidence for scalar fields, needs/N or goals/N (zero-based indexes)."""
 
     model_config = ConfigDict(extra="forbid", strict=True)
     field: str = Field(pattern=REFERENCE_FIELD_PATTERN)
@@ -105,6 +105,13 @@ def build_source_profile_prompt(
         "qualifiers; preserve qualifiers in the exact quote.\n"
         "- Compare the same fact, subject and period; distinct periods may coexist.\n"
         "- Use account IDs/URLs/handles, never passwords or secrets.\n"
+        "- Field meanings: business_number is a government business registration "
+        "or tax number (for example NEQ or CRA BN), NEVER a phone number. "
+        "phone_number is any phone line, including a main line or business phone. "
+        "domain_platform is the website builder or domain registrar. "
+        "meta_business_manager is a Meta Business Manager ID. A field that no "
+        "document states is null, even if another field looks similar.\n"
+        "- A conflict's field must be the field its alternative values belong to.\n"
         "- Brain context helps interpretation but is not evidence for client facts.\n"
         "Brain context (JSON string):\n"
         + json.dumps(brain_context, ensure_ascii=False)

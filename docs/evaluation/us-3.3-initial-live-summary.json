@@ -1,0 +1,27 @@
+{
+  "evaluated_at": "2026-11-02T15:17:30.908965+00:00",
+  "source_generation_commit": "71e3ce2",
+  "model": "qwen2.5:14b",
+  "passed_cases": 7,
+  "total_cases": 8,
+  "failures": [
+    {
+      "case": "complementary",
+      "prompt_sha256": "95b066bb6c7262953e2faaba6a4eee1147552422b44c79bcf9b3b969e07c947c",
+      "expected": {
+        "missing_fields": [],
+        "conflict_fields": [],
+        "email_values": []
+      },
+      "schema_sha256": "74f423ec3b8c71ae2d08ca62951aaa310275622c5ccc88d46ab9e4280141a55a",
+      "missed_missing": [],
+      "false_missing": [],
+      "missed_conflicts": [],
+      "false_conflicts": [
+        "goals"
+      ],
+      "passed": false,
+      "model_calls": 1
+    }
+  ]
+}
