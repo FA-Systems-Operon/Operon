@@ -13,6 +13,8 @@ from src.ai.source_prompt import (
     build_source_profile_prompt,
     generate_source_profile,
     parse_source_profile,
+    source_profile_schema,
+    validate_generated_profile,
 )
 
 
@@ -87,7 +89,9 @@ def evidence_case():
 
 def test_parser_accepts_evidence_from_transcript_and_intake(evidence_case):
     sources, profile = evidence_case
-    assert parse_source_profile(json.dumps(profile), sources).model_dump() == profile
+    result = parse_source_profile(json.dumps(profile), sources).model_dump()
+    assert {key: result[key] for key in profile} == profile
+    assert len(result["assessment"]["missing_fields"]) == 9
 
 
 @pytest.mark.parametrize(
@@ -140,13 +144,15 @@ def test_generation_returns_validated_profile(evidence_case):
         json.dumps(profile), "fake", "fake", 1
     )
     result = generate_source_profile(sources, provider, "Context only")
-    assert result.model_dump() == profile
+    assert {key: result.model_dump()[key] for key in profile} == profile
     provider.generate.assert_called_once_with(
-        build_source_profile_prompt(sources, "Context only"), json_output=True
+        build_source_profile_prompt(sources, "Context only"),
+        json_output=True,
+        output_schema=source_profile_schema(sources),
     )
 
 
-def test_generation_rejects_invalid_evidence_without_retry(evidence_case):
+def test_generation_rejects_invalid_evidence_after_one_repair(evidence_case):
     sources, profile = evidence_case
     profile["source_references"][0]["quote"] = "Invented quote"
     provider = Mock()
@@ -155,7 +161,7 @@ def test_generation_rejects_invalid_evidence_without_retry(evidence_case):
     )
     with pytest.raises(ValueError, match="occur exactly"):
         generate_source_profile(sources, provider)
-    provider.generate.assert_called_once()
+    assert provider.generate.call_count == 2
 
 
 def test_generation_propagates_provider_failure(evidence_case):
@@ -180,3 +186,151 @@ def test_parser_rejects_blank_profile_values(evidence_case, field):
     profile[field] = " " if field == "name" else [" "]
     with pytest.raises(ValueError, match="blank"):
         parse_source_profile(json.dumps(profile), sources)
+
+
+def test_decoding_schema_requires_all_fields_and_pins_reference_ids(evidence_case):
+    sources, _ = evidence_case
+    schema = source_profile_schema(sources)
+    assert set(schema["required"]) == set(schema["properties"])
+    for name in ("SourceReference", "ConflictAlternative"):
+        assert schema["$defs"][name]["properties"]["document_id"]["enum"] == [
+            "call",
+            "form",
+        ]
+    for field in ("needs", "goals"):
+        with pytest.raises(ValidationError):
+            SourceLinkedProfile.model_validate(
+                {
+                    "name": None,
+                    "needs": [],
+                    "goals": [],
+                    "source_references": [
+                        {"field": field, "document_id": "call", "quote": "text"}
+                    ],
+                }
+            )
+
+
+def test_generated_literal_scalars_get_exact_evidence_but_api_validation_stays_strict():
+    sources = [
+        SourceInput(
+            document_id="call",
+            kind="transcript",
+            text="Name: Maya; Email: maya@example.test",
+        )
+    ]
+    payload = {
+        "name": "Maya",
+        "email": "maya@example.test",
+        "needs": [],
+        "goals": [],
+        "source_references": [],
+    }
+    with pytest.raises(ValueError, match="Missing source references"):
+        parse_source_profile(json.dumps(payload), sources)
+    draft = validate_generated_profile(json.dumps(payload), sources)
+    assert [
+        (ref.field, ref.quote, ref.document_id) for ref in draft.source_references
+    ] == [
+        ("name", "Maya", "call"),
+        ("email", "maya@example.test", "call"),
+    ]
+    payload["email"] = "unsupported@example.test"
+    with pytest.raises(ValueError, match="Missing source references"):
+        validate_generated_profile(json.dumps(payload), sources)
+
+
+def test_generation_never_replaces_fabricated_existing_evidence(evidence_case):
+    sources, payload = evidence_case
+    payload["source_references"][0]["quote"] = "Fabricated quote"
+    with pytest.raises(ValueError, match="occur exactly"):
+        validate_generated_profile(json.dumps(payload), sources)
+
+
+def test_generated_redundant_conflict_references_are_deduplicated_only_after_validation():
+    sources = [
+        SourceInput(
+            document_id="call", kind="transcript", text="Email: one@example.test"
+        ),
+        SourceInput(document_id="form", kind="intake", text="Email: two@example.test"),
+    ]
+    alternatives = [
+        {"value": "one@example.test", "document_id": "call", "quote": sources[0].text},
+        {"value": "two@example.test", "document_id": "form", "quote": sources[1].text},
+    ]
+    payload = {
+        "name": None,
+        "needs": [],
+        "goals": [],
+        "email": None,
+        "source_references": [
+            {"field": "email", "document_id": "call", "quote": sources[0].text}
+        ],
+        "conflicts": [
+            {
+                "field": "email",
+                "explanation": "Different contact email",
+                "alternatives": alternatives,
+            }
+        ],
+    }
+    draft = validate_generated_profile(json.dumps(payload), sources)
+    assert draft.source_references == []
+    assert draft.conflicts[0].model_dump()["alternatives"] == alternatives
+    payload["source_references"][0]["quote"] = "Unrelated quote"
+    with pytest.raises(ValueError, match="absent field"):
+        validate_generated_profile(json.dumps(payload), sources)
+    payload["conflicts"][0]["alternatives"][0]["quote"] = "Invented quote"
+    with pytest.raises(ValueError, match="occur exactly"):
+        validate_generated_profile(json.dumps(payload), sources)
+
+
+def test_one_repair_can_correct_a_quote_without_weakening_validation(evidence_case):
+    sources, payload = evidence_case
+    valid = json.dumps(payload)
+    payload["source_references"][0]["quote"] = "Non-verbatim name quote"
+    provider = Mock()
+    provider.generate.side_effect = [
+        ModelResponse(json.dumps(payload), "fake", "fake", 1),
+        ModelResponse(valid, "fake", "fake", 1),
+    ]
+    draft = generate_source_profile(sources, provider)
+    assert draft.name == "Maya"
+    assert provider.generate.call_count == 2
+    repair_call = provider.generate.call_args_list[1]
+    assert "Copy quotes verbatim" in repair_call.args[0]
+    assert json.loads(
+        repair_call.args[0].split("Source documents (JSON):\n", 1)[1]
+    ) == [s.model_dump() for s in sources]
+    assert repair_call.kwargs["output_schema"] == source_profile_schema(sources)
+
+
+def test_generation_aligns_added_terminal_punctuation_to_exact_source_text():
+    sources = [
+        SourceInput(
+            document_id="call",
+            kind="transcript",
+            text="Our page is facebook.com/river and Instagram is @river.",
+        )
+    ]
+    payload = {
+        "name": None,
+        "needs": [],
+        "goals": [],
+        "facebook_page": "facebook.com/river",
+        "source_references": [
+            {
+                "field": "facebook_page",
+                "document_id": "call",
+                "quote": "Our page is facebook.com/river.",
+            }
+        ],
+    }
+    with pytest.raises(ValueError, match="occur exactly"):
+        parse_source_profile(json.dumps(payload), sources)
+    draft = validate_generated_profile(json.dumps(payload), sources)
+    assert draft.source_references[0].quote == "Our page is facebook.com/river"
+    assert draft.source_references[0].quote in sources[0].text
+    payload["source_references"][0]["quote"] = "Our page IS facebook.com/river."
+    with pytest.raises(ValueError, match="occur exactly"):
+        validate_generated_profile(json.dumps(payload), sources)

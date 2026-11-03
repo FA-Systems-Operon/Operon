@@ -368,3 +368,63 @@ failed pair again resets its attempts.
 
 For an existing database, apply `backend/migrations/005_add_onboarding_job_retries.sql`
 after 004.
+
+
+## Missing onboarding information and potential conflicts (#43)
+
+Source-linked drafts now extract these nullable, source-backed text fields:
+`business_number`, `website`, `domain_platform`, `meta_business_manager`,
+`facebook_page`, `instagram`, `phone_number`, `email`, and `business_address`.
+These nine fields are mandatory for completeness checks. Existing `name`, `needs`,
+and `goals` remain supported but are not mandatory. No restrictive business-number,
+URL, or domain-platform format rules are assumed. Account values are IDs, URLs, or
+handles, never passwords. Either source may supply a field.
+
+The generation prompt uses a compact JSON output contract, compares both sources
+before selecting values, and keeps list values separate from their evidence.
+The provider receives the Pydantic JSON schema to constrain decoding, including
+this job's document IDs. Strict validation still applies to every response.
+Ordinary text/JSON provider calls retain their existing behavior.
+
+During generation only, missing scalar references may be completed from exact
+literal value occurrences in the supplied sources. An added terminal period/question/exclamation mark may be removed only when
+the remaining quote occurs exactly in the same document. Unsupported text and
+changes inside a quote are never matched approximately. References redundantly repeated for a null
+conflicted scalar are removed only when they exactly duplicate already validated
+conflict alternatives; both claims remain preserved there. Paraphrased values
+still require model-supplied evidence. The direct source-draft API remains strict
+and does not apply this generation normalization.
+
+The generation prompt proposes `conflicts`, each with `field`, `explanation`, and
+exactly two `alternatives` containing `value`, `document_id`, and an exact `quote`.
+One alternative must cite a stored transcript and the other a stored intake for
+this client. Both claims concern the same fact/context; complementary information
+and formatting differences are not inherently conflicts. Scalar fields with a
+conflict stay null, with both alternatives available for review. Group-level
+`needs`/`goals` conflicts and existing item paths are also supported. Evidence
+validates provenance, not the model's semantic interpretation.
+
+The server recomputes `assessment: {rules_version: 1, missing_fields: [...]}`
+during generation and source-draft saving. A mandatory field is missing when it
+has neither a supported scalar value nor a validated conflict. Incoming assessment
+claims cannot suppress missing fields. Unknown paths, duplicate conflicts, blank
+values, invented quotes, wrong kinds or another client's evidence are rejected.
+A failed save produces no new version; job validation failures follow existing
+failure handling. Old ordinary source references can still use untyped documents,
+but conflict evidence requires stored kinds.
+
+Everything is saved in the existing immutable version JSON; no migration is
+needed. Historical versions without assessment stay unassessed. The generic
+profile update endpoint remains an unvalidated JSON editing endpoint and does not
+recompute completeness or establish conflict-resolution/approval guarantees.
+The future review/edit integration must invalidate or recompute assessment after
+edits. The source-draft endpoint validates the supplied evidence; it does not scan
+all documents a client owns. The onboarding job compares its exact pinned pair.
+
+Resolution and approval blocking are follow-up review-flow work, as described in
+the architecture; this change does not implement those controls. The agent makes at most one additional model call when structured output or
+evidence validation fails, following the architecture's bounded repair rule.
+The original documents, failed reply and validation error are supplied as data;
+the repaired response must pass the same full validator. A second invalid reply
+fails the job with no draft saved. Provider failures still use the existing job
+retry policy; they do not trigger this validation repair.

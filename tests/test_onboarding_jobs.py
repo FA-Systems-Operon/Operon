@@ -41,7 +41,7 @@ class SourceAwareProvider:
         self.build_reply = build_reply
         self.prompts = []
 
-    def generate(self, prompt, *, system=None, json_output=False):
+    def generate(self, prompt, *, system=None, json_output=False, output_schema=None):
         self.prompts.append(prompt)
         sources = json.loads(prompt.split("Source documents (JSON):\n", 1)[1])
         ids = {source["kind"]: source["document_id"] for source in sources}

@@ -183,3 +183,20 @@ def test_other_transport_error_raises_provider_unavailable():
 
     with pytest.raises(ProviderUnavailable, match="RemoteProtocolError"):
         make_provider(handler).generate("Say hi")
+
+
+def test_output_schema_constrains_generation_without_changing_other_calls():
+    schema = {
+        "type": "object",
+        "properties": {"name": {"type": "string"}},
+        "required": ["name"],
+    }
+    bodies = []
+
+    def handler(request):
+        bodies.append(json.loads(request.content))
+        return httpx.Response(200, json={"response": '{"name":"Ada"}'})
+
+    make_provider(handler).generate("Extract name", output_schema=schema)
+    assert bodies[0]["format"] == schema
+    assert bodies[0]["options"] == {"temperature": 0, "seed": 42}

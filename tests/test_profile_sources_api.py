@@ -9,6 +9,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from tests.test_profile_sources import add_text, make_draft
 
 from src.models import ClientProfileVersion
+from src.profile_flags import assess_missing
 
 
 def test_api_persists_and_returns_source_draft(
@@ -21,6 +22,7 @@ def test_api_persists_and_returns_source_draft(
     url = f"/client-profiles/{original.client_profile_id}"
     response = client.post(f"{url}/source-drafts", json=payload)
     assert response.status_code == 201
+    payload["assessment"] = assess_missing(payload, []).model_dump()
     assert response.json()["data"] == payload
     assert response.json()["status"] == "draft"
     assert response.json()["version_number"] == 2
