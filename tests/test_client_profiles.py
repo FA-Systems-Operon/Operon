@@ -7,7 +7,7 @@ import uuid
 
 def test_create_client_profile(client, demo_client):
     response = client.post(
-        "/client-profiles", params={"client_id": str(demo_client.id)}
+        "/api/v1/client-profiles", params={"client_id": str(demo_client.id)}
     )
 
     assert response.status_code == 201
@@ -26,10 +26,12 @@ def test_create_client_profile(client, demo_client):
 
 
 def test_update_client_profile_creates_new_version(client, demo_client):
-    create = client.post("/client-profiles", params={"client_id": str(demo_client.id)})
+    create = client.post(
+        "/api/v1/client-profiles", params={"client_id": str(demo_client.id)}
+    )
     profile_id = create.json()["client_profile_id"]
 
-    update = client.put(f"/client-profiles/{profile_id}", json={"key": "value"})
+    update = client.put(f"/api/v1/client-profiles/{profile_id}", json={"key": "value"})
 
     assert update.status_code == 200
     assert update.json()["version_number"] == 2
@@ -37,17 +39,19 @@ def test_update_client_profile_creates_new_version(client, demo_client):
 
 
 def test_update_client_profile_increments_version_each_time(client, demo_client):
-    create = client.post("/client-profiles", params={"client_id": str(demo_client.id)})
+    create = client.post(
+        "/api/v1/client-profiles", params={"client_id": str(demo_client.id)}
+    )
     profile_id = create.json()["client_profile_id"]
 
-    client.put(f"/client-profiles/{profile_id}", json={})
-    third = client.put(f"/client-profiles/{profile_id}", json={})
+    client.put(f"/api/v1/client-profiles/{profile_id}", json={})
+    third = client.put(f"/api/v1/client-profiles/{profile_id}", json={})
 
     assert third.json()["version_number"] == 3
 
 
 def test_update_unknown_client_profile_returns_404(client):
-    response = client.put(f"/client-profiles/{uuid.uuid4()}", json={})
+    response = client.put(f"/api/v1/client-profiles/{uuid.uuid4()}", json={})
 
     assert response.status_code == 404
 
@@ -58,14 +62,18 @@ def test_update_does_not_inherit_approval_or_touch_old_version(
     """A correction to an approved profile is a NEW unapproved version; v1 is untouched."""
     v1 = profile_factory(approved=True, data={"budget": 1000})
 
-    update = client.put(f"/client-profiles/{v1.client_profile_id}", json=sample_profile)
+    update = client.put(
+        f"/api/v1/client-profiles/{v1.client_profile_id}", json=sample_profile
+    )
 
     new = update.json()
     assert new["status"] == "draft"
     assert new["approved_at"] is None
     assert new["approved_by"] is None
 
-    versions = client.get(f"/client-profiles/{v1.client_profile_id}/versions").json()
+    versions = client.get(
+        f"/api/v1/client-profiles/{v1.client_profile_id}/versions"
+    ).json()
     assert versions[0]["status"] == "approved"
     assert versions[0]["approved_at"] is not None
     assert versions[0]["data"] == {"budget": 1000}  # not overwritten
@@ -76,12 +84,14 @@ def test_update_does_not_inherit_approval_or_touch_old_version(
 
 
 def test_list_client_profile_versions_oldest_first(client, demo_client):
-    create = client.post("/client-profiles", params={"client_id": str(demo_client.id)})
+    create = client.post(
+        "/api/v1/client-profiles", params={"client_id": str(demo_client.id)}
+    )
     profile_id = create.json()["client_profile_id"]
-    client.put(f"/client-profiles/{profile_id}", json={"v": 2})
-    client.put(f"/client-profiles/{profile_id}", json={"v": 3})
+    client.put(f"/api/v1/client-profiles/{profile_id}", json={"v": 2})
+    client.put(f"/api/v1/client-profiles/{profile_id}", json={"v": 3})
 
-    response = client.get(f"/client-profiles/{profile_id}/versions")
+    response = client.get(f"/api/v1/client-profiles/{profile_id}/versions")
 
     assert response.status_code == 200
     versions = response.json()
@@ -90,7 +100,7 @@ def test_list_client_profile_versions_oldest_first(client, demo_client):
 
 
 def test_list_versions_unknown_client_profile_returns_404(client):
-    response = client.get(f"/client-profiles/{uuid.uuid4()}/versions")
+    response = client.get(f"/api/v1/client-profiles/{uuid.uuid4()}/versions")
 
     assert response.status_code == 404
 
@@ -152,7 +162,8 @@ def test_approve_requires_approved_by(client, profile_factory):
     v1 = profile_factory()
 
     response = client.post(
-        f"/client-profiles/{v1.client_profile_id}/versions/{v1.id}/approve", json={}
+        f"/api/v1/client-profiles/{v1.client_profile_id}/versions/{v1.id}/approve",
+        json={},
     )
 
     assert response.status_code == 422
@@ -162,7 +173,7 @@ def test_approve_requires_approved_by(client, profile_factory):
 
 
 def test_latest_approved_unknown_profile_returns_404(client):
-    response = client.get(f"/client-profiles/{uuid.uuid4()}/latest-approved")
+    response = client.get(f"/api/v1/client-profiles/{uuid.uuid4()}/latest-approved")
 
     assert response.status_code == 404
 
@@ -170,7 +181,9 @@ def test_latest_approved_unknown_profile_returns_404(client):
 def test_latest_approved_without_any_approval_returns_404(client, profile_factory):
     v1 = profile_factory()
 
-    response = client.get(f"/client-profiles/{v1.client_profile_id}/latest-approved")
+    response = client.get(
+        f"/api/v1/client-profiles/{v1.client_profile_id}/latest-approved"
+    )
 
     assert response.status_code == 404
     assert response.json()["detail"] == "No approved version found"
@@ -179,7 +192,9 @@ def test_latest_approved_without_any_approval_returns_404(client, profile_factor
 def test_latest_approved_returns_the_approved_version(client, profile_factory):
     v1 = profile_factory(approved=True)
 
-    response = client.get(f"/client-profiles/{v1.client_profile_id}/latest-approved")
+    response = client.get(
+        f"/api/v1/client-profiles/{v1.client_profile_id}/latest-approved"
+    )
 
     assert response.status_code == 200
     assert response.json()["id"] == str(v1.id)
@@ -187,9 +202,11 @@ def test_latest_approved_returns_the_approved_version(client, profile_factory):
 
 def test_latest_approved_ignores_newer_unapproved_drafts(client, profile_factory):
     v1 = profile_factory(approved=True)
-    client.put(f"/client-profiles/{v1.client_profile_id}", json={"draft": True})
+    client.put(f"/api/v1/client-profiles/{v1.client_profile_id}", json={"draft": True})
 
-    response = client.get(f"/client-profiles/{v1.client_profile_id}/latest-approved")
+    response = client.get(
+        f"/api/v1/client-profiles/{v1.client_profile_id}/latest-approved"
+    )
 
     assert response.json()["id"] == str(v1.id)
 
@@ -200,12 +217,12 @@ def test_latest_approved_is_highest_version_not_latest_approval(
     """Approving an older version later must not roll the current record back."""
     v1 = profile_factory()
     pid = v1.client_profile_id
-    v2 = client.put(f"/client-profiles/{pid}", json={"n": 2}).json()
-    v3 = client.put(f"/client-profiles/{pid}", json={"n": 3}).json()
+    v2 = client.put(f"/api/v1/client-profiles/{pid}", json={"n": 2}).json()
+    v3 = client.put(f"/api/v1/client-profiles/{pid}", json={"n": 3}).json()
 
     api.approve_profile(pid, v3["id"])
     api.approve_profile(pid, v2["id"])
 
-    response = client.get(f"/client-profiles/{pid}/latest-approved")
+    response = client.get(f"/api/v1/client-profiles/{pid}/latest-approved")
 
     assert response.json()["id"] == v3["id"]

@@ -139,7 +139,7 @@ def test_late_approval_of_older_version_does_not_roll_back(
     assert r.json()["newly_stale_artifact_version_ids"] == []
     assert status_of(api, art["artifact_id"]) == "draft"
 
-    latest = client.get(f"/client-profiles/{pid}/latest-approved").json()
+    latest = client.get(f"/api/v1/client-profiles/{pid}/latest-approved").json()
     assert latest["id"] == v3["id"]
 
 
