@@ -109,6 +109,21 @@ class ClientProfileVersionOut(BaseModel):
     approved_at: datetime | None = None
 
 
+class ReviewInboxItemOut(BaseModel):
+    """One profile draft awaiting review, with what the inbox shows at a glance."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    version_id: uuid.UUID
+    client_profile_id: uuid.UUID
+    version_number: int
+    client_id: uuid.UUID
+    client_name: str
+    # When the draft version was saved, i.e. when it was generated.
+    created_at: datetime
+    status: ReviewStatus
+
+
 class PlaybookOut(BaseModel):
     """A playbook record returned by the API."""
 
