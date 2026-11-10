@@ -29,6 +29,18 @@ export type OnboardingJob = {
   created_at: string
 }
 
+// A profile draft waiting for a reviewer. One per profile, so a client can appear twice.
+export type ReviewInboxItem = {
+  version_id: string
+  client_profile_id: string
+  version_number: number
+  client_id: string
+  client_name: string
+  // When the draft was generated (saved).
+  created_at: string
+  status: 'draft' | 'in_review'
+}
+
 // A response the API answered with an error status (as opposed to no answer at all).
 export class ApiError extends Error {
   status: number
@@ -54,6 +66,15 @@ async function readDetail(response: Response): Promise<string | undefined> {
 
 export async function listClients(): Promise<Client[]> {
   const response = await fetch('/api/v1/clients')
+  if (!response.ok) {
+    throw new ApiError(response.status, await readDetail(response))
+  }
+  return response.json()
+}
+
+// Newest first, as the API sends them.
+export async function listReviews(): Promise<ReviewInboxItem[]> {
+  const response = await fetch('/api/v1/reviews')
   if (!response.ok) {
     throw new ApiError(response.status, await readDetail(response))
   }
