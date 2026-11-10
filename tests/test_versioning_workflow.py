@@ -18,10 +18,10 @@ def test_edit_approve_and_staleness_preserve_history(
     assert api.approve_playbook(playbook.playbook_id, playbook.id).status_code == 200
     if source_kind == "profile":
         parent_id, source_id = profile.client_profile_id, profile.id
-        path, approve = "/client-profiles", api.approve_profile
+        path, approve = "/api/v1/client-profiles", api.approve_profile
     else:
         parent_id, source_id = playbook.playbook_id, playbook.id
-        path, approve = "/playbooks", api.approve_playbook
+        path, approve = "/api/v1/playbooks", api.approve_playbook
     url = f"{path}/{parent_id}"
     original = client.get(f"{url}/latest-approved").json()
     artifact_response = api.artifact(demo_client.id, profile.id, playbook.id)
@@ -78,12 +78,12 @@ def test_failed_staleness_marking_rolls_back_approval(
     if source_kind == "profile":
         original = profile_factory(approved=True)
         parent_id = original.client_profile_id
-        path, approve = "/client-profiles", api.approve_profile
+        path, approve = "/api/v1/client-profiles", api.approve_profile
         target = "src.routers.client_profiles.mark_stale_for_client_profile"
     else:
         original = playbook_factory(approved=True)
         parent_id = original.playbook_id
-        path, approve = "/playbooks", api.approve_playbook
+        path, approve = "/api/v1/playbooks", api.approve_playbook
         target = "src.routers.playbooks.mark_stale_for_playbook"
     draft = client.put(f"{path}/{parent_id}", json={"changed": True}).json()
 

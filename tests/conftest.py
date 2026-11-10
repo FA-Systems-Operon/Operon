@@ -242,24 +242,26 @@ class OperonApi:
         return None if value is None else str(value)
 
     def new_profile_version(self, profile_id, data=None):
-        r = self.http.put(f"/client-profiles/{profile_id}", json=data or {"k": "v"})
+        r = self.http.put(
+            f"/api/v1/client-profiles/{profile_id}", json=data or {"k": "v"}
+        )
         assert r.status_code == 200, r.text
         return r.json()
 
     def approve_profile(self, profile_id, version_id):
         return self.http.post(
-            f"/client-profiles/{profile_id}/versions/{version_id}/approve",
+            f"/api/v1/client-profiles/{profile_id}/versions/{version_id}/approve",
             json={"approved_by": self.reviewer},
         )
 
     def new_playbook_version(self, playbook_id):
-        r = self.http.put(f"/playbooks/{playbook_id}", json={"rule": "x"})
+        r = self.http.put(f"/api/v1/playbooks/{playbook_id}", json={"rule": "x"})
         assert r.status_code == 200, r.text
         return r.json()
 
     def approve_playbook(self, playbook_id, version_id):
         return self.http.post(
-            f"/playbooks/{playbook_id}/versions/{version_id}/approve",
+            f"/api/v1/playbooks/{playbook_id}/versions/{version_id}/approve",
             json={"approved_by": self.reviewer},
         )
 
@@ -271,7 +273,7 @@ class OperonApi:
         kind="campaign_brief",
     ):
         return self.http.post(
-            "/artifacts",
+            "/api/v1/artifacts",
             json={
                 "client_id": self._s(client_id),
                 "kind": kind,
@@ -285,7 +287,7 @@ class OperonApi:
         self, artifact_id, profile_version_id, playbook_version_id=None
     ):
         return self.http.post(
-            f"/artifacts/{artifact_id}/versions",
+            f"/api/v1/artifacts/{artifact_id}/versions",
             json={
                 "client_profile_version_id": self._s(profile_version_id),
                 "playbook_version_id": self._s(playbook_version_id),
@@ -295,18 +297,18 @@ class OperonApi:
 
     def approve_artifact(self, artifact_id, version_id):
         return self.http.post(
-            f"/artifacts/{artifact_id}/versions/{version_id}/approve",
+            f"/api/v1/artifacts/{artifact_id}/versions/{version_id}/approve",
             json={"approved_by": self.reviewer},
         )
 
     def history(self, artifact_id) -> list[dict]:
-        r = self.http.get(f"/artifacts/{artifact_id}/versions")
+        r = self.http.get(f"/api/v1/artifacts/{artifact_id}/versions")
         assert r.status_code == 200, r.text
         return r.json()
 
     def stale(self, client_id=None) -> list[dict]:
         params = {"client_id": str(client_id)} if client_id else {}
-        r = self.http.get("/artifacts/stale", params=params)
+        r = self.http.get("/api/v1/artifacts/stale", params=params)
         assert r.status_code == 200, r.text
         return r.json()
 
