@@ -124,6 +124,14 @@ class ReviewInboxItemOut(BaseModel):
     status: ReviewStatus
 
 
+class ReviewDraftOut(BaseModel):
+    """One profile version opened for review, with the client's source documents."""
+
+    version: ClientProfileVersionOut
+    client: ClientOut
+    documents: list[SourceDocumentOut]
+
+
 class PlaybookOut(BaseModel):
     """A playbook record returned by the API."""
 
