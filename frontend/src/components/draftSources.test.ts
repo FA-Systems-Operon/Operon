@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { mapSourceReferences, type SourceLinkedDraft } from './draftSources'
+import {
+  mapSourceReferences,
+  reviewRows,
+  type ProfileConflict,
+  type SourceLinkedDraft,
+} from './draftSources'
 
 const DOC = '6f1c2d3e-0000-4000-8000-000000000001'
 
@@ -60,5 +65,58 @@ describe('mapSourceReferences', () => {
   it('treats an empty draft or missing keys as no fields', () => {
     expect(mapSourceReferences({ name: null, needs: [], goals: [], source_references: [] })).toEqual([])
     expect(mapSourceReferences({})).toEqual([])
+  })
+})
+
+const conflict = (field: string): ProfileConflict => ({
+  field,
+  explanation: 'The sources disagree.',
+  alternatives: [
+    { value: 'a@example.test', document_id: 'call', quote: 'Use a@example.test' },
+    { value: 'b@example.test', document_id: 'form', quote: 'Use b@example.test' },
+  ],
+})
+
+describe('reviewRows', () => {
+  const empty: SourceLinkedDraft = { name: null, needs: [], goals: [], source_references: [] }
+  const shape = (draft: Partial<SourceLinkedDraft>) =>
+    reviewRows(draft).rows.map((row) => [row.label, row.value, row.flag])
+
+  it('adds conflicting and missing fields to the populated ones, in field order', () => {
+    expect(
+      shape({
+        ...empty,
+        goals: ['Grow bookings'],
+        website: 'https://example.test',
+        conflicts: [conflict('email'), conflict('goals/0'), conflict('goals')],
+        assessment: { rules_version: 1, missing_fields: ['phone_number', 'website'] },
+      }),
+    ).toEqual([
+      ['Goals', 'a@example.test or b@example.test', 'conflict'],
+      ['Goal 1', 'Grow bookings', 'conflict'],
+      ['Website', 'https://example.test', null],
+      ['Phone number', 'Not mentioned', 'missing'],
+      ['Email', 'a@example.test or b@example.test', 'conflict'],
+    ])
+  })
+
+  it('keeps each conflict on its row for the evidence panel', () => {
+    const [row] = reviewRows({ ...empty, conflicts: [conflict('name')] }).rows
+
+    expect(row.conflicts).toEqual([conflict('name')])
+    expect(row.references).toEqual([])
+  })
+
+  it('reports nothing missing for drafts that were never checked', () => {
+    const legacy = { ...empty, assessment: { rules_version: 2, missing_fields: ['email'] } }
+
+    expect(reviewRows(legacy)).toEqual({ rows: [], unsupported: false })
+  })
+
+  it.each([
+    ['conflict', { conflicts: [conflict('goals/99')] }],
+    ['missing field', { assessment: { rules_version: 1, missing_fields: ['password'] } }],
+  ])('flags an unsupported %s instead of dropping it silently', (_, flags) => {
+    expect(reviewRows({ ...empty, ...flags })).toEqual({ rows: [], unsupported: true })
   })
 })
