@@ -59,12 +59,20 @@ test.each([
   expect(screen.getByRole('main').textContent).toBe(title)
 })
 
-test('Reviews is an empty page and marks the Reviews link', () => {
+test('Reviews opens the review inbox and marks the Reviews link', async () => {
   openAt('#/reviews')
 
-  expect(screen.getByRole('heading', { name: 'Reviews' })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: 'Review inbox' })).toBeInTheDocument()
   expect(screen.getByRole('link', { name: 'Reviews' })).toHaveAttribute('aria-current', 'page')
   expect(activeTab()).toBeNull()
+  expect(await screen.findByText('No drafts waiting for review.')).toBeInTheDocument()
+})
+
+test('a draft link from the inbox opens a placeholder under Reviews', () => {
+  openAt('#/reviews/draft?profile=p1&version=v2')
+
+  expect(screen.getByRole('heading', { name: 'Draft review' })).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Reviews' })).toHaveAttribute('aria-current', 'page')
 })
 
 test('Add sources opens under the Brain tab with the client from the link', async () => {
