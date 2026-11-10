@@ -226,3 +226,11 @@ def test_latest_approved_is_highest_version_not_latest_approval(
     response = client.get(f"/api/v1/client-profiles/{pid}/latest-approved")
 
     assert response.json()["id"] == v3["id"]
+
+
+def test_old_unprefixed_client_profiles_path_is_gone(client, demo_client):
+    # Everything the frontend calls lives under /api/v1, which the proxy forwards.
+    response = client.post(
+        "/client-profiles", params={"client_id": str(demo_client.id)}
+    )
+    assert response.status_code == 404
