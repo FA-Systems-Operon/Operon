@@ -50,6 +50,8 @@
 .link-button:focus-within,
 .tab:focus-visible,
 .review-row:focus-visible,
+.review-field:focus-visible,
+.back-link:focus-visible,
 .picker:focus-within {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -167,9 +169,13 @@
   padding: 4rem 2rem;
 }
 
-.placeholder {
+.placeholder,
+.review-draft {
   max-width: 1100px;
   margin: 0 auto;
+}
+
+.placeholder {
   text-align: right;
 }
 
@@ -182,7 +188,8 @@
 }
 
 .add-sources h1,
-.review-inbox h1 {
+.review-inbox h1,
+.review-draft h1 {
   margin: 0 0 1rem;
   font-size: 3rem;
   letter-spacing: -0.03em;
@@ -361,9 +368,9 @@
   font-size: 0.875rem;
 }
 
-/* ---- Review inbox ---- */
+/* ---- Review inbox and review draft ---- */
 
-/* Laid out like the client tracking table on the Command mockup. */
+/* The inbox is laid out like the client tracking table on the Command mockup. */
 .review-card {
   padding: 0.75rem 1.25rem;
   border: 1px solid var(--border);
@@ -377,15 +384,20 @@
   list-style: none;
 }
 
-.review-row {
+/* Inbox rows and draft field rows. */
+.review-row,
+.review-field {
   display: grid;
-  grid-template-columns: 2fr 1.5fr 0.5fr 1fr;
-  gap: 1rem;
   align-items: baseline;
-  padding: 0.75rem 0.5rem;
+  gap: 1rem;
   border-radius: 8px;
   color: var(--muted);
   font-size: 0.875rem;
+}
+
+.review-row {
+  grid-template-columns: 2fr 1.5fr 0.5fr 1fr;
+  padding: 0.75rem 0.5rem;
   text-decoration: none;
 }
 
@@ -397,7 +409,8 @@
   color: var(--faint);
 }
 
-.review-client {
+.review-client,
+.review-field-value {
   overflow-wrap: anywhere;
   color: var(--text);
   font-weight: 600;
@@ -412,6 +425,132 @@
   flex-wrap: wrap;
   align-items: baseline;
   gap: 1rem;
+}
+
+.back-link {
+  color: var(--muted);
+  font-size: 0.875rem;
+  text-decoration: none;
+}
+
+.review-draft-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem 2rem;
+  margin: 1.5rem 0 2rem;
+}
+
+.review-draft-head .lead {
+  margin: 0;
+}
+
+.review-draft-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.review-pill {
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  background: var(--surface-raised);
+  color: var(--text);
+}
+
+.review-draft-body {
+  display: grid;
+  grid-template-columns: 3fr 2fr;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.review-fields {
+  padding: 1.25rem;
+}
+
+.review-field {
+  grid-template-columns: 11rem 1fr auto;
+  width: 100%;
+  padding: 0.85rem 1rem;
+  border: 0;
+  background: none;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.review-field[aria-pressed='true'] {
+  background: var(--surface-raised);
+}
+
+.review-field-value {
+  font-size: 1rem;
+}
+
+.review-field[data-flag='missing'] .review-field-value {
+  color: var(--muted);
+}
+
+/* Same warning colour as DraftSourceView's flags (#44). */
+.review-field[data-flag] .review-field-label,
+.review-flag {
+  color: #ffcc80;
+}
+
+.review-evidence {
+  margin: 0;
+  padding: 1.75rem 2rem;
+  background: var(--surface);
+}
+
+.review-evidence h2 {
+  margin: 0.25rem 0 1rem;
+  font-size: 2rem;
+  letter-spacing: -0.02em;
+}
+
+.review-flag {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.review-quotes {
+  display: grid;
+  gap: 1.25rem;
+  margin: 1.5rem 0;
+}
+
+.review-quotes li {
+  padding-left: 1rem;
+  border-left: 2px solid var(--border);
+}
+
+.review-quote-source,
+.review-quotes strong {
+  display: block;
+  margin-bottom: 0.3rem;
+}
+
+.review-quote-source {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.review-quotes q {
+  font-size: 1.1rem;
+  line-height: 1.5;
+}
+
+.review-matched {
+  margin: 2rem 0 0;
+  color: var(--faint);
+  font-size: 0.8rem;
 }
 
 /* ---- Status (developer page) ---- */
@@ -454,7 +593,8 @@
   }
 
   .add-sources h1,
-  .review-inbox h1 {
+  .review-inbox h1,
+  .review-draft h1 {
     font-size: 2.25rem;
   }
 
@@ -462,13 +602,35 @@
     display: none;
   }
 
-  .review-row {
-    grid-template-columns: 1fr auto auto;
+  .review-row,
+  .review-field {
     gap: 0.25rem 1rem;
   }
 
-  .review-client {
+  .review-row {
+    grid-template-columns: 1fr auto auto;
+  }
+
+  .review-field {
+    grid-template-columns: 1fr auto;
+  }
+
+  .review-client,
+  .review-field-value {
     grid-column: 1 / -1;
+  }
+
+  /* Under its label and source tag. */
+  .review-field-value {
+    grid-row: 2;
+  }
+
+  .review-draft-body {
+    grid-template-columns: 1fr;
+  }
+
+  .review-evidence {
+    padding: 1.5rem 1.25rem;
   }
 
   .slots {
