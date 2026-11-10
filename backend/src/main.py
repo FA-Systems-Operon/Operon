@@ -22,8 +22,8 @@ from src.routers import (
     documents,
     onboarding_jobs,
     playbooks,
+    auth,
 )
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -51,7 +51,7 @@ print(
     f"model: {settings.OLLAMA_MODEL or '(OLLAMA_MODEL not set)'}",
     flush=True,
 )
-
+app.include_router(auth.router)
 app.include_router(artifacts.router)
 app.include_router(clients.router)
 app.include_router(documents.router)
