@@ -1,0 +1,130 @@
+"""M14: no email or phone number reaches a model.
+
+The fake Ollama server records every request body, and the tests check that
+body, the bytes that would actually leave the app, for emails and phones.
+"""
+
+import json
+
+import httpx
+import pytest
+
+from src.ai.ollama import OllamaProvider
+from src.ai.provider import get_provider
+from src.ai.redaction import RedactingProvider, redact, restore
+from src.config import settings
+
+EMAILS = [
+    "anna.client@example.com",
+    "billing+invoices@acme-corp.ca",
+    "J.Doe@sub.mail.co.uk",
+]
+PHONES = [
+    "(514) 555-1234",
+    "514-555-9876",
+    "514.555.0000",
+    "514 555 4321",
+    "1-800-555-0199",
+    "+1 438 555 7788",
+    "+44 20 7946 0958",
+    "+15145550123",
+    "613-555-0100 ext. 22",
+]
+
+SOURCE = (
+    "Intake form\n"
+    f"Main contact: {EMAILS[0]}, invoices go to {EMAILS[1]}.\n"
+    f"Ops lead: {EMAILS[2]}\n"
+    f"Phones: {', '.join(PHONES)}\n"
+    "NEQ: 1171234567\n"
+)
+
+
+def recording_provider(reply: str = "ok"):
+    sent: list[dict] = []
+
+    def handler(request):
+        sent.append(json.loads(request.content))
+        return httpx.Response(200, json={"response": reply})
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    inner = OllamaProvider(base_url="http://x", model="m", client=client)
+    return RedactingProvider(inner), sent
+
+
+def assert_no_pii(payload: str):
+    for value in EMAILS + PHONES:
+        assert value not in payload, f"{value!r} reached the model"
+    assert "@" not in payload
+
+
+def test_no_email_or_phone_reaches_the_model():
+    provider, sent = recording_provider()
+
+    provider.generate(SOURCE, system=f"Reply to {EMAILS[0]} or {PHONES[0]}.")
+
+    assert len(sent) == 1
+    assert_no_pii(json.dumps(sent[0]))
+    assert "[EMAIL_1]" in sent[0]["prompt"]
+    assert "[PHONE_1]" in sent[0]["prompt"]
+
+
+def test_get_provider_redacts_every_call(monkeypatch):
+    """The real factory, which every caller in the app uses, must redact."""
+    sent: list[dict] = []
+
+    def handler(request):
+        sent.append(json.loads(request.content))
+        return httpx.Response(200, json={"response": "ok"})
+
+    monkeypatch.setattr(settings, "AI_PROVIDER", "ollama")
+    monkeypatch.setattr(settings, "OLLAMA_MODEL", "m")
+    monkeypatch.setattr(
+        "src.ai.ollama._default_client",
+        httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+
+    get_provider().generate(SOURCE, json_output=True)
+
+    assert_no_pii(json.dumps(sent[0]))
+
+
+def test_reply_gets_real_values_back():
+    """Extraction still works: the model answers with tokens, callers get values."""
+    reply = json.dumps({"email": "[EMAIL_1]", "phone_number": "[PHONE_1]"})
+    provider, _ = recording_provider(reply)
+
+    result = json.loads(provider.generate(SOURCE).text)
+
+    assert result == {"email": EMAILS[0], "phone_number": PHONES[0]}
+
+
+def test_same_value_gets_same_token():
+    text, tokens = redact(f"{EMAILS[0]} and again {EMAILS[0]}")
+
+    assert text == "[EMAIL_1] and again [EMAIL_1]"
+    assert tokens == {"[EMAIL_1]": EMAILS[0]}
+
+
+@pytest.mark.parametrize(
+    "keep",
+    [
+        "NEQ 1171234567",  # 10-digit business number, no separators
+        "CRA BN 123456789RT0001",
+        "Invoice 2024-11-09",
+        "Version 1.2.3",
+        "Price $1,250.00",
+        "Postal code H2X 1Y4",
+    ],
+)
+def test_non_contact_numbers_are_left_alone(keep):
+    text, tokens = redact(keep)
+
+    assert text == keep
+    assert tokens == {}
+
+
+def test_restore_ignores_unknown_tokens():
+    assert (
+        restore("[PHONE_9] stays", {"[PHONE_1]": "514-555-1234"}) == "[PHONE_9] stays"
+    )
