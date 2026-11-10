@@ -188,3 +188,43 @@ TEST_DATABASE_URL='<dedicated PostgreSQL URL ending in _test>' \
 As with the existing baseline live-model test, these opt-in functions are
 excluded from CI coverage because CI has no Ollama service. They are run
 separately and their results are documented in the evaluation status.
+
+## Review inbox and draft detail (AT 4.1, #65)
+
+Criteria: (1) given a draft awaiting review, when a reviewer opens the review
+inbox, it is listed with the client name and generation time; (2) given a
+reviewer selects it, the detail view shows the evidence and the proposed
+profile fields side by side. Drafts are generated the way the app makes them:
+both files are uploaded through the API, then the onboarding job drafts them with
+a faked model, so CI needs no Ollama.
+
+| Criterion | Evidence |
+| --- | --- |
+| (1) The awaiting draft is listed with its client name and the time the job saved it; an approved draft and the empty placeholder are not | `test_review_inbox_acceptance.py::test_inbox_lists_the_awaiting_draft_with_client_name_and_time` |
+| (1) The inbox row shows the client name and the formatted generation time | `frontend/src/pages/ReviewInbox.acceptance.test.tsx` (criterion 1) |
+| (2) Opening the item with the IDs the inbox returned gives the proposed fields, and every quote cites a returned document and occurs in the uploaded file of that kind | `test_review_inbox_acceptance.py::test_selected_draft_opens_with_its_fields_and_evidence` |
+| (2) Clicking the row opens the detail page: field list and evidence panel in the same two-column body; choosing a field shows its quote and source document | `ReviewInbox.acceptance.test.tsx` (criterion 2) |
+| The frontend's API replies have the real response shape | `test_review_inbox_acceptance.py::test_frontend_fixture_has_the_real_response_shape` against `fixtures/review_inbox/responses.json` |
+| Empty state: no drafts gives `[]` and the inbox says so | `test_inbox_is_empty_when_no_draft_awaits_review`; `ReviewInbox.acceptance.test.tsx` (empty) |
+| Error state: the inbox says it couldn't load, and Try again loads it | `ReviewInbox.acceptance.test.tsx` (error) |
+
+Detailed filtering, ordering and 404 cases are in `test_reviews.py`, and the page
+states in `ReviewInboxPage.test.tsx` and `ReviewDraftPage.test.tsx`.
+
+```bash
+python -m pytest tests/test_review_inbox_acceptance.py tests/test_reviews.py -q
+cd frontend && npm test && npm run build
+```
+
+The frontend test was checked to fail when the inbox shows the wrong client
+name or time, links to the wrong draft, drops a field, shows no quotes, loses its
+empty message, or Try again does nothing. The backend test has not run locally
+yet (Postgres was down); once it is up, confirm it fails when `reviews.py`
+returns the client's `created_at` as the generation time, drops the
+`data != {}` filter, or returns another client's documents, then revert.
+
+**Limitations:** there is no authentication yet, so "a reviewer" is anyone who
+opens the page. "Side by side" is checked in the markup (both columns inside
+the two-column body), not visually; the CSS stacks them under 720px. The
+placeholder and approval steps call `/client-profiles` without `/api/v1`; update
+them, and re-run this suite, once #164 moves those routes.
