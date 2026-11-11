@@ -114,7 +114,6 @@ test('selects the first field and shows its quote and document', async () => {
   expect(evidence().getByRole('heading', { name: 'Name' })).toBeInTheDocument()
   expect(evidence().getByText('Contact name: Maya Chen', { selector: 'q' })).toBeInTheDocument()
   expect(evidence().getByText('intake.md · Intake')).toBeInTheDocument()
-  expect(evidence().getByText(/matched word for word/)).toBeInTheDocument()
 })
 
 test('clicking a field shows every quote with its document', async () => {
@@ -174,12 +173,35 @@ test('a quote that is both a source and a conflict side shows once, with its val
   ])
 })
 
+// Profile edits (PUT) accept any JSON, so the saved data can have the wrong types.
+test.each([
+  ['a string', 'Bathrooms'],
+  ['an object', { 0: 'Bathrooms' }],
+  ['null', null],
+])('a draft with needs as %s and other bad data still opens', async (_, needs) => {
+  const data = {
+    name: 42,
+    needs,
+    goals: [null, 7, 'Fill the winter schedule'],
+    source_references: 'none',
+    conflicts: { field: 'email' },
+    assessment: [],
+  }
+  mockDraft(reply(200, { ...DRAFT, version: { ...DRAFT.version, data } }))
+  render(<ReviewDraftPage profileId="p1" versionId="v2" />)
+
+  expect(await screen.findByRole('heading', { name: 'Plateau Basements' })).toBeInTheDocument()
+  expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual([
+    'Goal 1Fill the winter schedule',
+  ])
+  expect(evidence().getByText('No source linked to this field.')).toBeInTheDocument()
+})
+
 test('says when a field has no source, or was not found at all', async () => {
   await openDraft()
 
   await userEvent.click(row('Need 2'))
   expect(evidence().getByText('No source linked to this field.')).toBeInTheDocument()
-  expect(evidence().queryByText(/matched word for word/)).not.toBeInTheDocument()
 
   await userEvent.click(row('Website'))
   expect(evidence().getByText('Not found in the transcript or intake answers.')).toBeInTheDocument()

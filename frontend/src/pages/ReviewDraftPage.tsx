@@ -153,7 +153,6 @@ export default function ReviewDraftPage({ profileId, versionId }: ReviewDraftPag
                 Operon won't pick one. A reviewer decides which value to keep.
               </p>
             )}
-            <p className="review-matched">✓ Quotes were matched word for word in the files.</p>
           </>
         )}
       </section>
