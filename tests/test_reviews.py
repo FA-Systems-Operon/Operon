@@ -56,7 +56,9 @@ def test_generated_draft_appears_with_client_and_time(
 
 
 def test_empty_placeholder_is_not_listed(client, demo_client):
-    created = client.post("/client-profiles", params={"client_id": str(demo_client.id)})
+    created = client.post(
+        "/api/v1/client-profiles", params={"client_id": str(demo_client.id)}
+    )
     assert created.status_code == 201
     assert created.json()["status"] == "draft"
 
@@ -99,7 +101,7 @@ def test_a_correction_to_a_job_draft_replaces_it(
     db_session.commit()
 
     corrected = client.put(
-        f"/client-profiles/{placeholder.client_profile_id}",
+        f"/api/v1/client-profiles/{placeholder.client_profile_id}",
         json={**DRAFT, "name": "Maya Chen-Lee"},
     )
     assert corrected.status_code == 200
