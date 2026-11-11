@@ -74,7 +74,7 @@ def drafts_of(client, db, owner):
     )
     if profile is None:
         return []
-    response = client.get(f"/client-profiles/{profile.id}/versions")
+    response = client.get(f"/api/v1/client-profiles/{profile.id}/versions")
     assert response.status_code == 200, response.text
     return response.json()
 

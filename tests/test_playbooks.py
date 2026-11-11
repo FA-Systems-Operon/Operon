@@ -6,7 +6,7 @@ import uuid
 
 
 def test_create_playbook(client):
-    response = client.post("/playbooks")
+    response = client.post("/api/v1/playbooks")
 
     assert response.status_code == 201
     body = response.json()
@@ -24,10 +24,10 @@ def test_create_playbook(client):
 
 
 def test_update_playbook_creates_new_version(client):
-    create = client.post("/playbooks")
+    create = client.post("/api/v1/playbooks")
     playbook_id = create.json()["playbook_id"]
 
-    update = client.put(f"/playbooks/{playbook_id}", json={"step": "one"})
+    update = client.put(f"/api/v1/playbooks/{playbook_id}", json={"step": "one"})
 
     assert update.status_code == 200
     assert update.json()["version_number"] == 2
@@ -35,17 +35,17 @@ def test_update_playbook_creates_new_version(client):
 
 
 def test_update_playbook_increments_version_each_time(client):
-    create = client.post("/playbooks")
+    create = client.post("/api/v1/playbooks")
     playbook_id = create.json()["playbook_id"]
 
-    client.put(f"/playbooks/{playbook_id}", json={})
-    third = client.put(f"/playbooks/{playbook_id}", json={})
+    client.put(f"/api/v1/playbooks/{playbook_id}", json={})
+    third = client.put(f"/api/v1/playbooks/{playbook_id}", json={})
 
     assert third.json()["version_number"] == 3
 
 
 def test_update_unknown_playbook_returns_404(client):
-    response = client.put(f"/playbooks/{uuid.uuid4()}", json={})
+    response = client.put(f"/api/v1/playbooks/{uuid.uuid4()}", json={})
 
     assert response.status_code == 404
 
@@ -56,14 +56,14 @@ def test_update_does_not_inherit_approval_or_touch_old_version(
     """Editing an approved playbook is a NEW unapproved version; v1 is untouched."""
     v1 = playbook_factory(approved=True, data={"rule": "original"})
 
-    update = client.put(f"/playbooks/{v1.playbook_id}", json={"rule": "changed"})
+    update = client.put(f"/api/v1/playbooks/{v1.playbook_id}", json={"rule": "changed"})
 
     new = update.json()
     assert new["status"] == "draft"
     assert new["approved_at"] is None
     assert new["approved_by"] is None
 
-    versions = client.get(f"/playbooks/{v1.playbook_id}/versions").json()
+    versions = client.get(f"/api/v1/playbooks/{v1.playbook_id}/versions").json()
     assert versions[0]["status"] == "approved"
     assert versions[0]["approved_at"] is not None
     assert versions[0]["data"] == {"rule": "original"}  # not overwritten
@@ -74,12 +74,12 @@ def test_update_does_not_inherit_approval_or_touch_old_version(
 
 
 def test_list_playbook_versions_oldest_first(client):
-    create = client.post("/playbooks")
+    create = client.post("/api/v1/playbooks")
     playbook_id = create.json()["playbook_id"]
-    client.put(f"/playbooks/{playbook_id}", json={"v": 2})
-    client.put(f"/playbooks/{playbook_id}", json={"v": 3})
+    client.put(f"/api/v1/playbooks/{playbook_id}", json={"v": 2})
+    client.put(f"/api/v1/playbooks/{playbook_id}", json={"v": 3})
 
-    response = client.get(f"/playbooks/{playbook_id}/versions")
+    response = client.get(f"/api/v1/playbooks/{playbook_id}/versions")
 
     assert response.status_code == 200
     versions = response.json()
@@ -88,7 +88,7 @@ def test_list_playbook_versions_oldest_first(client):
 
 
 def test_list_versions_unknown_playbook_returns_404(client):
-    response = client.get(f"/playbooks/{uuid.uuid4()}/versions")
+    response = client.get(f"/api/v1/playbooks/{uuid.uuid4()}/versions")
 
     assert response.status_code == 404
 
@@ -148,7 +148,7 @@ def test_approve_requires_approved_by(client, playbook_factory):
     v1 = playbook_factory()
 
     response = client.post(
-        f"/playbooks/{v1.playbook_id}/versions/{v1.id}/approve", json={}
+        f"/api/v1/playbooks/{v1.playbook_id}/versions/{v1.id}/approve", json={}
     )
 
     assert response.status_code == 422
@@ -158,7 +158,7 @@ def test_approve_requires_approved_by(client, playbook_factory):
 
 
 def test_latest_approved_unknown_playbook_returns_404(client):
-    response = client.get(f"/playbooks/{uuid.uuid4()}/latest-approved")
+    response = client.get(f"/api/v1/playbooks/{uuid.uuid4()}/latest-approved")
 
     assert response.status_code == 404
 
@@ -166,7 +166,7 @@ def test_latest_approved_unknown_playbook_returns_404(client):
 def test_latest_approved_without_any_approval_returns_404(client, playbook_factory):
     v1 = playbook_factory()
 
-    response = client.get(f"/playbooks/{v1.playbook_id}/latest-approved")
+    response = client.get(f"/api/v1/playbooks/{v1.playbook_id}/latest-approved")
 
     assert response.status_code == 404
     assert response.json()["detail"] == "No approved version found"
@@ -175,7 +175,7 @@ def test_latest_approved_without_any_approval_returns_404(client, playbook_facto
 def test_latest_approved_returns_the_approved_version(client, playbook_factory):
     v1 = playbook_factory(approved=True)
 
-    response = client.get(f"/playbooks/{v1.playbook_id}/latest-approved")
+    response = client.get(f"/api/v1/playbooks/{v1.playbook_id}/latest-approved")
 
     assert response.status_code == 200
     assert response.json()["id"] == str(v1.id)
@@ -183,9 +183,9 @@ def test_latest_approved_returns_the_approved_version(client, playbook_factory):
 
 def test_latest_approved_ignores_newer_unapproved_drafts(client, playbook_factory):
     v1 = playbook_factory(approved=True)
-    client.put(f"/playbooks/{v1.playbook_id}", json={"draft": True})
+    client.put(f"/api/v1/playbooks/{v1.playbook_id}", json={"draft": True})
 
-    response = client.get(f"/playbooks/{v1.playbook_id}/latest-approved")
+    response = client.get(f"/api/v1/playbooks/{v1.playbook_id}/latest-approved")
 
     assert response.json()["id"] == str(v1.id)
 
@@ -196,12 +196,17 @@ def test_latest_approved_is_highest_version_not_latest_approval(
     """Approving an older version later must not roll the current record back."""
     v1 = playbook_factory()
     pid = v1.playbook_id
-    v2 = client.put(f"/playbooks/{pid}", json={"n": 2}).json()
-    v3 = client.put(f"/playbooks/{pid}", json={"n": 3}).json()
+    v2 = client.put(f"/api/v1/playbooks/{pid}", json={"n": 2}).json()
+    v3 = client.put(f"/api/v1/playbooks/{pid}", json={"n": 3}).json()
 
     api.approve_playbook(pid, v3["id"])
     api.approve_playbook(pid, v2["id"])  # approved afterwards, but older
 
-    response = client.get(f"/playbooks/{pid}/latest-approved")
+    response = client.get(f"/api/v1/playbooks/{pid}/latest-approved")
 
     assert response.json()["id"] == v3["id"]
+
+
+def test_old_unprefixed_playbooks_path_is_gone(client):
+    # Everything the frontend calls lives under /api/v1, which the proxy forwards.
+    assert client.post("/playbooks").status_code == 404

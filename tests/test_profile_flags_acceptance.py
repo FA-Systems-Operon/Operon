@@ -49,7 +49,7 @@ def test_generated_flags_survive_job_persistence_and_retrieval(
     assert job["status"] == "succeeded", job
     assert len(provider.prompts) == 1
 
-    url = f"/client-profiles/{original.client_profile_id}"
+    url = f"/api/v1/client-profiles/{original.client_profile_id}"
     versions = client.get(f"{url}/versions").json()
     saved = next(
         version for version in versions if version["id"] == job["result_version_id"]
@@ -129,7 +129,7 @@ def test_real_provider_job_saves_validated_flags(  # pragma: no cover
     job = get_job(client, demo_client, response.json())
     assert job["status"] == "succeeded", job
     versions = client.get(
-        f"/client-profiles/{original.client_profile_id}/versions"
+        f"/api/v1/client-profiles/{original.client_profile_id}/versions"
     ).json()
     saved = next(
         version for version in versions if version["id"] == job["result_version_id"]
