@@ -32,8 +32,24 @@ def test_extracts_normalized_transcript():
     ).encode("utf-8-sig")
 
     assert extract_txt(data) == (
-        "[00:01] Alice: Café.\n\n  [00:02] Bob: Keep  two spaces."
+        "[00:01] Alice: Café.\n\n  [00:02] Bob: Keep  two spaces.\n"
     )
+
+
+@pytest.mark.parametrize(
+    ("data", "expected"),
+    [
+        pytest.param(b"Alice: Hi.\n", "Alice: Hi.\n", id="lf"),
+        pytest.param(b"Alice: Hi.\r\n", "Alice: Hi.\n", id="crlf"),
+        pytest.param(b"Alice: Hi.\r", "Alice: Hi.\n", id="cr"),
+        pytest.param(b"Alice: Hi.\n\n \t\n", "Alice: Hi.\n", id="blank-lines-at-end"),
+        pytest.param(b"Alice: Hi.", "Alice: Hi.", id="no-newline"),
+        pytest.param(b"Alice: Hi.  ", "Alice: Hi.", id="trailing-spaces"),
+    ],
+)
+def test_keeps_only_the_files_own_last_newline(data: bytes, expected: str):
+    # #156: dropping it changed the model's draft for the same file.
+    assert extract_txt(data) == expected
 
 
 @pytest.mark.parametrize(
