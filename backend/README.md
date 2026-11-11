@@ -188,8 +188,8 @@ immutable snapshot data.
 
 | Request | Result |
 | --- | --- |
-| `GET /client-profiles/{profile_id}/latest-approved` | Highest numbered approved version of this profile. |
-| `GET /playbooks/{playbook_id}/latest-approved` | Highest numbered approved version of this playbook. |
+| `GET /api/v1/client-profiles/{profile_id}/latest-approved` | Highest numbered approved version of this profile. |
+| `GET /api/v1/playbooks/{playbook_id}/latest-approved` | Highest numbered approved version of this playbook. |
 
 Both endpoints return `200` with the version ID, parent ID, `version_number`,
 `data`, `created_at`, and `approved_at`. Ordering uses **version number**, not
@@ -269,7 +269,7 @@ CI command are in `tests/README.md`.
 
 ## Source-linked draft profiles (#40)
 
-`POST /client-profiles/{profile_id}/source-drafts` accepts the #39 output:
+`POST /api/v1/client-profiles/{profile_id}/source-drafts` accepts the #39 output:
 `name`, `needs`, `goals`, and `source_references` (each with `field`,
 `document_id`, and `quote`). Create the profile first using the existing endpoint.
 Documents must belong to that profile's client and have saved extracted text.
@@ -280,10 +280,10 @@ provenance, not whether the model's interpretation is correct.
 A successful request returns 201 with a new draft version. Profile values and
 references are stored together in the existing immutable `data` JSON snapshot;
 no migration is required, and old versions remain unchanged. Retrieve evidence
-through `GET /client-profiles/{profile_id}/versions` in each version's `data`.
+through `GET /api/v1/client-profiles/{profile_id}/versions` in each version's `data`.
 The existing latest-approved endpoint continues to return only approved versions.
-This follows the existing profile route prefix; frontend proxy integration is
-separate. Existing generic profile endpoints keep their current behavior.
+Like the other API routes, it lives under `/api/v1`, so the frontend reaches
+it through the Vite dev proxy. Existing generic profile endpoints keep their current behavior.
 
 ## Onboarding draft job (#36)
 
