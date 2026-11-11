@@ -17,6 +17,8 @@ type Request = { method: string; url: string; body: unknown }
 function fakeApi() {
   const requests: Request[] = []
   const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    // The nav's waiting-review count isn't part of the upload flow.
+    if (url === '/api/v1/reviews') return { ok: true, json: async () => [] } as Response
     const method = init?.method ?? 'GET'
     let body: unknown = null
     let answer: unknown = [{ id: CLIENT, name: 'Plateau Basements', created_at: '' }]

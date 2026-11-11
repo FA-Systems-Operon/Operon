@@ -48,7 +48,7 @@ export default function App() {
 
   return (
     <div className="app">
-      <TopNav active={page.tab} />
+      <TopNav active={page.tab} path={path} />
       <main className="page">{page.content}</main>
     </div>
   )
