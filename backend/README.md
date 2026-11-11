@@ -466,3 +466,27 @@ saved, which for a generated draft is when it was generated. `version_id` and
 
 The list is not paginated; it only holds unreviewed drafts. If it grows,
 cursor paging on `(created_at, version_id)` fits the existing order.
+
+## Review draft detail (#57)
+
+`GET /api/v1/reviews/profiles/{profile_id}/versions/{version_id}` returns what
+the review page needs to open one draft, in a single call:
+
+```json
+{
+  "version": { "id": "<uuid>", "client_profile_id": "<uuid>", "version_number": 2,
+               "status": "draft", "data": { "...": "the saved draft" },
+               "created_at": "...", "approved_by": null, "approved_at": null },
+  "client": { "id": "<uuid>", "name": "Maya's Bakery", "created_at": "..." },
+  "documents": [ { "id": "<uuid>", "original_filename": "call.txt",
+                   "kind": "transcript", "...": "same fields as the documents list" } ]
+}
+```
+
+`version` has the same shape as the profile versions list. `documents` are the
+client's source documents (oldest first, no storage key), so the page can show
+which file and kind each quote's `document_id` refers to. Any version can be
+opened, not only drafts awaiting review. The version is looked up within the
+profile: a version of another profile, or an unknown profile or version,
+returns `404`. The route is under `/api/v1` already and does not depend on the
+profile routes moving there.

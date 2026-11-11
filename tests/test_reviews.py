@@ -1,10 +1,11 @@
-"""Review inbox: latest profile drafts awaiting review (#54)."""
+"""Review inbox: latest profile drafts awaiting review (#54), and one draft (#57)."""
 
+import uuid
 from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from src.models import ClientProfileVersion, JobStatus, ReviewStatus
+from src.models import ClientProfileVersion, DocumentKind, JobStatus, ReviewStatus
 
 INBOX = "/api/v1/reviews"
 DRAFT = {"name": "Maya Chen", "needs": ["More bookings"], "source_references": []}
@@ -132,3 +133,87 @@ def test_no_drafts_returns_an_empty_list(client):
 
     assert response.status_code == 200
     assert response.json() == []
+
+
+def draft_url(profile_id, version_id):
+    return f"{INBOX}/profiles/{profile_id}/versions/{version_id}"
+
+
+def test_draft_returns_version_client_and_only_that_clients_documents(
+    client,
+    db_session,
+    demo_client,
+    client_factory,
+    profile_factory,
+    add_version,
+    stored_document,
+):
+    placeholder = profile_factory()
+    draft = add_version(placeholder.client_profile_id, 2)
+    transcript = stored_document(filename="call.txt")
+    transcript.kind = DocumentKind.TRANSCRIPT
+    db_session.commit()
+    stored_document(filename="other.txt", owner=client_factory("Other Client"))
+
+    response = client.get(draft_url(draft.client_profile_id, draft.id))
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["version"]["id"] == str(draft.id)
+    assert body["version"]["version_number"] == 2
+    assert body["version"]["data"] == DRAFT
+    assert body["version"]["status"] == "draft"
+    assert body["client"]["id"] == str(demo_client.id)
+    assert body["client"]["name"] == "Demo Client"
+    assert [(d["original_filename"], d["kind"]) for d in body["documents"]] == [
+        ("call.txt", "transcript")
+    ]
+    assert "storage_key" not in body["documents"][0]
+
+
+def test_approved_version_still_opens(client, profile_factory, add_version):
+    placeholder = profile_factory()
+    approved = add_version(
+        placeholder.client_profile_id, 2, status=ReviewStatus.APPROVED
+    )
+
+    response = client.get(draft_url(approved.client_profile_id, approved.id))
+
+    assert response.status_code == 200
+    assert response.json()["version"]["status"] == "approved"
+
+
+def test_draft_with_no_documents_returns_an_empty_list(
+    client, profile_factory, add_version
+):
+    draft = add_version(profile_factory().client_profile_id, 2)
+
+    response = client.get(draft_url(draft.client_profile_id, draft.id))
+
+    assert response.json()["documents"] == []
+
+
+@pytest.mark.parametrize(
+    "case", ["other_profile", "unknown_version", "unknown_profile"]
+)
+def test_draft_not_in_that_profile_is_not_found(
+    client, profile_factory, add_version, case
+):
+    draft = add_version(profile_factory().client_profile_id, 2)
+    other = profile_factory()
+    profile_id, version_id = draft.client_profile_id, draft.id
+    if case == "other_profile":
+        profile_id = other.client_profile_id
+    elif case == "unknown_version":
+        version_id = uuid.uuid4()
+    else:
+        profile_id = uuid.uuid4()
+
+    response = client.get(draft_url(profile_id, version_id))
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Profile version not found"
+
+
+def test_draft_with_invalid_ids_returns_422(client):
+    assert client.get(draft_url("not-a-uuid", uuid.uuid4())).status_code == 422
