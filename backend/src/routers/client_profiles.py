@@ -19,7 +19,7 @@ from src.versioning import (
     next_client_profile_version,
 )
 
-router = APIRouter(prefix="/client-profiles", tags=["client-profiles"])
+router = APIRouter(prefix="/api/v1/client-profiles", tags=["client-profiles"])
 
 DbSession = Annotated[Session, Depends(get_db)]
 
