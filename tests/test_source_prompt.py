@@ -384,6 +384,8 @@ def test_generation_aligns_case_and_spacing_to_exact_source_text(quote):
         pytest.param("my goal is for every single new inquiry", id="added-word"),
         pytest.param("my goal is for every old inquiry", id="changed-word"),
         pytest.param("every new inquiry is my goal", id="reordered"),
+        pytest.param("?", id="punctuation-only"),
+        pytest.param("   ", id="spaces-only"),
     ],
 )
 def test_generation_still_rejects_quotes_with_different_words(quote):
