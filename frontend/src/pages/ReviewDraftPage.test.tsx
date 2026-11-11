@@ -146,6 +146,34 @@ test('a field can be chosen from the keyboard, and a conflict shows both sides',
   expect(evidence().getByText(/won't pick one/)).toBeInTheDocument()
 })
 
+test('a quote that is both a source and a conflict side shows once, with its value', async () => {
+  const quote = 'call me on 514-555-0100'
+  const data = {
+    phone_number: '514-555-0100',
+    source_references: [{ field: 'phone_number', document_id: CALL, quote }],
+    conflicts: [
+      {
+        field: 'phone_number',
+        explanation: 'The sources give different numbers.',
+        alternatives: [
+          { value: '514-555-0100', document_id: CALL, quote },
+          { value: '438-555-0199', document_id: FORM, quote: 'Phone: 438-555-0199' },
+        ],
+      },
+    ],
+  }
+  mockDraft(reply(200, { ...DRAFT, version: { ...DRAFT.version, data } }))
+  render(<ReviewDraftPage profileId="p1" versionId="v2" />)
+
+  expect(await screen.findByRole('button', { name: /Phone number/ })).toHaveTextContent(
+    /2 sources$/,
+  )
+  expect(evidence().getAllByRole('listitem').map((item) => item.textContent)).toEqual([
+    `call.txt · Transcript514-555-0100${quote}`,
+    'intake.md · Intake438-555-0199Phone: 438-555-0199',
+  ])
+})
+
 test('says when a field has no source, or was not found at all', async () => {
   await openDraft()
 
