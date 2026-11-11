@@ -1,5 +1,12 @@
 import { afterEach, expect, test, vi } from 'vitest'
-import { ApiError, listClients, listReviews, startOnboardingJob, uploadDocument } from './api'
+import {
+  ApiError,
+  getReviewDraft,
+  listClients,
+  listReviews,
+  startOnboardingJob,
+  uploadDocument,
+} from './api'
 
 function response(status: number, body: unknown) {
   return {
@@ -50,6 +57,28 @@ test('listReviews throws an ApiError with the status on failure', async () => {
   expect(error).toBeInstanceOf(ApiError)
   expect(error.status).toBe(503)
   expect(error.detail).toBe('Database down')
+})
+
+test('getReviewDraft returns the draft, client and documents for that version', async () => {
+  const draft = { version: { id: 'v 2' }, client: { name: 'Acme' }, documents: [] }
+  const fetchMock = vi.fn().mockResolvedValue(response(200, draft))
+  vi.stubGlobal('fetch', fetchMock)
+
+  await expect(getReviewDraft('p/1', 'v 2')).resolves.toEqual(draft)
+  expect(fetchMock).toHaveBeenCalledWith('/api/v1/reviews/profiles/p%2F1/versions/v%202')
+})
+
+test('getReviewDraft throws an ApiError with the reason on failure', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue(response(404, { detail: 'Profile version not found' })),
+  )
+
+  const error = await getReviewDraft('p1', 'v9').catch((caught) => caught)
+
+  expect(error).toBeInstanceOf(ApiError)
+  expect(error.status).toBe(404)
+  expect(error.detail).toBe('Profile version not found')
 })
 
 test('uploadDocument posts the file and its kind as a form', async () => {

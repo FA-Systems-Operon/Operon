@@ -1,3 +1,5 @@
+import type { SourceLinkedDraft } from './components/draftSources'
+
 export type Client = {
   id: string
   name: string
@@ -41,6 +43,28 @@ export type ReviewInboxItem = {
   status: 'draft' | 'in_review'
 }
 
+export type ReviewStatus = 'draft' | 'in_review' | 'approved' | 'rejected' | 'stale'
+
+// One saved version of a client profile. Generated drafts keep the agent's output in data.
+export type ProfileVersion = {
+  id: string
+  client_profile_id: string
+  version_number: number
+  status: ReviewStatus
+  data: Partial<SourceLinkedDraft>
+  created_at: string
+  approved_by: string | null
+  approved_at: string | null
+}
+
+// Everything the review page needs to open one draft, in one call (#57).
+export type ReviewDraft = {
+  version: ProfileVersion
+  client: Client
+  // The client's source documents, to name the file each quote came from.
+  documents: SourceDocument[]
+}
+
 // A response the API answered with an error status (as opposed to no answer at all).
 export class ApiError extends Error {
   status: number
@@ -75,6 +99,16 @@ export async function listClients(): Promise<Client[]> {
 // Newest first, as the API sends them.
 export async function listReviews(): Promise<ReviewInboxItem[]> {
   const response = await fetch('/api/v1/reviews')
+  if (!response.ok) {
+    throw new ApiError(response.status, await readDetail(response))
+  }
+  return response.json()
+}
+
+export async function getReviewDraft(profileId: string, versionId: string): Promise<ReviewDraft> {
+  const response = await fetch(
+    `/api/v1/reviews/profiles/${encodeURIComponent(profileId)}/versions/${encodeURIComponent(versionId)}`,
+  )
   if (!response.ok) {
     throw new ApiError(response.status, await readDetail(response))
   }

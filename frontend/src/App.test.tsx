@@ -70,11 +70,20 @@ test('Reviews opens the review inbox and marks the Reviews link', async () => {
   expect(await screen.findByText('No drafts waiting for review.')).toBeInTheDocument()
 })
 
-test('a draft link from the inbox opens a placeholder under Reviews', () => {
+test('a draft link from the inbox opens that draft under Reviews', async () => {
+  const fetchMock = vi.fn().mockImplementation(() =>
+    jsonResponse({
+      version: { version_number: 2, status: 'draft', data: {}, created_at: '2026-11-09T14:03:00Z' },
+      client: { id: 'c1', name: 'Plateau Basements' },
+      documents: [],
+    }),
+  )
+  vi.stubGlobal('fetch', fetchMock)
   openAt('#/reviews/draft?profile=p1&version=v2')
 
-  expect(screen.getByRole('heading', { name: 'Draft review' })).toBeInTheDocument()
+  expect(await screen.findByRole('heading', { name: 'Plateau Basements' })).toBeInTheDocument()
   expect(screen.getByRole('link', { name: 'Reviews' })).toHaveAttribute('aria-current', 'page')
+  expect(fetchMock).toHaveBeenCalledWith('/api/v1/reviews/profiles/p1/versions/v2')
 })
 
 test('Add sources opens under the Brain tab with the client from the link', async () => {

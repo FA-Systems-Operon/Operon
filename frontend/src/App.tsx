@@ -4,6 +4,7 @@ import TopNav, { type Tab } from './components/TopNav'
 import AddSourcesPage from './pages/AddSourcesPage'
 import CommandPage from './pages/CommandPage'
 import PlaceholderPage from './pages/PlaceholderPage'
+import ReviewDraftPage from './pages/ReviewDraftPage'
 import ReviewInboxPage from './pages/ReviewInboxPage'
 import StatusPage from './pages/StatusPage'
 import { useRoute } from './router'
@@ -24,9 +25,21 @@ function pageFor(path: string, query: URLSearchParams): Page {
       return { tab: 'workforce', content: <PlaceholderPage title="Workforce" /> }
     case '/reviews':
       return { tab: 'reviews', content: <ReviewInboxPage /> }
-    // One draft from the inbox; #57 replaces the placeholder.
-    case '/reviews/draft':
-      return { tab: 'reviews', content: <PlaceholderPage title="Draft review" /> }
+    case '/reviews/draft': {
+      const profileId = query.get('profile')
+      const versionId = query.get('version')
+      // The key starts fresh (no selected field) when the link opens another draft.
+      return {
+        tab: 'reviews',
+        content: (
+          <ReviewDraftPage
+            key={`${profileId}/${versionId}`}
+            profileId={profileId}
+            versionId={versionId}
+          />
+        ),
+      }
+    }
     case '/sources/new': {
       const clientId = query.get('client')
       // The key starts a fresh form when the chosen client in the link changes.
