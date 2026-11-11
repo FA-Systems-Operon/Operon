@@ -1,0 +1,62 @@
+{
+  "inbox_item": {
+    "version_id": "5c0f9a1e-0000-4000-8000-000000000003",
+    "client_profile_id": "5c0f9a1e-0000-4000-8000-000000000002",
+    "version_number": 1,
+    "client_id": "5c0f9a1e-0000-4000-8000-000000000001",
+    "client_name": "Plateau Basements",
+    "created_at": "2026-11-09T14:03:12.511000Z",
+    "status": "draft"
+  },
+  "draft": {
+    "version": {
+      "id": "5c0f9a1e-0000-4000-8000-000000000003",
+      "client_profile_id": "5c0f9a1e-0000-4000-8000-000000000002",
+      "version_number": 1,
+      "status": "draft",
+      "data": {
+        "name": "Maya Chen",
+        "needs": ["More qualified bookings"],
+        "goals": ["30 bookings per month", "Launch a referral program"],
+        "source_references": [
+          {"field": "name", "document_id": "5c0f9a1e-0000-4000-8000-000000000005", "quote": "Contact name: Maya Chen"},
+          {"field": "needs/0", "document_id": "5c0f9a1e-0000-4000-8000-000000000004", "quote": "I need more qualified bookings."},
+          {"field": "goals/0", "document_id": "5c0f9a1e-0000-4000-8000-000000000004", "quote": "We want 30 bookings per month."},
+          {"field": "goals/1", "document_id": "5c0f9a1e-0000-4000-8000-000000000005", "quote": "Goal: Launch a referral program"}
+        ],
+        "conflicts": [],
+        "assessment": {"rules_version": 1, "missing_fields": ["website", "email"]}
+      },
+      "created_at": "2026-11-09T14:03:12.511000Z",
+      "approved_by": null,
+      "approved_at": null
+    },
+    "client": {
+      "id": "5c0f9a1e-0000-4000-8000-000000000001",
+      "name": "Plateau Basements",
+      "created_at": "2026-11-09T14:01:40.020000Z"
+    },
+    "documents": [
+      {
+        "id": "5c0f9a1e-0000-4000-8000-000000000004",
+        "client_id": "5c0f9a1e-0000-4000-8000-000000000001",
+        "original_filename": "transcript.txt",
+        "content_type": "text/plain",
+        "size_bytes": 102,
+        "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "kind": "transcript",
+        "uploaded_at": "2026-11-09T14:02:05.300000Z"
+      },
+      {
+        "id": "5c0f9a1e-0000-4000-8000-000000000005",
+        "client_id": "5c0f9a1e-0000-4000-8000-000000000001",
+        "original_filename": "intake.txt",
+        "content_type": "text/plain",
+        "size_bytes": 76,
+        "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "kind": "intake",
+        "uploaded_at": "2026-11-09T14:02:06.100000Z"
+      }
+    ]
+  }
+}
