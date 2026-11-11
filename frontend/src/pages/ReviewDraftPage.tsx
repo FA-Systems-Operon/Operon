@@ -19,12 +19,23 @@ type ReviewDraftPageProps = {
   versionId: string | null
 }
 
-// The quotes behind a row: its own references, then each side of a conflict.
+const quoteKey = ({ document_id, quote }: { document_id: string; quote: string }) =>
+  JSON.stringify([document_id, quote])
+
+// The quotes behind a row: its own references, then each side of a conflict. A quote
+// that is both (same document and words) shows once, as the side with its value.
 function evidenceFor(row: ReviewRow) {
-  return [
-    ...row.references.map(({ document_id, quote }) => ({ document_id, quote, value: null })),
-    ...row.conflicts.flatMap((conflict) => conflict.alternatives),
+  const sides = row.conflicts.flatMap((conflict) => conflict.alternatives)
+  const sideKeys = new Set(sides.map(quoteKey))
+  const evidence = [
+    ...row.references
+      .filter((reference) => !sideKeys.has(quoteKey(reference)))
+      .map(({ document_id, quote }) => ({ document_id, quote, value: null as string | null })),
+    ...sides,
   ]
+  return evidence.filter(
+    (item, index) => evidence.findIndex((other) => quoteKey(other) === quoteKey(item)) === index,
+  )
 }
 
 export default function ReviewDraftPage({ profileId, versionId }: ReviewDraftPageProps) {
