@@ -196,7 +196,7 @@ def test_start_saves_one_pending_job_for_the_pair(
 
 
 def test_draft_uses_both_files_without_manual_steps(
-    client, db_session, demo_client, fake_model
+    client, db_session, demo_client, fake_model, signed_in_user
 ):
     provider = fake_model()
 
@@ -216,6 +216,12 @@ def test_draft_uses_both_files_without_manual_steps(
     cited = {ref["document_id"] for ref in version.data["source_references"]}
     assert cited == {transcript["id"], intake["id"]}
     assert version.status.value == "draft"
+    event = db_session.scalars(
+        select(AuditEvent).where(AuditEvent.action == "draft_created")
+    ).one()
+    assert event.actor_id == signed_in_user.id
+    assert event.object_id == version.client_profile_id
+    assert event.version_id == version.id
 
 
 def test_draft_ignores_the_clients_other_documents(

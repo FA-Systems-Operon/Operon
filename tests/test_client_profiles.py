@@ -2,6 +2,10 @@
 
 import uuid
 
+from sqlalchemy import select
+
+from src.models import AuditEvent
+
 # --- POST /client-profiles ---
 
 
@@ -25,7 +29,9 @@ def test_create_client_profile(client, demo_client):
 # --- PUT /client-profiles/{id} ---
 
 
-def test_update_client_profile_creates_new_version(client, demo_client):
+def test_update_client_profile_creates_new_version(
+    client, db_session, demo_client, signed_in_user
+):
     create = client.post("/client-profiles", params={"client_id": str(demo_client.id)})
     profile_id = create.json()["client_profile_id"]
 
@@ -34,6 +40,16 @@ def test_update_client_profile_creates_new_version(client, demo_client):
     assert update.status_code == 200
     assert update.json()["version_number"] == 2
     assert update.json()["data"] == {"key": "value"}
+    events = {
+        event.action: event
+        for event in db_session.scalars(
+            select(AuditEvent).where(AuditEvent.object_id == uuid.UUID(profile_id))
+        )
+    }
+    assert set(events) == {"draft_created", "edit"}
+    assert events["draft_created"].version_id == uuid.UUID(create.json()["id"])
+    assert events["edit"].version_id == uuid.UUID(update.json()["id"])
+    assert events["edit"].actor_id == signed_in_user.id
 
 
 def test_update_client_profile_increments_version_each_time(client, demo_client):

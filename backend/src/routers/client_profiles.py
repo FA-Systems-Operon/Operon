@@ -9,8 +9,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from src.ai.source_prompt import SourceLinkedProfile
+from src.audit import record_audit_event
+from src.auth import current_user
 from src.db import get_db
-from src.models import ClientProfile, ClientProfileVersion, ReviewStatus
+from src.models import ClientProfile, ClientProfileVersion, ReviewStatus, User
 from src.profile_sources import save_source_profile
 from src.schemas import ApproveIn, ClientProfileVersionOut, ProfileApprovalOut
 from src.staleness import mark_stale_for_client_profile
@@ -22,12 +24,15 @@ from src.versioning import (
 router = APIRouter(prefix="/client-profiles", tags=["client-profiles"])
 
 DbSession = Annotated[Session, Depends(get_db)]
+SignedInUser = Annotated[User, Depends(current_user)]
 
 
 @router.post(
     "", response_model=ClientProfileVersionOut, status_code=status.HTTP_201_CREATED
 )
-def create_client_profile(client_id: uuid.UUID, db: DbSession) -> ClientProfileVersion:
+def create_client_profile(
+    client_id: uuid.UUID, db: DbSession, actor: SignedInUser
+) -> ClientProfileVersion:
     """Create a new client profile and its first version."""
     profile = ClientProfile(client_id=client_id)
     db.add(profile)
@@ -39,6 +44,15 @@ def create_client_profile(client_id: uuid.UUID, db: DbSession) -> ClientProfileV
         data={},
     )
     db.add(version)
+    db.flush()
+    record_audit_event(
+        db,
+        actor_id=actor.id,
+        action="draft_created",
+        object_type="client_profile",
+        object_id=profile.id,
+        version_id=version.id,
+    )
     db.commit()
     db.refresh(version)
     return version
@@ -46,7 +60,7 @@ def create_client_profile(client_id: uuid.UUID, db: DbSession) -> ClientProfileV
 
 @router.put("/{profile_id}", response_model=ClientProfileVersionOut)
 def update_client_profile(
-    profile_id: uuid.UUID, data: dict, db: DbSession
+    profile_id: uuid.UUID, data: dict, db: DbSession, actor: SignedInUser
 ) -> ClientProfileVersion:
     """Create a new immutable version of a client profile instead of overwriting."""
     profile = db.get(ClientProfile, profile_id)
@@ -60,6 +74,15 @@ def update_client_profile(
         data=data,
     )
     db.add(version)
+    db.flush()
+    record_audit_event(
+        db,
+        actor_id=actor.id,
+        action="edit",
+        object_type="client_profile",
+        object_id=profile_id,
+        version_id=version.id,
+    )
     db.commit()
     db.refresh(version)
     return version
@@ -71,11 +94,19 @@ def update_client_profile(
     status_code=status.HTTP_201_CREATED,
 )
 def create_source_draft(
-    profile_id: uuid.UUID, body: SourceLinkedProfile, db: DbSession
+    profile_id: uuid.UUID, body: SourceLinkedProfile, db: DbSession, actor: SignedInUser
 ) -> ClientProfileVersion:
     """Save a generated draft only when its evidence matches stored client text."""
     try:
         version = save_source_profile(db, profile_id, body)
+        record_audit_event(
+            db,
+            actor_id=actor.id,
+            action="draft_created",
+            object_type="client_profile",
+            object_id=profile_id,
+            version_id=version.id,
+        )
         db.commit()
     except LookupError as error:
         db.rollback()
