@@ -120,3 +120,66 @@ describe('reviewRows', () => {
     expect(reviewRows({ ...empty, ...flags })).toEqual({ rows: [], unsupported: true })
   })
 })
+
+// Profile edits (PUT) accept any JSON, so saved data can have the wrong types.
+describe('draft data of the wrong type', () => {
+  const malformed = (data: unknown) => data as Partial<SourceLinkedDraft>
+
+  it.each([
+    ['a string', 'Payroll help'],
+    ['an object', { 0: 'Payroll help' }],
+    ['null', null],
+  ])('treats needs and goals given as %s as empty', (_, value) => {
+    const fields = mapSourceReferences(malformed({ name: 'Ada', needs: value, goals: value }))
+    expect(fields.map((field) => field.key)).toEqual(['name'])
+  })
+
+  it.each([null, 'draft', ['Payroll help']])('treats a whole draft of %j as empty', (data) => {
+    expect(reviewRows(malformed(data))).toEqual({ rows: [], unsupported: false })
+  })
+
+  it('skips non-string items and keeps each reference on its own item', () => {
+    const fields = mapSourceReferences(
+      malformed({
+        needs: ['Payroll help', 7, null, { text: 'Taxes' }, 'Bookkeeping'],
+        source_references: [
+          { field: 'needs/1', document_id: DOC, quote: 'about the 7' },
+          { field: 'needs/4', document_id: DOC, quote: 'the books are behind' },
+        ],
+      }),
+    )
+    expect(fields.map(({ key, label, value, references }) => [key, label, value, references.length])).toEqual([
+      ['needs/0', 'Need 1', 'Payroll help', 0],
+      ['needs/4', 'Need 2', 'Bookkeeping', 1],
+    ])
+  })
+
+  it('treats a name, field value or source_references of the wrong type as empty', () => {
+    const fields = mapSourceReferences(
+      malformed({
+        name: 42,
+        email: { address: 'ada@example.test' },
+        needs: ['Payroll help'],
+        source_references: { field: 'needs/0', document_id: DOC, quote: 'payroll' },
+      }),
+    )
+    expect(fields).toEqual([{ key: 'needs/0', label: 'Need 1', value: 'Payroll help', references: [] }])
+  })
+
+  it('skips malformed references, conflicts and assessments', () => {
+    const quote = 'ada@example.test'
+    const { rows, unsupported } = reviewRows(
+      malformed({
+        email: 'ada@example.test',
+        source_references: [null, 'email', { field: 'email', document_id: DOC }, { field: 'email', document_id: DOC, quote }],
+        conflicts: [null, { field: 7 }, { field: 'phone_number', explanation: { why: 1 }, alternatives: 'both' }],
+        assessment: { rules_version: 1, missing_fields: 'website' },
+      }),
+    )
+    expect(unsupported).toBe(false)
+    expect(rows.map(({ key, flag, references, conflicts }) => [key, flag, references, conflicts])).toEqual([
+      ['phone_number', 'conflict', [], [{ field: 'phone_number', explanation: '', alternatives: [] }]],
+      ['email', null, [{ field: 'email', document_id: DOC, quote }], []],
+    ])
+  })
+})
