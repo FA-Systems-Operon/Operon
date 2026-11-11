@@ -14,16 +14,21 @@ const DRAFT_URL = `/api/v1/reviews/profiles/${ITEM.client_profile_id}/versions/$
 
 type Reply = [status: number, body: unknown]
 
-// Answers the inbox with each reply in turn (the last one repeats) and the draft.
-function fakeApi(...inbox: Reply[]) {
+// Answers every /api/v1/reviews call with the same reply until the test switches it.
+// The nav's waiting-count badge (TopNav) asks too, on load and on each route change,
+// so both see the same inbox, however many times either asks. The draft URL gets the draft.
+function fakeApi(inbox: Reply) {
+  let reply = inbox
   const fetchMock = vi.fn(async (url: string) => {
-    const [status, body]: Reply =
-      url === '/api/v1/reviews' ? (inbox.shift() ?? [200, [ITEM]]) : [200, DRAFT]
     if (url !== '/api/v1/reviews' && url !== DRAFT_URL) throw new Error(`Unexpected ${url}`)
+    const [status, body]: Reply = url === DRAFT_URL ? [200, DRAFT] : reply
     return { ok: status < 400, status, json: async () => body } as Response
   })
   vi.stubGlobal('fetch', fetchMock)
-  return fetchMock
+  const answerInboxWith = (next: Reply) => {
+    reply = next
+  }
+  return { fetchMock, answerInboxWith }
 }
 
 function openInbox() {
@@ -50,14 +55,16 @@ test('criterion 1: the draft is listed with its client name and generation time'
 })
 
 test('criterion 2: selecting the draft opens its fields and evidence side by side', async () => {
-  const fetchMock = fakeApi([200, [ITEM]])
+  const { fetchMock } = fakeApi([200, [ITEM]])
   openInbox()
 
   await userEvent.click(await screen.findByRole('link', { name: /Plateau Basements/ }))
 
   expect(await screen.findByRole('heading', { name: 'Plateau Basements' })).toBeInTheDocument()
-  expect(fetchMock).toHaveBeenLastCalledWith(DRAFT_URL)
-  expect(screen.getByRole('link', { name: 'Reviews' })).toHaveAttribute('aria-current', 'page')
+  // The nav badge may ask for the inbox again after the route change, so not "last".
+  expect(fetchMock).toHaveBeenCalledWith(DRAFT_URL)
+  // Named "Reviews, N waiting" while drafts are waiting.
+  expect(screen.getByRole('link', { name: /^Reviews/ })).toHaveAttribute('aria-current', 'page')
   // The proposed fields, one button each, and the evidence for the selected one.
   const fields = screen.getByRole('button', { name: /^Name/ }).closest('ul')!
   expect(
@@ -94,10 +101,11 @@ test('an empty inbox says no drafts are waiting', async () => {
 })
 
 test('an inbox that fails to load says so, and Try again loads the draft', async () => {
-  fakeApi([500, {}], [200, [ITEM]])
+  const { answerInboxWith } = fakeApi([500, {}])
   openInbox()
 
   expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't load the drafts")
+  answerInboxWith([200, [ITEM]])
   await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
 
   expect(await screen.findByRole('link', { name: /Plateau Basements/ })).toBeInTheDocument()
