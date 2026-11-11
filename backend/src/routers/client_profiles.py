@@ -14,7 +14,7 @@ from src.auth import current_user
 from src.db import get_db
 from src.models import ClientProfile, ClientProfileVersion, ReviewStatus, User
 from src.profile_sources import save_source_profile
-from src.schemas import ApproveIn, ClientProfileVersionOut, ProfileApprovalOut
+from src.schemas import ClientProfileVersionOut, ProfileApprovalOut
 from src.staleness import mark_stale_for_client_profile
 from src.versioning import (
     get_latest_approved_client_profile_version,
@@ -152,7 +152,7 @@ def latest_approved_client_profile(
     "/{profile_id}/versions/{version_id}/approve", response_model=ProfileApprovalOut
 )
 def approve_client_profile_version(
-    profile_id: uuid.UUID, version_id: uuid.UUID, body: ApproveIn, db: DbSession
+    profile_id: uuid.UUID, version_id: uuid.UUID, db: DbSession, actor: SignedInUser
 ) -> ProfileApprovalOut:
     """Approve one version, then mark artifacts built from older versions stale.
 
@@ -176,11 +176,19 @@ def approve_client_profile_version(
         raise HTTPException(status.HTTP_409_CONFLICT, "Version is already approved")
 
     version.status = ReviewStatus.APPROVED
-    version.approved_by = body.approved_by
+    version.approved_by = actor.id
     version.approved_at = datetime.now(timezone.utc)
     db.flush()
 
     stale = mark_stale_for_client_profile(db, profile_id)
+    record_audit_event(
+        db,
+        actor_id=actor.id,
+        action="approve",
+        object_type="client_profile",
+        object_id=profile_id,
+        version_id=version.id,
+    )
     db.commit()
     return ProfileApprovalOut(
         version=ClientProfileVersionOut.model_validate(version),

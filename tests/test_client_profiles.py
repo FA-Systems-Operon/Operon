@@ -128,12 +128,13 @@ def test_approve_client_profile_version(api, profile_factory):
     assert body["newly_stale_artifact_version_ids"] == []  # nothing depended on it
 
 
-def test_approve_already_approved_version_returns_409(api, profile_factory):
+def test_approve_already_approved_version_returns_409(api, db_session, profile_factory):
     v1 = profile_factory(approved=True)
 
     response = api.approve_profile(v1.client_profile_id, v1.id)
 
     assert response.status_code == 409
+    assert db_session.scalars(select(AuditEvent)).first() is None
 
 
 def test_approve_unknown_version_returns_404(api, profile_factory):
@@ -164,14 +165,21 @@ def test_approve_version_of_a_different_profile_returns_404(
     assert response.status_code == 404
 
 
-def test_approve_requires_approved_by(client, profile_factory):
-    v1 = profile_factory()
-
+def test_approval_audit_uses_session_actor(
+    client, db_session, profile_factory, signed_in_user
+):
+    version = profile_factory()
     response = client.post(
-        f"/client-profiles/{v1.client_profile_id}/versions/{v1.id}/approve", json={}
+        f"/client-profiles/{version.client_profile_id}/versions/{version.id}/approve",
+        json={"approved_by": str(uuid.uuid4())},
     )
-
-    assert response.status_code == 422
+    assert response.status_code == 200
+    assert response.json()["version"]["approved_by"] == str(signed_in_user.id)
+    audit = db_session.scalars(select(AuditEvent)).one()
+    assert audit.actor_id == signed_in_user.id
+    assert audit.action == "approve"
+    assert audit.object_id == version.client_profile_id
+    assert audit.version_id == version.id
 
 
 # --- GET /client-profiles/{id}/latest-approved ---

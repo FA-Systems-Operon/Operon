@@ -250,9 +250,9 @@ class OperonApi:
     """The HTTP calls the staleness tests act through. Every id argument may be a
     UUID, a str, or None, so ORM rows and JSON responses can be passed alike."""
 
-    def __init__(self, http):
+    def __init__(self, http, reviewer):
         self.http = http
-        self.reviewer = str(uuid.uuid4())
+        self.reviewer = str(reviewer)
 
     @staticmethod
     def _s(value):
@@ -329,8 +329,8 @@ class OperonApi:
 
 
 @pytest.fixture
-def api(client):
-    return OperonApi(client)
+def api(client, signed_in_user):
+    return OperonApi(client, signed_in_user.id)
 
 
 @pytest.fixture
