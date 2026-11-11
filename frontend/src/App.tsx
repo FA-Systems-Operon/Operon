@@ -10,7 +10,12 @@ import StatusPage from './pages/StatusPage'
 import LoginPage from './pages/LoginPage'
 import AcceptInvitePage from './pages/AcceptInvitePage'
 
-import { getCurrentUser, isPublicRoute, type AuthStatus } from './auth'
+import {
+  getCurrentUser,
+  isPublicRoute,
+  logout,
+  type AuthStatus,
+} from './auth'
 import { useRoute } from './router'
 
 type Page = {
@@ -76,6 +81,9 @@ function pageFor(path: string, query: URLSearchParams): Page {
 }
 
 export default function App() {
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [logoutError, setLogoutError] = useState('')
+
   const { path, query } = useRoute()
 
   const [authStatus, setAuthStatus] =
@@ -109,6 +117,25 @@ export default function App() {
       active = false
     }
   }, [])
+
+  async function handleLogout() {
+  if (isLoggingOut) return
+
+  setIsLoggingOut(true)
+  setLogoutError('')
+
+  try {
+    await logout()
+
+    // Only mark the user signed out if the server confirms success.
+    setAuthStatus('unauthenticated')
+    window.location.hash = '#/login'
+  } catch {
+    setLogoutError('Unable to log out. Please try again.')
+  } finally {
+    setIsLoggingOut(false)
+  }
+}
 
   // Keep the original destination, including query parameters.
   useEffect(() => {
@@ -166,7 +193,12 @@ const page = pageFor(path, query)
 
   return (
     <div className="app">
-      <TopNav active={page.tab} />
+      <TopNav
+        active={page.tab}
+        onLogout={handleLogout}
+        isLoggingOut={isLoggingOut}
+       logoutError={logoutError}
+      />
       <main className="page">{page.content}</main>
     </div>
   )

@@ -1,3 +1,4 @@
+
 export type Tab = 'command' | 'brain' | 'workforce' | 'reviews'
 
 const TABS: { id: Tab; label: string; href: string }[] = [
@@ -8,9 +9,17 @@ const TABS: { id: Tab; label: string; href: string }[] = [
 
 type TopNavProps = {
   active: Tab | null
+  onLogout: () => Promise<void>
+  isLoggingOut: boolean
+  logoutError?: string
 }
 
-export default function TopNav({ active }: TopNavProps) {
+export default function TopNav({
+  active,
+  onLogout,
+  isLoggingOut,
+  logoutError,
+}: TopNavProps) {
   const current = (tab: Tab) => (active === tab ? 'page' : undefined)
 
   return (
@@ -39,9 +48,26 @@ export default function TopNav({ active }: TopNavProps) {
         </ul>
       </nav>
 
-      <a className="topnav-reviews" href="#/reviews" aria-current={current('reviews')}>
-        Reviews
-      </a>
+      <div className="topnav-actions">
+        <a
+          className="topnav-reviews"
+          href="#/reviews"
+          aria-current={current('reviews')}
+        >
+          Reviews
+        </a>
+
+        <button
+          type="button"
+          className="topnav-logout"
+          onClick={() => void onLogout()}
+          disabled={isLoggingOut}
+        >
+          {isLoggingOut ? 'Logging out...' : 'Log out'}
+        </button>
+
+        {logoutError && <span role="alert">{logoutError}</span>}
+      </div>
     </header>
   )
 }

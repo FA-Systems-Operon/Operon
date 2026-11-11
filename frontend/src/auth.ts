@@ -30,6 +30,19 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
   return response.json() as Promise<AuthUser>
 }
 
+
+export async function logout(): Promise<void> {
+  const response = await fetch('/api/v1/logout', {
+    method: 'POST',
+    credentials: 'include',
+  })
+
+  if (!response.ok) {
+    throw new Error('Unable to log out. Please try again.')
+  }
+}
+
+
 // These routes must remain accessible without login.
 export function isPublicRoute(path: string): boolean {
   return path === '/login' || path === '/accept-invite'
