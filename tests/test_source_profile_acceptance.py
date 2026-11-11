@@ -111,7 +111,7 @@ def test_every_saved_field_links_to_its_source_passage(
     provider = FakeProvider(json.dumps(model_reply(example["draft"], sources)))
 
     draft = generate_source_profile(sources, provider)
-    url = f"/client-profiles/{profile.client_profile_id}"
+    url = f"/api/v1/client-profiles/{profile.client_profile_id}"
     response = client.post(f"{url}/source-drafts", json=draft.model_dump())
     assert response.status_code == 201
     saved = client.get(f"{url}/versions").json()[-1]["data"]
@@ -152,7 +152,8 @@ def test_real_quote_cited_from_the_wrong_document_is_not_saved(
     payload["source_references"][0]["document_id"] = transcript.document_id
 
     response = client.post(
-        f"/client-profiles/{profile.client_profile_id}/source-drafts", json=payload
+        f"/api/v1/client-profiles/{profile.client_profile_id}/source-drafts",
+        json=payload,
     )
 
     assert response.status_code == 422
