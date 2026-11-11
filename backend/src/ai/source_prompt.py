@@ -1,6 +1,7 @@
 """Source-linked profile prompt and response format for task #39."""
 
 import json
+import re
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -202,8 +203,10 @@ def validate_generated_profile(
     """Complete literal scalar evidence, then apply the same strict validator.
 
     This does not guess provenance: only exact value occurrences in the supplied
-    source pair can supply missing scalar references. Terminal punctuation can
-    be aligned only to an exact source substring; unsupported evidence is rejected. Conflict evidence stays in alternatives.
+    source pair can supply missing scalar references. A quote that differs from
+    the source only in case, spacing or terminal punctuation is replaced by the
+    source's exact text; unsupported evidence is rejected. Conflict evidence
+    stays in alternatives.
     """
     profile = SourceLinkedProfile.model_validate_json(text)
     documents = {source.document_id: source.text for source in sources}
@@ -212,11 +215,19 @@ def validate_generated_profile(
         text = documents.get(document_id, "")
         if quote in text:
             return quote
-        # Models sometimes finish an excerpt with punctuation absent from the
-        # source. Only trim it if the result is an exact substring of that same
-        # document; never use fuzzy matching or change an unsupported passage.
-        trimmed = quote.rstrip(".!?")
-        return trimmed if trimmed and trimmed in text else quote
+        # Models sometimes change the case or spacing of an excerpt, or finish it
+        # with punctuation absent from the source (#156). Look for the same words
+        # in the same order and keep the document's own text. Words are never
+        # added, dropped or changed, so an unsupported passage is still rejected.
+        for candidate in (quote, quote.rstrip(".!?")):
+            words = candidate.split()
+            if not words:
+                continue
+            pattern = r"\s+".join(re.escape(word) for word in words)
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                return match.group()
+        return quote
 
     profile = profile.model_copy(
         update={

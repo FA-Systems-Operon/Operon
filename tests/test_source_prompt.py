@@ -331,6 +331,61 @@ def test_generation_aligns_added_terminal_punctuation_to_exact_source_text():
     draft = validate_generated_profile(json.dumps(payload), sources)
     assert draft.source_references[0].quote == "Our page is facebook.com/river"
     assert draft.source_references[0].quote in sources[0].text
-    payload["source_references"][0]["quote"] = "Our page IS facebook.com/river."
+    payload["source_references"][0]["quote"] = "Our page WAS facebook.com/river."
     with pytest.raises(ValueError, match="occur exactly"):
         validate_generated_profile(json.dumps(payload), sources)
+
+
+def goal_quote_payload(quote: str) -> str:
+    return json.dumps(
+        {
+            "name": None,
+            "needs": [],
+            "goals": ["A reply to every new inquiry within one day"],
+            "source_references": [
+                {"field": "goals/0", "document_id": "call", "quote": quote}
+            ],
+        }
+    )
+
+
+GOAL_SOURCES = [
+    SourceInput(
+        document_id="call",
+        kind="transcript",
+        text="Jordan: My goal is for every new inquiry\nto get a reply within one day.",
+    )
+]
+
+
+@pytest.mark.parametrize(
+    "quote",
+    [
+        pytest.param("my goal is for every new inquiry", id="case"),
+        pytest.param("My goal  is for every new inquiry", id="extra-space"),
+        pytest.param("inquiry to get a reply", id="line-break-as-space"),
+        pytest.param("MY GOAL is for every new inquiry.", id="case-and-period"),
+    ],
+)
+def test_generation_aligns_case_and_spacing_to_exact_source_text(quote):
+    # #156: the model quoted "my goal is ..." from a transcript that says "My goal".
+    with pytest.raises(ValueError, match="occur exactly"):
+        parse_source_profile(goal_quote_payload(quote), GOAL_SOURCES)
+    draft = validate_generated_profile(goal_quote_payload(quote), GOAL_SOURCES)
+    stored = draft.source_references[0].quote
+    assert stored in GOAL_SOURCES[0].text
+    assert stored.casefold().split() == quote.rstrip(".").casefold().split()
+
+
+@pytest.mark.parametrize(
+    "quote",
+    [
+        pytest.param("my goal is for every inquiry", id="dropped-word"),
+        pytest.param("my goal is for every single new inquiry", id="added-word"),
+        pytest.param("my goal is for every old inquiry", id="changed-word"),
+        pytest.param("every new inquiry is my goal", id="reordered"),
+    ],
+)
+def test_generation_still_rejects_quotes_with_different_words(quote):
+    with pytest.raises(ValueError, match="occur exactly"):
+        validate_generated_profile(goal_quote_payload(quote), GOAL_SOURCES)
