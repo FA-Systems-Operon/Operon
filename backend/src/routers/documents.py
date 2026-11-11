@@ -8,6 +8,8 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Query, UploadFile, 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from src.audit import record_audit_event
+from src.auth import current_user
 from src.config import settings
 from src.db import get_db
 from src.document_extraction import (
@@ -16,7 +18,7 @@ from src.document_extraction import (
     extract_document,
     validate_document,
 )
-from src.models import Client, DocumentKind, ExtractedText, SourceDocument
+from src.models import Client, DocumentKind, ExtractedText, SourceDocument, User
 from src.schemas import ExtractedTextOut, SourceDocumentOut
 from src.storage import DocumentStorage, get_storage
 
@@ -48,6 +50,7 @@ def upload_document(
     file: UploadFile,
     db: DbSession,
     storage: Storage,
+    actor: Annotated[User, Depends(current_user)],
     kind: Annotated[DocumentKind | None, Form()] = None,
 ) -> SourceDocument:
     """Store an uploaded file against a client and record its metadata."""
@@ -89,8 +92,16 @@ def upload_document(
     storage.save(storage_key, data)
     db.add(document)
     try:
+        record_audit_event(
+            db,
+            actor_id=actor.id,
+            action="upload",
+            object_type="source_document",
+            object_id=document_id,
+        )
         db.commit()
     except Exception:
+        db.rollback()
         # Don't leave a file in storage that no database row points to.
         storage.delete(storage_key)
         raise

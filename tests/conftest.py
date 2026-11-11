@@ -36,6 +36,7 @@ os.environ["BACKGROUND_WORKER_ENABLED"] = "false"
 import pytest
 from fastapi.testclient import TestClient
 
+from src.auth import current_user
 from src.db import Base, SessionLocal, engine, get_db
 from src.main import app
 from src.models import (
@@ -48,7 +49,9 @@ from src.models import (
     Playbook,
     PlaybookVersion,
     ReviewStatus,
+    Role,
     SourceDocument,
+    User,
 )
 from src.storage import LocalFileStorage, get_storage
 
@@ -104,8 +107,22 @@ def storage(tmp_path):
 
 
 @pytest.fixture
-def client(db_session, storage):
+def signed_in_user(db_session):
+    user = User(
+        email=f"{uuid.uuid4()}@example.test",
+        display_name="Synthetic reviewer",
+        password_hash="unused",
+        role=Role.REVIEWER,
+    )
+    db_session.add(user)
+    db_session.commit()
+    return user
+
+
+@pytest.fixture
+def client(db_session, storage, signed_in_user):
     """HTTP client for the app, with the database and storage swapped for test ones."""
+    app.dependency_overrides[current_user] = lambda: signed_in_user
     app.dependency_overrides[get_db] = lambda: db_session
     app.dependency_overrides[get_storage] = lambda: storage
     # Not using "with TestClient(app)", so the app's startup create_all doesn't

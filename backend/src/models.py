@@ -158,6 +158,8 @@ class OnboardingJob(Base):
     intake_document_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("source_documents.id"), index=True
     )
+    # Older jobs have no recorded initiator.
+    initiated_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
     status: Mapped[JobStatus] = mapped_column(
         Enum(
             JobStatus,
