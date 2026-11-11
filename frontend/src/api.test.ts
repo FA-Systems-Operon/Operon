@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from 'vitest'
-import { ApiError, listClients, startOnboardingJob, uploadDocument } from './api'
+import { ApiError, listClients, listReviews, startOnboardingJob, uploadDocument } from './api'
 
 function response(status: number, body: unknown) {
   return {
@@ -31,6 +31,25 @@ test('listClients throws an ApiError with the status on failure', async () => {
   expect(error.status).toBe(500)
   expect(error.detail).toBeUndefined()
   expect(error.message).toBe('Request failed with status 500')
+})
+
+test('listReviews returns the drafts from the API', async () => {
+  const drafts = [{ version_id: 'v2', client_name: 'Acme', status: 'draft' }]
+  const fetchMock = vi.fn().mockResolvedValue(response(200, drafts))
+  vi.stubGlobal('fetch', fetchMock)
+
+  await expect(listReviews()).resolves.toEqual(drafts)
+  expect(fetchMock).toHaveBeenCalledWith('/api/v1/reviews')
+})
+
+test('listReviews throws an ApiError with the status on failure', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(503, { detail: 'Database down' })))
+
+  const error = await listReviews().catch((caught) => caught)
+
+  expect(error).toBeInstanceOf(ApiError)
+  expect(error.status).toBe(503)
+  expect(error.detail).toBe('Database down')
 })
 
 test('uploadDocument posts the file and its kind as a form', async () => {

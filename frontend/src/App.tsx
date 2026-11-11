@@ -4,6 +4,7 @@ import TopNav, { type Tab } from './components/TopNav'
 import AddSourcesPage from './pages/AddSourcesPage'
 import CommandPage from './pages/CommandPage'
 import PlaceholderPage from './pages/PlaceholderPage'
+import ReviewInboxPage from './pages/ReviewInboxPage'
 import StatusPage from './pages/StatusPage'
 import { useRoute } from './router'
 
@@ -22,7 +23,10 @@ function pageFor(path: string, query: URLSearchParams): Page {
     case '/workforce':
       return { tab: 'workforce', content: <PlaceholderPage title="Workforce" /> }
     case '/reviews':
-      return { tab: 'reviews', content: <PlaceholderPage title="Reviews" /> }
+      return { tab: 'reviews', content: <ReviewInboxPage /> }
+    // One draft from the inbox; #57 replaces the placeholder.
+    case '/reviews/draft':
+      return { tab: 'reviews', content: <PlaceholderPage title="Draft review" /> }
     case '/sources/new': {
       const clientId = query.get('client')
       // The key starts a fresh form when the chosen client in the link changes.
@@ -44,7 +48,7 @@ export default function App() {
 
   return (
     <div className="app">
-      <TopNav active={page.tab} />
+      <TopNav active={page.tab} path={path} />
       <main className="page">{page.content}</main>
     </div>
   )
