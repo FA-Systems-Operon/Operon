@@ -70,11 +70,9 @@ class _Strict(BaseModel):
 
 
 def _validation_error(value) -> ValidationError:
-    try:
+    with pytest.raises(ValidationError) as info:
         _Strict.model_validate({"value": value})
-    except ValidationError as error:
-        return error
-    raise AssertionError("expected a ValidationError")
+    return info.value
 
 
 # --- Levels -----------------------------------------------------------------
@@ -185,6 +183,71 @@ def test_a_traceback_cached_by_another_formatter_is_not_reused():
         )
     assert MARKER in logging.Formatter().format(record)  # caches exc_text
     assert MARKER not in SafeFormatter().format(record)
+
+
+def test_no_exception_formats_as_empty():
+    assert format_exception_safely((None, None, None)) == ""
+
+
+def test_an_exception_that_was_never_raised_has_no_traceback_header():
+    output = format_exception_safely((ValueError, ValueError(MARKER), None))
+    assert output == f"ValueError: {WITHHELD}"
+
+
+def test_raise_from_none_hides_the_suppressed_context():
+    try:
+        try:
+            raise KeyError(MARKER)
+        except KeyError:
+            raise RuntimeError("replaced") from None
+    except RuntimeError:
+        output = format_exception_safely(sys.exc_info())
+    assert "KeyError" not in output
+    assert f"RuntimeError: {WITHHELD}" in output
+
+
+def test_a_cycle_of_exceptions_is_printed_once_each():
+    first, second = ValueError(MARKER), KeyError(MARKER)
+    first.__context__, second.__context__ = second, first
+    output = format_exception_safely((ValueError, first, None))
+    assert output.count("ValueError") == 1 and output.count("KeyError") == 1
+    assert MARKER not in output
+
+
+def test_a_safe_error_without_a_message_shows_only_its_type():
+    assert describe_exception(ProviderTimeout()) == "src.ai.provider.ProviderTimeout"
+
+
+def test_format_exception_is_safe_when_called_directly():
+    try:
+        raise ValueError(MARKER)
+    except ValueError:
+        output = SafeFormatter().formatException(sys.exc_info())
+    assert MARKER not in output
+    assert f"ValueError: {WITHHELD}" in output
+
+
+def test_exceptions_passed_as_named_arguments_are_scrubbed():
+    record = logging.LogRecord(
+        "src.test", logging.ERROR, __file__, 1, "Failed: %(error)s", (), None
+    )
+    record.args = {"error": ValueError(MARKER), "job": "job-1"}
+    output = SafeFormatter("%(message)s").format(record)
+    assert output == f"Failed: ValueError: {WITHHELD}"
+
+
+def test_a_server_handler_that_is_already_safe_is_left_as_is():
+    server = logging.getLogger("uvicorn.error")
+    formatter = SafeFormatter(LOG_FORMAT)
+    handler = logging.StreamHandler(io.StringIO())
+    handler.setFormatter(formatter)
+    server.addHandler(handler)
+    try:
+        configure_logging("INFO")
+    finally:
+        server.removeHandler(handler)
+    assert handler.formatter is formatter
+    assert "format" not in vars(formatter)  # not wrapped a second time
 
 
 def test_exceptions_passed_as_arguments_are_scrubbed(log_output):
