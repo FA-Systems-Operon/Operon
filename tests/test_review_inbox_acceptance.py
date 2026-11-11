@@ -83,15 +83,14 @@ def test_inbox_lists_the_awaiting_draft_with_client_name_and_time(
         for item in open_inbox(client)
         if item["client_name"] != "Plateau Basements"
     ]
-    # Profile routes have no /api/v1 prefix until #164 merges; update both then.
     approved = client.post(
-        f"/client-profiles/{acme['client_profile_id']}/versions/{acme['version_id']}/approve",
+        f"/api/v1/client-profiles/{acme['client_profile_id']}/versions/{acme['version_id']}/approve",
         json={"approved_by": str(uuid.uuid4())},
     )
     assert approved.status_code == 200, approved.text
     northshore = client_factory("Northshore Kitchens")
     placeholder = client.post(
-        "/client-profiles", params={"client_id": str(northshore.id)}
+        "/api/v1/client-profiles", params={"client_id": str(northshore.id)}
     )
     assert placeholder.status_code == 201, placeholder.text
 

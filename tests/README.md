@@ -225,6 +225,4 @@ returns the client's `created_at` as the generation time, drops the
 
 **Limitations:** there is no authentication yet, so "a reviewer" is anyone who
 opens the page. "Side by side" is checked in the markup (both columns inside
-the two-column body), not visually; the CSS stacks them under 720px. The
-placeholder and approval steps call `/client-profiles` without `/api/v1`; update
-them, and re-run this suite, once #164 moves those routes.
+the two-column body), not visually; the CSS stacks them under 720px.
