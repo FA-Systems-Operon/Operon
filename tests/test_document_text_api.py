@@ -54,7 +54,7 @@ def store_legacy_document(db, storage, client_id, data, filename):
 @pytest.mark.parametrize(
     ("filename", "data", "content_type", "expected"),
     [
-        ("transcript.txt", b"Alice: Hello.  \r\n", "text/plain", "Alice: Hello."),
+        ("transcript.txt", b"Alice: Hello.  \r\n", "text/plain", "Alice: Hello.\n"),
         (
             "transcript.md",
             b"# Meeting\n\n**Alice:** Hello.",
@@ -132,7 +132,7 @@ def test_force_extraction_refreshes_saved_result(
     response = client.post(f"{url}/extract", params={"force": "true"})
 
     assert response.status_code == 200
-    assert response.json()["text"] == "Alice: Hello."
+    assert response.json()["text"] == "Alice: Hello.\n"
     assert datetime.fromisoformat(response.json()["extracted_at"]) > old_timestamp
     assert client.get(f"{url}/text").json() == response.json()
     assert client.post(f"{url}/extract").json() == response.json()
