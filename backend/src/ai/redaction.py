@@ -23,14 +23,20 @@ EMAIL_PATTERN = re.compile(
 # the letter of an escape like a literal backslash-n: text that was
 # JSON-encoded before it reaches us holds "\\n514-555-1234", and the "n" there
 # is not part of the number.
+#
+# Where a number may break over two lines: a real line break, or one escaped
+# by JSON-encoding (a backslash-n, possibly with extra backslashes when the
+# text was encoded more than once).
+_LINE_BREAK = r"(?:\r\n|\s|\\+r\\+n|\\+[nrt])"
+
 PHONE_PATTERN = re.compile(
     r"(?:(?<=\\[nrt])|(?<![\w+]))(?:"
     # International: +44 20 7946 0958, +33 1 23 45 67 89, +15145551234
     r"\+\d{1,3}(?:[ .-]?\(?\d{1,4}\)?){2,5}"
     r"|"
     # North American: (514) 555-1234, 514-555-1234, 1-800-555-1234, 514.555.1234
-    r"(?:1[ .-])?(?:\(\d{3}\)(?:\r\n|\s)?|\d{3}[ .-])\d{3}[ .-]\d{4}"
-    r")(?:(?:\r\n|\s)?(?:x|ext\.?)\s?\d{1,5})?(?!\w)"
+    r"(?:1[ .-])?(?:\(\d{3}\)" + _LINE_BREAK + r"?|\d{3}[ .-])\d{3}[ .-]\d{4}"
+    r")(?:" + _LINE_BREAK + r"?(?:x|ext\.?)\s?\d{1,5})?(?!\w)"
 )
 
 _TOKEN_PATTERN = re.compile(r"\[(?:EMAIL|PHONE)_\d+\]")
@@ -72,6 +78,9 @@ def restore(text: str, tokens: dict[str, str], *, json_escape: bool = False) -> 
     JSON string. A phone split over two lines then comes back as "\\n" instead
     of a raw line break, so the reply stays valid JSON, and the parsed value
     is still exactly the original.
+
+    A value taken from JSON-encoded text (it holds a backslash, which a phone
+    or email otherwise never does) is already escaped, so it goes back as-is.
     """
     if not tokens:
         return text
@@ -81,7 +90,9 @@ def restore(text: str, tokens: dict[str, str], *, json_escape: bool = False) -> 
         if token not in tokens:
             return token
         value = tokens[token]
-        return json.dumps(value)[1:-1] if json_escape else value
+        if json_escape and "\\" not in value:
+            return json.dumps(value)[1:-1]
+        return value
 
     return _TOKEN_PATTERN.sub(replace, text)
 

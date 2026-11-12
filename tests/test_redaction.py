@@ -192,3 +192,36 @@ def test_plain_text_reply_gets_the_line_break_back_as_is():
     response = provider.generate(f"Phone: {SPLIT_PHONES[0]}")
 
     assert response.text == f"Call {SPLIT_PHONES[0]} today."
+
+
+@pytest.mark.parametrize(
+    "phone",
+    [
+        r"(514)\n555-1234",  # escaped line break after the area code
+        r"(438)\r\n555-7788",  # escaped Windows line ending
+        r"613-555-0100\next. 22",  # escaped line break before the extension
+        r"(514)\\n555-1234",  # escaped twice, e.g. a reply quoted in a prompt
+    ],
+)
+def test_phone_with_escaped_line_break_inside_is_redacted(phone):
+    text, tokens = redact(f"Phone: {phone} end")
+
+    assert text == "Phone: [PHONE_1] end"
+    assert tokens == {"[PHONE_1]": phone}
+
+
+@pytest.mark.parametrize("phone", SPLIT_PHONES)
+def test_json_encoded_document_with_split_phone_round_trips(phone):
+    """Documents reach the model JSON-encoded, as source_prompt.py sends them.
+
+    The number must not reach the model, and the parsed reply must hold the
+    real line break so the value still matches the document text.
+    """
+    prompt = json.dumps([{"document_id": "D1", "text": f"Phone: {phone}"}])
+    reply = json.dumps({"phone_number": "[PHONE_1]"})
+    provider, sent = recording_provider(reply)
+
+    response = provider.generate(prompt, json_output=True)
+
+    assert "555" not in sent[0]["prompt"]
+    assert json.loads(response.text) == {"phone_number": phone}
