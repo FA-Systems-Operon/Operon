@@ -43,6 +43,7 @@ def test_extracts_normalized_transcript():
         pytest.param(b"Alice: Hi.\r\n", "Alice: Hi.\n", id="crlf"),
         pytest.param(b"Alice: Hi.\r", "Alice: Hi.\n", id="cr"),
         pytest.param(b"Alice: Hi.\n\n \t\n", "Alice: Hi.\n", id="blank-lines-at-end"),
+        pytest.param(b"Alice: Hi.\n  \t", "Alice: Hi.\n", id="newline-then-spaces"),
         pytest.param(b"Alice: Hi.", "Alice: Hi.", id="no-newline"),
         pytest.param(b"Alice: Hi.  ", "Alice: Hi.", id="trailing-spaces"),
     ],

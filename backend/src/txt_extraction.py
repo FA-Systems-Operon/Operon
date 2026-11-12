@@ -17,4 +17,5 @@ def extract_txt(data: bytes) -> str:
     text = normalize_text(decoded)
     if not text.strip():
         raise ValueError("Text is empty or contains only whitespace")
-    return text + "\n" if decoded.endswith(("\n", "\r")) else text
+    ends_with_newline = decoded.rstrip(" \t").endswith(("\n", "\r"))
+    return text + "\n" if ends_with_newline else text
