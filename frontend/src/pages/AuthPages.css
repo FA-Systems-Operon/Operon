@@ -91,3 +91,18 @@
   outline: 2px solid white;
   outline-offset: 3px;
 }
+
+/* Admin invite page, shown inside the app shell */
+.invite-page {
+  display: flex;
+  justify-content: center;
+  padding: 24px;
+}
+
+.invite-result {
+  margin-top: 28px;
+}
+
+.invite-result .auth-button {
+  margin-bottom: 12px;
+}

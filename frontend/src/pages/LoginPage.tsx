@@ -1,14 +1,33 @@
-
 import { useState, type SubmitEventHandler } from 'react'
 import './AuthPages.css'
+import { login, safeNext, type AuthUser } from '../auth'
 
-export default function LoginPage() {
+type LoginPageProps = {
+  next: string | null
+  onSignedIn: (user: AuthUser) => void
+}
+
+export default function LoginPage({ next, onSignedIn }: LoginPageProps) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  async function signIn() {
+    setSubmitting(true)
+    try {
+      const user = await login(email.trim(), password)
+      onSignedIn(user)
+      window.location.hash = `#${safeNext(next)}`
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Unable to sign in. Please try again.')
+      setSubmitting(false)
+    }
+  }
 
   const handleSubmit: SubmitEventHandler<HTMLFormElement> = (event) => {
     event.preventDefault()
+    if (submitting) return
     setError('')
 
     if (!email.trim() || !password) {
@@ -21,8 +40,7 @@ export default function LoginPage() {
       return
     }
 
-    // TODO: Connect to the backend authentication endpoint.
-    setError('Authentication is not available yet.')
+    void signIn()
   }
 
   return (
@@ -67,8 +85,8 @@ export default function LoginPage() {
           </p>
         )}
 
-        <button className="auth-button" type="submit">
-          Sign in
+        <button className="auth-button" type="submit" disabled={submitting}>
+          {submitting ? 'Signing in...' : 'Sign in'}
         </button>
       </form>
     </div>

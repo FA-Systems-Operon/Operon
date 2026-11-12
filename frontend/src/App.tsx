@@ -9,12 +9,14 @@ import PlaceholderPage from './pages/PlaceholderPage'
 import StatusPage from './pages/StatusPage'
 import LoginPage from './pages/LoginPage'
 import AcceptInvitePage from './pages/AcceptInvitePage'
+import InviteUserPage from './pages/InviteUserPage'
 
 import {
   getCurrentUser,
   isPublicRoute,
   logout,
   type AuthStatus,
+  type AuthUser,
 } from './auth'
 import { useRoute } from './router'
 
@@ -23,15 +25,25 @@ type Page = {
   content: ReactNode
 }
 
-function pageFor(path: string, query: URLSearchParams): Page {
+function pageFor(
+  path: string,
+  query: URLSearchParams,
+  onSignedIn: (user: AuthUser) => void,
+  currentUser: AuthUser | null,
+): Page {
   switch (path) {
     case '/login':
-      return { tab: null, content: <LoginPage /> }
+      return {
+        tab: null,
+        content: <LoginPage next={query.get('next')} onSignedIn={onSignedIn} />,
+      }
 
     case '/accept-invite':
       return {
         tab: null,
-        content: <AcceptInvitePage token={query.get('token')} />,
+        content: (
+          <AcceptInvitePage token={query.get('token')} onSignedIn={onSignedIn} />
+        ),
       }
 
     case '/':
@@ -69,6 +81,9 @@ function pageFor(path: string, query: URLSearchParams): Page {
       }
     }
 
+    case '/invite':
+      return { tab: null, content: <InviteUserPage user={currentUser} /> }
+
     case '/status':
       return { tab: null, content: <StatusPage /> }
 
@@ -91,6 +106,16 @@ export default function App() {
 
   const [sessionError, setSessionError] = useState('')
 
+  // Who is signed in (role-based screens will read this).
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null)
+
+  // Called by the login and accept-invite pages. Without this the app would still
+  // think the visitor is signed out and send them straight back to /login.
+  function handleSignedIn(user: AuthUser) {
+    setCurrentUser(user)
+    setAuthStatus('authenticated')
+  }
+
   // Check the session once when Operon loads.
   useEffect(() => {
     let active = true
@@ -101,6 +126,7 @@ export default function App() {
 
         if (!active) return
 
+        setCurrentUser(user)
         setAuthStatus(user ? 'authenticated' : 'unauthenticated')
       } catch {
         if (!active) return
@@ -128,6 +154,7 @@ export default function App() {
     await logout()
 
     // Only mark the user signed out if the server confirms success.
+    setCurrentUser(null)
     setAuthStatus('unauthenticated')
     window.location.hash = '#/login'
   } catch {
@@ -152,7 +179,7 @@ export default function App() {
   }, [authStatus, path, query])
 
   if (isPublicRoute(path)) {
-  return pageFor(path, query).content
+  return pageFor(path, query, handleSignedIn, currentUser).content
 }
 
   if (sessionError) {
@@ -189,13 +216,14 @@ export default function App() {
     return null
   }
 
-const page = pageFor(path, query)
+const page = pageFor(path, query, handleSignedIn, currentUser)
 
   return (
     <div className="app">
       <TopNav
         active={page.tab}
         onLogout={handleLogout}
+        isAdmin={currentUser?.role === 'admin'}
         isLoggingOut={isLoggingOut}
        logoutError={logoutError}
       />

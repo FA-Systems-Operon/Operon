@@ -39,7 +39,7 @@ class LoginOut(BaseModel):
 
 class InviteIn(BaseModel):
     email: str = Field(max_length=320, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-    role: Role
+    role: Role = Role.VIEWER #default generic privilege, admin will probs change later.
 
 
 class InviteOut(BaseModel):
