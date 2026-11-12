@@ -19,6 +19,7 @@ export default function InlineDraftField({ path, label, value, displayValue, onS
   const [pending, setPending] = useState<PendingFieldEdit | null>(null)
   const button = useRef<HTMLButtonElement>(null)
   const errorId = useId()
+  const valueId = useId()
   const restoreFocus = useRef(false)
   useLayoutEffect(() => {
     if (!pending && restoreFocus.current) {
@@ -49,6 +50,7 @@ export default function InlineDraftField({ path, label, value, displayValue, onS
         type="button"
         className="review-field-value inline-draft-value"
         aria-label={`Edit ${label}`}
+        aria-describedby={valueId}
         hidden={pending !== null}
         onClick={() => {
           onSelect()
@@ -56,7 +58,7 @@ export default function InlineDraftField({ path, label, value, displayValue, onS
           setPending(next)
           onPendingChange(path, next)
         }}
-      >{displayValue}</button>
+      ><span id={valueId}>{displayValue}</span></button>
       {pending && (
         <>
           <input

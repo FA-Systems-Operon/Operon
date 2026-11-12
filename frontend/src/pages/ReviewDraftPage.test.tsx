@@ -375,3 +375,53 @@ test('list edits retain evidence and reject blanks without changing another item
   expect(screen.getByRole('button', { name: 'Edit Need 1' })).toHaveTextContent('Basement finishing')
   expect(evidence().getByText('we finish basements', { selector: 'q' })).toBeInTheDocument()
 })
+
+
+test('the unapplied-edits banner clears after cancel or correction of invalid pending input', async () => {
+  await openDraft()
+  const banner = () => screen.queryByText(/Some edits have not been applied/)
+  expect(banner()).not.toBeInTheDocument()
+  await userEvent.click(screen.getByRole('button', { name: 'Edit Need 1' }))
+  await userEvent.clear(screen.getByRole('textbox', { name: 'Need 1' }))
+  await userEvent.tab()
+  expect(banner()).toBeInTheDocument()
+  await userEvent.click(screen.getByRole('textbox', { name: 'Need 1' }))
+  await userEvent.keyboard('{Escape}')
+  expect(banner()).not.toBeInTheDocument()
+  await userEvent.click(screen.getByRole('button', { name: 'Edit Need 1' }))
+  await userEvent.clear(screen.getByRole('textbox', { name: 'Need 1' }))
+  await userEvent.keyboard('{Enter}')
+  expect(banner()).toBeInTheDocument()
+  await userEvent.type(screen.getByRole('textbox', { name: 'Need 1' }), 'Corrected need')
+  expect(banner()).not.toBeInTheDocument()
+  await userEvent.keyboard('{Enter}')
+  expect(screen.getByRole('button', { name: 'Edit Need 1' })).toHaveTextContent('Corrected need')
+  expect(banner()).not.toBeInTheDocument()
+})
+
+test('dirty display labels original conflict proposals, source counts and unsupported warnings', async () => {
+  const data = { ...DRAFT.version.data, conflicts: [
+    ...DRAFT.version.data.conflicts!,
+    { field: 'unknown', explanation: 'Unsupported warning', alternatives: [] },
+  ] }
+  mockDraft(reply(200, { ...DRAFT, version: { ...DRAFT.version, data } }))
+  render(<ReviewDraftPage profileId="p1" versionId="v2" />)
+  await screen.findByRole('heading', { name: 'Plateau Basements' })
+  await edit('Name', 'Corrected')
+  expect(screen.getByText(/Some original-version warnings/)).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Edit Email' })).toHaveAccessibleDescription(
+    'Original proposal: maya@call.test or maya@form.test',
+  )
+  expect(row('Email').closest('.review-field')).toHaveTextContent('2 original sources')
+  await userEvent.click(row('Email'))
+  expect(evidence().getByText(/Original version evidence/)).toBeInTheDocument()
+  expect(evidence().getByText('The sources give different emails.')).toBeInTheDocument()
+  expect(screen.queryByText('▲ Sources disagree')).not.toBeInTheDocument()
+  await edit('Name', 'Maya Chen')
+  expect(screen.queryByText(/Some original-version warnings/)).not.toBeInTheDocument()
+  expect(screen.getByText(/Some warnings could not be shown/)).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Edit Email' })).toHaveAccessibleDescription(
+    'maya@call.test or maya@form.test',
+  )
+  expect(row('Email').closest('.review-field')).toHaveTextContent('2 sources')
+})

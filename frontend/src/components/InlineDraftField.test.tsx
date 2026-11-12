@@ -69,3 +69,13 @@ test('IME Enter does not apply; valid correction clears an earlier error', async
   await userEvent.keyboard('{Enter}')
   expect(onApply).toHaveBeenLastCalledWith('needs/0', 'Fixed')
 })
+
+
+test('the edit button describes its displayed value, including after the value changes', () => {
+  const props = { path: 'name' as const, label: 'Name', value: 'Original', displayValue: 'Original',
+    onApply: vi.fn(), onPendingChange: vi.fn(), onSelect: vi.fn() }
+  const { rerender } = render(<InlineDraftField {...props} />)
+  expect(screen.getByRole('button', { name: 'Edit Name' })).toHaveAccessibleDescription('Original')
+  rerender(<InlineDraftField {...props} value="Corrected" displayValue="Corrected" />)
+  expect(screen.getByRole('button', { name: 'Edit Name' })).toHaveAccessibleDescription('Corrected')
+})

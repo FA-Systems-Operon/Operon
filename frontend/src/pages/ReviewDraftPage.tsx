@@ -132,10 +132,13 @@ function LoadedDraft({ draft, back }: { draft: ReviewDraft; back: React.ReactNod
 
   function sourceTag(row: ReviewRow) {
     const evidence = evidenceFor(row)
-    if (evidence.length > 1) return `${evidence.length} sources`
+    if (evidence.length > 1) return `${evidence.length} ${dirty ? 'original sources' : 'sources'}`
     if (evidence.length === 0) return ''
     return documents.find(({ id }) => id === evidence[0].document_id)?.kind ?? 'source'
   }
+
+  const originalDisplayValue = (row: ReviewRow) =>
+    dirty && row.flag === 'conflict' ? `Original proposal: ${row.value}` : row.value
 
   function renderEvidence(row: ReviewRow) {
     const evidence = evidenceFor(row)
@@ -201,7 +204,8 @@ function LoadedDraft({ draft, back }: { draft: ReviewDraft; back: React.ReactNod
         <div className="review-fields">
           {unsupported && (
             <p className="field-error">
-              Some warnings could not be shown. Check the saved draft data.
+              {dirty ? 'Some original-version warnings could not be shown. Check the saved draft data.'
+                : 'Some warnings could not be shown. Check the saved draft data.'}
             </p>
           )}
           <ul className="review-list">
@@ -228,12 +232,12 @@ function LoadedDraft({ draft, back }: { draft: ReviewDraft; back: React.ReactNod
                       label={row.label}
                       value={fieldValue(session.currentData, row.key)}
                       displayValue={session.changes[row.key]
-                        ? session.changes[row.key]!.currentValue ?? 'Not mentioned' : row.value}
+                        ? session.changes[row.key]!.currentValue ?? 'Not mentioned' : originalDisplayValue(row)}
                       onSelect={() => setSelectedKey(row.key)}
                       onApply={(path, text) => setSession((previous) => applyEdit(previous, path, text))}
                       onPendingChange={pendingChange}
                     />
-                  ) : <span className="review-field-value">{row.value}</span>}
+                  ) : <span className="review-field-value">{originalDisplayValue(row)}</span>}
                   <span className="mono">
                     {sourceTag(row)}
                     {isEditablePath(session.originalData, row.key) && session.changes[row.key] && (
