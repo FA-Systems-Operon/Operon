@@ -1,6 +1,6 @@
 import { useState, type SubmitEventHandler } from 'react'
 import './AuthPages.css'
-import { login, safeNext, type AuthUser } from '../auth'
+import { login, safeNext, type AuthUser, isValidEmail } from '../auth'
 
 type LoginPageProps = {
   next: string | null
@@ -35,7 +35,7 @@ export default function LoginPage({ next, onSignedIn }: LoginPageProps) {
       return
     }
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+    if (!isValidEmail(email)) {
       setError('Please enter a valid email address.')
       return
     }

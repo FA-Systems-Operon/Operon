@@ -1,6 +1,6 @@
 import { useState, type SubmitEventHandler } from 'react'
 import './AuthPages.css'
-import { createInvite, inviteLink, type AuthUser, type Invite } from '../auth'
+import { createInvite, inviteLink, type AuthUser, type Invite, isValidEmail } from '../auth'
 
 type InviteUserPageProps = {
   user: AuthUser | null
@@ -42,7 +42,7 @@ export default function InviteUserPage({ user }: InviteUserPageProps) {
     if (submitting) return
     setError('')
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+    if (!isValidEmail(email)) {
       setError('Enter a valid email address.')
       return
     }

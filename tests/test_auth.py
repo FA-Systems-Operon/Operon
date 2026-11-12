@@ -75,7 +75,12 @@ def test_password_is_hashed_and_verifiable():
 
 
 def test_the_same_password_gets_a_different_hash_each_time():
-    assert hash_password(PASSWORD) != hash_password(PASSWORD)
+    first = hash_password(PASSWORD)
+    second = hash_password(PASSWORD)
+    assert first != second
+    # Different salts, but both are still valid hashes of the same password.
+    assert verify_password(first, PASSWORD)
+    assert verify_password(second, PASSWORD)
 
 
 def test_a_garbage_hash_never_verifies():
