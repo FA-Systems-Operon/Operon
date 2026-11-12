@@ -150,3 +150,45 @@ def test_escaped_newline_reaches_the_model_redacted():
     provider.generate(json.dumps({"notes": "Call\n514-555-1234\nor email"}))
 
     assert "514-555-1234" not in json.dumps(sent[0])
+
+
+SPLIT_PHONES = [
+    "(514)\n555-1234",  # line break after the area code
+    "613-555-0100\next. 22",  # line break before the extension
+    "(438)\r\n555-7788",  # Windows line ending
+    "514-555-1234\r\next. 5",  # Windows line ending before the extension
+]
+
+
+@pytest.mark.parametrize("phone", SPLIT_PHONES)
+def test_json_reply_stays_valid_when_phone_has_line_break(phone):
+    """A phone split over two lines is put back escaped, so the JSON still parses.
+
+    The parsed value keeps the line break, so it still matches the source text.
+    """
+    reply = json.dumps({"phone_number": "[PHONE_1]"})
+    provider, sent = recording_provider(reply)
+
+    response = provider.generate(f"Phone: {phone}", json_output=True)
+
+    assert sent[0]["prompt"] == "Phone: [PHONE_1]"
+    assert json.loads(response.text) == {"phone_number": phone}
+
+
+def test_json_reply_with_output_schema_is_escaped_too():
+    reply = json.dumps({"phone_number": "[PHONE_1]"})
+    provider, _ = recording_provider(reply)
+
+    response = provider.generate(
+        f"Phone: {SPLIT_PHONES[0]}", output_schema={"type": "object"}
+    )
+
+    assert json.loads(response.text) == {"phone_number": SPLIT_PHONES[0]}
+
+
+def test_plain_text_reply_gets_the_line_break_back_as_is():
+    provider, _ = recording_provider("Call [PHONE_1] today.")
+
+    response = provider.generate(f"Phone: {SPLIT_PHONES[0]}")
+
+    assert response.text == f"Call {SPLIT_PHONES[0]} today."

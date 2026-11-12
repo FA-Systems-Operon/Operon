@@ -6,6 +6,7 @@ sees the real value, but fields like phone_number and email still end up with
 it, and quotes still match the source text exactly.
 """
 
+import json
 import re
 
 from src.ai.provider import ModelProvider, ModelResponse
@@ -28,8 +29,8 @@ PHONE_PATTERN = re.compile(
     r"\+\d{1,3}(?:[ .-]?\(?\d{1,4}\)?){2,5}"
     r"|"
     # North American: (514) 555-1234, 514-555-1234, 1-800-555-1234, 514.555.1234
-    r"(?:1[ .-])?(?:\(\d{3}\)\s?|\d{3}[ .-])\d{3}[ .-]\d{4}"
-    r")(?:\s?(?:x|ext\.?)\s?\d{1,5})?(?!\w)"
+    r"(?:1[ .-])?(?:\(\d{3}\)(?:\r\n|\s)?|\d{3}[ .-])\d{3}[ .-]\d{4}"
+    r")(?:(?:\r\n|\s)?(?:x|ext\.?)\s?\d{1,5})?(?!\w)"
 )
 
 _TOKEN_PATTERN = re.compile(r"\[(?:EMAIL|PHONE)_\d+\]")
@@ -64,11 +65,25 @@ def redact(
     return text, tokens
 
 
-def restore(text: str, tokens: dict[str, str]) -> str:
-    """Put the original values back wherever the model repeated a token."""
+def restore(text: str, tokens: dict[str, str], *, json_escape: bool = False) -> str:
+    """Put the original values back wherever the model repeated a token.
+
+    With `json_escape`, each value goes back escaped as it would be inside a
+    JSON string. A phone split over two lines then comes back as "\\n" instead
+    of a raw line break, so the reply stays valid JSON, and the parsed value
+    is still exactly the original.
+    """
     if not tokens:
         return text
-    return _TOKEN_PATTERN.sub(lambda m: tokens.get(m.group(0), m.group(0)), text)
+
+    def replace(match: re.Match) -> str:
+        token = match.group(0)
+        if token not in tokens:
+            return token
+        value = tokens[token]
+        return json.dumps(value)[1:-1] if json_escape else value
+
+    return _TOKEN_PATTERN.sub(replace, text)
 
 
 class RedactingProvider:
@@ -96,7 +111,11 @@ class RedactingProvider:
             prompt, system=system, json_output=json_output, output_schema=output_schema
         )
         return ModelResponse(
-            text=restore(response.text, tokens),
+            text=restore(
+                response.text,
+                tokens,
+                json_escape=json_output or output_schema is not None,
+            ),
             provider=response.provider,
             model=response.model,
             duration_ms=response.duration_ms,
