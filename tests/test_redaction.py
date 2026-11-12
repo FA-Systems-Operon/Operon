@@ -128,3 +128,25 @@ def test_restore_ignores_unknown_tokens():
     assert (
         restore("[PHONE_9] stays", {"[PHONE_1]": "514-555-1234"}) == "[PHONE_9] stays"
     )
+
+
+@pytest.mark.parametrize("escape", [r"\n", r"\r", r"\t"])
+@pytest.mark.parametrize("phone", ["514-555-1234", "(514) 555-1234", "+1 438 555 7788"])
+def test_phone_after_escaped_whitespace_is_redacted(escape, phone):
+    """Text that was JSON-encoded holds a literal backslash-n, not a newline.
+
+    The "n" in that escape is a word character, so it must not stop a phone
+    right after it from being redacted.
+    """
+    text, tokens = redact(f"Phone:{escape}{phone}{escape}Next line")
+
+    assert text == f"Phone:{escape}[PHONE_1]{escape}Next line"
+    assert tokens == {"[PHONE_1]": phone}
+
+
+def test_escaped_newline_reaches_the_model_redacted():
+    provider, sent = recording_provider()
+
+    provider.generate(json.dumps({"notes": "Call\n514-555-1234\nor email"}))
+
+    assert "514-555-1234" not in json.dumps(sent[0])
