@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, test, vi } from 'vitest'
 import responses from '../../../tests/fixtures/review_inbox/responses.json'
@@ -65,20 +65,11 @@ test('criterion 2: selecting the draft opens its fields and evidence side by sid
   expect(fetchMock).toHaveBeenCalledWith(DRAFT_URL)
   // Named "Reviews, N waiting" while drafts are waiting.
   expect(screen.getByRole('link', { name: /^Reviews/ })).toHaveAttribute('aria-current', 'page')
-  // The proposed fields, one button each, and the evidence for the selected one.
+  // Each field has an evidence selector and an inline value editor.
   const fields = screen.getByRole('button', { name: /^Name/ }).closest('ul')!
-  expect(
-    within(fields)
-      .getAllByRole('button')
-      .map((button) => button.textContent),
-  ).toEqual([
-    'NameMaya Chenintake',
-    'Need 1More qualified bookingstranscript',
-    'Goal 130 bookings per monthtranscript',
-    'Goal 2Launch a referral programintake',
-    '○ WebsiteNot mentioned',
-    '○ EmailNot mentioned',
-  ])
+  expect(within(fields).getByRole('button', { name: 'Edit Name' })).toHaveTextContent('Maya Chen')
+  expect(within(fields).getByRole('button', { name: 'Edit Goal 1' })).toHaveTextContent('30 bookings per month')
+  expect(within(fields).getByRole('button', { name: 'Edit Website' })).toHaveTextContent('Not mentioned')
   const evidence = screen.getByRole('region', { name: 'Name' })
   expect(within(evidence).getByText('Contact name: Maya Chen')).toBeInTheDocument()
   // Side by side: both columns sit in the same two-column body.
@@ -109,4 +100,51 @@ test('an inbox that fails to load says so, and Try again loads the draft', async
   await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
 
   expect(await screen.findByRole('link', { name: /Plateau Basements/ })).toBeInTheDocument()
+})
+
+
+test('production navigation opens inline editing and reopening discards local edits', async () => {
+  const { fetchMock } = fakeApi([200, [ITEM]])
+  openInbox()
+  const open = async () => {
+    await userEvent.click(await screen.findByRole('link', { name: /Plateau Basements/ }))
+    await screen.findByRole('heading', { name: 'Plateau Basements' })
+  }
+  await open()
+  await userEvent.click(screen.getByRole('button', { name: 'Edit Name' }))
+  await userEvent.clear(screen.getByRole('textbox', { name: 'Name' }))
+  await userEvent.type(screen.getByRole('textbox'), 'Local only{Enter}')
+  expect(screen.getByRole('status')).toHaveTextContent('Unsaved local changes')
+  expect(screen.getByRole('region', { name: 'Name' })).toHaveTextContent('Original version evidence')
+  await userEvent.click(screen.getByRole('link', { name: '← Review inbox' }))
+  await open()
+  expect(screen.getByRole('button', { name: 'Edit Name' })).toHaveTextContent('Maya Chen')
+  expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  expect(fetchMock.mock.calls.every((call) => call.length === 1)).toBe(true)
+})
+
+
+test('opening another version clears applied changes and invalid typing', async () => {
+  const otherVersion = 'another-version'
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+    const body = url === '/api/v1/reviews' ? [ITEM]
+      : { ...DRAFT, version: { ...DRAFT.version, id: url.endsWith(otherVersion) ? otherVersion : ITEM.version_id } }
+    return { ok: true, status: 200, json: async () => body } as Response
+  }))
+  openInbox()
+  await userEvent.click(await screen.findByRole('link', { name: /Plateau Basements/ }))
+  await userEvent.click(await screen.findByRole('button', { name: 'Edit Name' }))
+  await userEvent.clear(screen.getByRole('textbox'))
+  await userEvent.type(screen.getByRole('textbox'), 'Local correction{Enter}')
+  await userEvent.click(screen.getByRole('button', { name: 'Edit Need 1' }))
+  await userEvent.clear(screen.getByRole('textbox'))
+  await userEvent.tab()
+  expect(screen.getByRole('alert')).toBeInTheDocument()
+  await act(async () => {
+    window.location.hash = `#/reviews/draft?profile=${ITEM.client_profile_id}&version=${otherVersion}`
+  })
+  expect(await screen.findByRole('button', { name: 'Edit Name' })).toHaveTextContent('Maya Chen')
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
 })

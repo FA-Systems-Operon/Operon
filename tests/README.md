@@ -226,3 +226,73 @@ returns the client's `created_at` as the generation time, drops the
 **Limitations:** there is no authentication yet, so "a reviewer" is anyone who
 opens the page. "Side by side" is checked in the markup (both columns inside
 the two-column body), not visually; the CSS stacks them under 720px.
+
+## Inline field editing (#59; reuse for AT 4.2, #66)
+
+Task #59 covers local editing on the production review detail page only. Editable
+statuses are `draft` and `in_review`; historical statuses remain read-only. The
+name and nine onboarding fields accept nullable text. Boundary whitespace is
+trimmed; clearing a scalar produces null. Existing needs/goals items accept
+nonblank text, keeping their saved indexes. No list additions, deletions or
+reordering are supported. Empty lists stay empty. No format validation is imposed
+on contact/account fields; these rules follow `profile_flags.py` and
+`source_prompt.py`, not the generic update endpoint's arbitrary JSON contract.
+
+| Requirement / reusable scenario | Automated coverage |
+| --- | --- |
+| Clicking a value edits it in the detail view; label selection still opens evidence | `ReviewDraftPage.test.tsx`, `ReviewInbox.acceptance.test.tsx` |
+| Every scalar, including absent/missing/conflicted values, is editable in draft/in_review | `ReviewDraftPage.test.tsx` |
+| Other statuses stay read-only and still show evidence | `ReviewDraftPage.test.tsx` |
+| Enter applies; Escape cancels current typing and restores focus; Tab/Shift+Tab and blur apply valid text; IME Enter does not apply | `InlineDraftField.test.tsx` |
+| Blank list input retains text and an accessible error; correction or Escape clears it | `InlineDraftField.test.tsx`, `ReviewDraftPage.test.tsx` |
+| Existing list indexes, neighboring entries, original evidence and unknown JSON are preserved | `draftEdits.test.ts`, `draftSources.test.ts`, `ReviewDraftPage.test.tsx` |
+| Track original version identity, changed paths, original/current values and absent versus null keys; repeated edits compare to the loaded original | `draftEdits.test.ts` |
+| Applied changes hide assessment-derived badges globally, label original evidence and mark edited values; full revert restores the original display | `ReviewDraftPage.test.tsx` |
+| Conflicted scalar input starts empty rather than from joined alternatives; both original claims remain visible after correction | `ReviewDraftPage.test.tsx` |
+| Original API reply is unchanged and editing sends no mutation request | `ReviewDraftPage.test.tsx`, `ReviewInbox.acceptance.test.tsx` |
+| Leaving/reopening or opening another version resets applied edits, invalid text and dirty state | `ReviewInbox.acceptance.test.tsx` |
+
+Paths above are under `frontend/src/` (helper), `frontend/src/components/`, or
+`frontend/src/pages/` as appropriate. The production navigation tests reuse
+`tests/fixtures/review_inbox/responses.json`; page tests use a synthetic draft with
+missing and conflicting fields. Existing evidence, loading/error, retry and
+late-response regressions remain in the page and source suites.
+
+Run with Node 24 and locked dependencies, from `frontend`:
+
+```bash
+npm ci --ignore-scripts
+npx vitest run src/draftEdits.test.ts src/components/InlineDraftField.test.tsx \
+  src/components/draftSources.test.ts src/pages/ReviewDraftPage.test.tsx \
+  src/pages/ReviewInbox.acceptance.test.tsx
+npm test
+npm run build
+```
+
+The local session stores `base` (client/profile/version IDs, version number and
+created timestamp), `originalData`, `currentData`, and `changes[path]` with
+`originalPresent`, `originalValue` and `currentValue`. Applied changes are separate
+from editor callbacks: `onApply(path, text)`, `onPendingChange(path, {text, error} | null)`
+and `onSelect()`. The page tracks pending fields separately, so a future save flow
+can account for unapplied/invalid input. A full revert restores original key
+presence. An empty edit on an absent or malformed scalar is a no-op, preserving
+legacy data; a nonempty correction replaces only that field.
+
+Assessment invalidation is display-only: saved assessment, conflicts, references
+and approval metadata are not changed. Original evidence does not automatically
+verify a reviewer correction. There is only an unsaved-local-changes notice, with
+no navigation guard, browser storage, saving, recomputation or approval gate.
+
+For #66, reuse these local scenarios after #60 adds save/reload, failures,
+concurrent/stale saves, and approval of the edited version. Those persistence and
+approval scenarios are intentionally not implemented by #59. In particular, #60
+must choose a persistence/validation contract for corrected conflicts: the
+source-draft validator requires conflicted scalar values to remain null and cannot
+be used unchanged to save a corrected non-null value while retaining its original
+conflict. Generic PUT also accepts arbitrary JSON and does not establish a current
+assessment or a conflict-resolution guarantee.
+
+Manual browser checks remain necessary for real Tab/Shift+Tab/blur focus movement,
+IME behavior, visible focus and error announcement, long values and evidence,
+and the responsive layout below 720px. jsdom interaction checks do not prove
+browser layout, assistive-technology behavior or full #66 persistence acceptance.
