@@ -17,6 +17,7 @@ from src.db import Base, engine
 from src.onboarding_jobs import start_worker
 from src.routers import (
     artifacts,
+    auth,
     client_profiles,
     clients,
     documents,
@@ -51,7 +52,7 @@ print(
     f"model: {settings.OLLAMA_MODEL or '(OLLAMA_MODEL not set)'}",
     flush=True,
 )
-
+app.include_router(auth.router)
 app.include_router(artifacts.router)
 app.include_router(clients.router)
 app.include_router(documents.router)

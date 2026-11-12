@@ -7,7 +7,7 @@ import App from './App'
 const mockUser = {
   id: 'test-user',
   email: 'staff@example.com',
-  role: 'staff',
+  role: 'reviewer',
 }
 
 function mockApi(logoutResponse: 'success' | 'error' | 'pending') {
@@ -25,7 +25,7 @@ function mockApi(logoutResponse: 'success' | 'error' | 'pending') {
         } as Response
       }
 
-      if (url === '/api/v1/logout') {
+      if (url === '/api/v1/auth/logout') {
         if (logoutResponse === 'pending') {
           await new Promise<void>((resolve) => {
             resolveLogout = resolve
@@ -60,6 +60,7 @@ afterEach(() => {
 })
 
 test('successful logout redirects to login', async () => {
+  document.cookie = 'operon_csrf=test-csrf-token'
   const { fetchMock } = mockApi('success')
   const user = userEvent.setup()
 
@@ -80,11 +81,13 @@ test('successful logout redirects to login', async () => {
     await screen.findByRole('heading', { name: 'Welcome back' }),
   ).toBeInTheDocument()
 
+  // The backend rejects a POST without the CSRF header (403).
   expect(fetchMock).toHaveBeenCalledWith(
-    '/api/v1/logout',
+    '/api/v1/auth/logout',
     expect.objectContaining({
       method: 'POST',
       credentials: 'include',
+      headers: { 'X-CSRF-Token': 'test-csrf-token' },
     }),
   )
 })
@@ -136,7 +139,7 @@ test('logout button prevents repeated requests while pending', async () => {
   )
 
   const logoutCalls = fetchMock.mock.calls.filter(
-    ([url]) => String(url) === '/api/v1/logout',
+    ([url]) => String(url) === '/api/v1/auth/logout',
   )
 
   expect(logoutCalls).toHaveLength(1)

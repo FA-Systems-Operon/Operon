@@ -12,6 +12,7 @@ type TopNavProps = {
   onLogout: () => Promise<void>
   isLoggingOut: boolean
   logoutError?: string
+  isAdmin?: boolean
 }
 
 export default function TopNav({
@@ -19,6 +20,7 @@ export default function TopNav({
   onLogout,
   isLoggingOut,
   logoutError,
+  isAdmin = false,
 }: TopNavProps) {
   const current = (tab: Tab) => (active === tab ? 'page' : undefined)
 
@@ -56,6 +58,12 @@ export default function TopNav({
         >
           Reviews
         </a>
+
+        {isAdmin && (
+          <a className="topnav-reviews" href="#/invite">
+            Invite
+          </a>
+        )}
 
         <button
           type="button"
