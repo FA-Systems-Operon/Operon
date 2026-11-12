@@ -17,13 +17,14 @@ from src.db import Base, engine
 from src.onboarding_jobs import start_worker
 from src.routers import (
     artifacts,
+    auth,
     client_profiles,
     clients,
     documents,
     onboarding_jobs,
     playbooks,
-    auth,
 )
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

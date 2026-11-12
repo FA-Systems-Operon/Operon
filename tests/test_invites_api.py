@@ -12,13 +12,17 @@ PASSWORD = "a-long-password-123"
 def sign_in(client, db_session, email, role):
     """Create a user, log in, and return the CSRF header a browser would send."""
     auth.create_user(db_session, email, "Test User", PASSWORD, role)
-    response = client.post("/api/v1/auth/login", json={"email": email, "password": PASSWORD})
+    response = client.post(
+        "/api/v1/auth/login", json={"email": email, "password": PASSWORD}
+    )
     assert response.status_code == 200
     return {auth.CSRF_HEADER: client.cookies.get(auth.CSRF_COOKIE)}
 
 
 def invite(client, headers, email="nina@example.com", **extra):
-    return client.post("/api/v1/users/invite", json={"email": email, **extra}, headers=headers)
+    return client.post(
+        "/api/v1/users/invite", json={"email": email, **extra}, headers=headers
+    )
 
 
 def accept(client, token, name="Nina", password=PASSWORD):
@@ -111,7 +115,9 @@ def test_unknown_token_gets_the_same_error(client):
 
 
 def test_expired_invitation_is_rejected(client, db_session):
-    _, token = auth.create_invitation(db_session, "nina@example.com", Role.VIEWER, hours=-1)
+    _, token = auth.create_invitation(
+        db_session, "nina@example.com", Role.VIEWER, hours=-1
+    )
     assert accept(client, token).status_code == 400
 
 

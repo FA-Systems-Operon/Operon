@@ -459,9 +459,9 @@ def _make_guard(fields: tuple[str, ...]):
                 )
         approved = state.attrs.approved_at.history
         if (
-                approved.has_changes()
-                and approved.deleted
-                and approved.deleted[0] is not None
+            approved.has_changes()
+            and approved.deleted
+            and approved.deleted[0] is not None
         ):
             raise ValueError("approved_at is already set and cannot be changed")
 

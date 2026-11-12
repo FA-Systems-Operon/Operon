@@ -1,6 +1,7 @@
 import threading
 import uuid
 from datetime import timedelta
+from typing import Annotated
 
 import pytest
 from fastapi import Depends, FastAPI
@@ -41,7 +42,9 @@ def unique_email() -> str:
     return f"{uuid.uuid4().hex[:10]}@example.com"
 
 
-def make_user(role: Role = Role.REVIEWER, password: str = PASSWORD, active: bool = True) -> str:
+def make_user(
+    role: Role = Role.REVIEWER, password: str = PASSWORD, active: bool = True
+) -> str:
     email = unique_email()
     with SessionLocal() as db:
         user = create_user(db, email, "Test User", password, role)
@@ -52,7 +55,9 @@ def make_user(role: Role = Role.REVIEWER, password: str = PASSWORD, active: bool
 
 
 def login(client: TestClient, email: str, password: str = PASSWORD):
-    return client.post("/api/v1/auth/login", json={"email": email, "password": password})
+    return client.post(
+        "/api/v1/auth/login", json={"email": email, "password": password}
+    )
 
 
 def csrf(client: TestClient) -> dict[str, str]:
@@ -78,9 +83,8 @@ def test_a_garbage_hash_never_verifies():
 
 
 def test_a_short_password_is_refused():
-    with SessionLocal() as db:
-        with pytest.raises(AuthError, match="at least"):
-            create_user(db, unique_email(), "Short", "short", Role.VIEWER)
+    with SessionLocal() as db, pytest.raises(AuthError, match="at least"):
+        create_user(db, unique_email(), "Short", "short", Role.VIEWER)
 
 
 # --- users and roles -----------------------------------------------------------------
@@ -98,9 +102,8 @@ def test_every_role_can_be_stored_and_read_back():
 
 def test_emails_are_case_insensitive_and_unique():
     email = make_user()
-    with SessionLocal() as db:
-        with pytest.raises(AuthError, match="already exists"):
-            create_user(db, email.upper(), "Duplicate", PASSWORD, Role.VIEWER)
+    with SessionLocal() as db, pytest.raises(AuthError, match="already exists"):
+        create_user(db, email.upper(), "Duplicate", PASSWORD, Role.VIEWER)
 
 
 # --- one-time invitations ------------------------------------------------------------
@@ -140,9 +143,8 @@ def test_an_expired_invitation_is_refused():
 
 
 def test_an_unknown_token_gets_the_same_error_as_a_used_one():
-    with SessionLocal() as db:
-        with pytest.raises(AuthError, match="invalid or has expired"):
-            accept_invitation(db, "made-up-token", "Nobody", PASSWORD)
+    with SessionLocal() as db, pytest.raises(AuthError, match="invalid or has expired"):
+        accept_invitation(db, "made-up-token", "Nobody", PASSWORD)
 
 
 def test_a_refused_invitation_does_not_use_it_up():
@@ -319,7 +321,7 @@ probe = FastAPI()
 
 
 @probe.get("/admin-only")
-def admin_only(user: User = Depends(require_role(Role.ADMIN))):
+def admin_only(user: Annotated[User, Depends(require_role(Role.ADMIN))]):
     return {"email": user.email}
 
 
@@ -342,7 +344,9 @@ def test_require_role_answers_401_when_signed_out():
 
 def test_require_role_answers_403_for_the_wrong_role():
     assert probe_client_signed_in_as(Role.VIEWER).get("/admin-only").status_code == 403
-    assert probe_client_signed_in_as(Role.REVIEWER).get("/admin-only").status_code == 403
+    assert (
+        probe_client_signed_in_as(Role.REVIEWER).get("/admin-only").status_code == 403
+    )
 
 
 def test_require_role_lets_the_right_role_through():
@@ -350,7 +354,9 @@ def test_require_role_lets_the_right_role_through():
 
 
 def test_an_admin_cannot_use_a_reviewer_only_action():
-    assert probe_client_signed_in_as(Role.ADMIN).post("/reviewer-action").status_code in (403,)
+    assert probe_client_signed_in_as(Role.ADMIN).post(
+        "/reviewer-action"
+    ).status_code in (403,)
 
 
 def test_protected_posts_also_need_the_csrf_header():
@@ -433,8 +439,18 @@ def test_inviting_the_same_email_again_cancels_the_older_link():
     second = invite(admin, email).json()["invite_token"]
     public = TestClient(app)
     body = {"display_name": "Late Joiner", "password": PASSWORD}
-    assert public.post("/api/v1/auth/accept-invite", json={"token": first, **body}).status_code == 400
-    assert public.post("/api/v1/auth/accept-invite", json={"token": second, **body}).status_code == 201
+    assert (
+        public.post(
+            "/api/v1/auth/accept-invite", json={"token": first, **body}
+        ).status_code
+        == 400
+    )
+    assert (
+        public.post(
+            "/api/v1/auth/accept-invite", json={"token": second, **body}
+        ).status_code
+        == 201
+    )
 
 
 # --- accept-invite endpoint (public) ---------------------------------------------------------
@@ -485,6 +501,19 @@ def test_a_weak_password_or_blank_name_is_refused_and_keeps_the_invite_usable():
     assert accept(token).status_code == 201
 
 
+def attempt(
+    name: str, barrier: threading.Barrier, token: str, results: list[str]
+) -> None:
+    """Try to accept the invite; every call waits at the barrier so two start together."""
+    with SessionLocal() as db:
+        barrier.wait()
+        try:
+            accept_invitation(db, token, name, PASSWORD)
+            results.append("ok")
+        except AuthError:
+            results.append("refused")
+
+
 def test_two_people_using_the_same_invite_at_once_only_one_wins():
     for _ in range(10):
         with SessionLocal() as db:
@@ -492,22 +521,20 @@ def test_two_people_using_the_same_invite_at_once_only_one_wins():
         results: list[str] = []
         barrier = threading.Barrier(2)
 
-        def attempt(name: str) -> None:
-            with SessionLocal() as db:
-                barrier.wait()
-                try:
-                    accept_invitation(db, token, name, PASSWORD)
-                    results.append("ok")
-                except AuthError:
-                    results.append("refused")
+        threads = [
+            threading.Thread(target=attempt, args=(name, barrier, token, results))
+            for name in ("A", "B")
+        ]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
 
-        threads = [threading.Thread(target=attempt, args=(n,)) for n in ("A", "B")]
-        [t.start() for t in threads]
-        [t.join() for t in threads]
         assert sorted(results) == ["ok", "refused"]
 
 
 # --- slowing down password guessing -------------------------------------------------------------
+
 
 def fail_login(client: TestClient, email: str, times: int) -> None:
     for _ in range(times):
@@ -517,7 +544,9 @@ def fail_login(client: TestClient, email: str, times: int) -> None:
 def count_failures(email: str) -> int:
     with SessionLocal() as db:
         return len(
-            db.execute(select(LoginAttempt).where(LoginAttempt.email == email)).scalars().all()
+            db.execute(select(LoginAttempt).where(LoginAttempt.email == email))
+            .scalars()
+            .all()
         )
 
 
@@ -567,7 +596,7 @@ def test_the_lock_lifts_after_the_window(client):
     long_ago = utcnow() - timedelta(minutes=auth_module.LOGIN_WINDOW_MINUTES + 1)
     with SessionLocal() as db:
         for attempt in db.execute(
-                select(LoginAttempt).where(LoginAttempt.email == email)
+            select(LoginAttempt).where(LoginAttempt.email == email)
         ).scalars():
             attempt.attempted_at = long_ago
         db.commit()

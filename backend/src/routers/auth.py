@@ -39,7 +39,9 @@ class LoginOut(BaseModel):
 
 class InviteIn(BaseModel):
     email: str = Field(max_length=320, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-    role: Role = Role.VIEWER #default generic privilege, admin will probs change later.
+    role: Role = (
+        Role.VIEWER
+    )  # default generic privilege, admin will probs change later.
 
 
 class InviteOut(BaseModel):
@@ -102,9 +104,9 @@ def login(body: LoginIn, response: Response, db: DbSession) -> dict:
 
 @router.post("/auth/logout", status_code=status.HTTP_204_NO_CONTENT)
 def logout(
-        response: Response,
-        db: DbSession,
-        context: Annotated[AuthContext, Depends(auth.current_auth)],
+    response: Response,
+    db: DbSession,
+    context: Annotated[AuthContext, Depends(auth.current_auth)],
 ) -> None:
     """Sign out. Needs the CSRF header like any other POST."""
     auth.revoke_session(db, context.session)
@@ -118,11 +120,13 @@ def me(user: Annotated[User, Depends(auth.current_user)]) -> User:
     return user
 
 
-@router.post("/users/invite", response_model=InviteOut, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/users/invite", response_model=InviteOut, status_code=status.HTTP_201_CREATED
+)
 def invite_user(
-        body: InviteIn,
-        db: DbSession,
-        admin: Annotated[User, Depends(auth.require_role(Role.ADMIN))],
+    body: InviteIn,
+    db: DbSession,
+    admin: Annotated[User, Depends(auth.require_role(Role.ADMIN))],
 ) -> dict:
     """Admins only. Creates a one-time invite and returns its token once.
 
@@ -130,9 +134,13 @@ def invite_user(
     """
     email = auth.normalize_email(body.email)
     if db.execute(select(User.id).where(User.email == email)).first() is not None:
-        raise HTTPException(status.HTTP_409_CONFLICT, "An account with that email already exists")
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "An account with that email already exists"
+        )
 
-    invitation, token = auth.create_invitation(db, email, body.role, invited_by=admin.id)
+    invitation, token = auth.create_invitation(
+        db, email, body.role, invited_by=admin.id
+    )
     return {
         "id": invitation.id,
         "email": invitation.email,
@@ -142,7 +150,9 @@ def invite_user(
     }
 
 
-@router.post("/auth/accept-invite", response_model=UserOut, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/auth/accept-invite", response_model=UserOut, status_code=status.HTTP_201_CREATED
+)
 def accept_invite(body: AcceptInviteIn, db: DbSession) -> User:
     """Public. Turns a valid invite token into an account. Sign in afterwards."""
     try:

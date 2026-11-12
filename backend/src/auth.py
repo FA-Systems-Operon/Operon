@@ -30,7 +30,9 @@ LOGIN_MAX_FAILURES = int(os.environ.get("LOGIN_MAX_FAILURES", "5"))
 LOGIN_WINDOW_MINUTES = int(os.environ.get("LOGIN_WINDOW_MINUTES", "15"))
 
 SESSION_COOKIE = "operon_session"  # HttpOnly: JavaScript cannot read it
-CSRF_COOKIE = "operon_csrf"  # readable by JavaScript, which copies it into the header below
+CSRF_COOKIE = (
+    "operon_csrf"  # readable by JavaScript, which copies it into the header below
+)
 CSRF_HEADER = "X-CSRF-Token"
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 
@@ -100,12 +102,12 @@ def verify_password(password_hash: str, password: str) -> bool:
 
 
 def create_user(
-        db: Session,
-        email: str,
-        display_name: str,
-        password: str,
-        role: Role,
-        commit: bool = True,
+    db: Session,
+    email: str,
+    display_name: str,
+    password: str,
+    role: Role,
+    commit: bool = True,
 ) -> User:
     """Create an active user. Raises AuthError for a weak password, no name or a taken email.
 
@@ -136,11 +138,11 @@ def create_user(
 
 
 def create_invitation(
-        db: Session,
-        email: str,
-        role: Role,
-        invited_by: uuid.UUID | None = None,
-        hours: int = INVITE_HOURS,
+    db: Session,
+    email: str,
+    role: Role,
+    invited_by: uuid.UUID | None = None,
+    hours: int = INVITE_HOURS,
 ) -> tuple[Invitation, str]:
     """Create a one-time invite. Returns (invitation, token). The token is shown only now.
 
@@ -155,7 +157,7 @@ def create_invitation(
             Invitation.email == email,
             Invitation.accepted_at.is_(None),
             Invitation.expires_at > now,
-            )
+        )
         .values(expires_at=now)
     )
     token = new_token()
@@ -172,7 +174,7 @@ def create_invitation(
 
 
 def accept_invitation(
-        db: Session, token: str, display_name: str, password: str
+    db: Session, token: str, display_name: str, password: str
 ) -> User:
     """Use an invite to create the account. Works once; unknown, used and expired look the same."""
     invalid = AuthError("This invitation is invalid or has expired")
@@ -242,7 +244,7 @@ def check_login_allowed(db: Session, email: str) -> None:
             .where(
                 LoginAttempt.email == normalize_email(email),
                 LoginAttempt.attempted_at > now - window,
-                )
+            )
             .order_by(LoginAttempt.attempted_at)
         )
         .scalars()
@@ -257,7 +259,9 @@ def record_failed_login(db: Session, email: str) -> None:
     now = utcnow()
     db.add(LoginAttempt(email=normalize_email(email), attempted_at=now))
     # Housekeeping: nothing older than a day is ever needed.
-    db.execute(delete(LoginAttempt).where(LoginAttempt.attempted_at < now - timedelta(days=1)))
+    db.execute(
+        delete(LoginAttempt).where(LoginAttempt.attempted_at < now - timedelta(days=1))
+    )
     db.commit()
 
 
@@ -307,10 +311,10 @@ def _check_csrf(request: Request, session: UserSession) -> None:
     header = request.headers.get(CSRF_HEADER)
     cookie = request.cookies.get(CSRF_COOKIE)
     if (
-            not header
-            or not cookie
-            or not hmac.compare_digest(header, cookie)
-            or not hmac.compare_digest(hash_token(header), session.csrf_token_hash)
+        not header
+        or not cookie
+        or not hmac.compare_digest(header, cookie)
+        or not hmac.compare_digest(hash_token(header), session.csrf_token_hash)
     ):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "CSRF token missing or invalid")
 
@@ -323,7 +327,11 @@ def current_auth(request: Request, db: DbSession) -> AuthContext:
     session = db.execute(
         select(UserSession).where(UserSession.token_hash == hash_token(token))
     ).scalar_one_or_none()
-    if session is None or session.revoked_at is not None or session.expires_at <= utcnow():
+    if (
+        session is None
+        or session.revoked_at is not None
+        or session.expires_at <= utcnow()
+    ):
         raise _not_signed_in()
 
     user = db.get(User, session.user_id)

@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 
 TEST_DATABASE_URL = os.getenv(
     "TEST_DATABASE_URL",
-    "postgresql://operon:change-me@localhost:5432/operon_test",
+    "postgresql://operon:operon@localhost:5432/operon_test",
 )
 
 # Safety check: refuse to run (and wipe tables) against a non-test database.
@@ -87,14 +87,8 @@ def db_session(database):
     session.close()
     # Empty every table so each test starts from a clean database.
     with engine.begin() as conn:
-        conn.execute(
-            text(
-                "TRUNCATE onboarding_jobs, artifact_versions, artifacts, "
-                "client_profile_versions, client_profiles, "
-                "playbook_versions, playbooks, "
-                "extracted_texts, source_documents, clients"
-            )
-        )
+        tables = ", ".join(f'"{table.name}"' for table in Base.metadata.sorted_tables)
+        conn.execute(text(f"TRUNCATE {tables}"))
 
 
 @pytest.fixture
