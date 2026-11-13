@@ -118,10 +118,20 @@ test.each([
 test('Reviews opens the review inbox and marks the Reviews link', async () => {
   openAt('#/reviews')
 
-  expect(screen.getByRole('heading', { name: 'Review inbox' })).toBeInTheDocument()
-  expect(screen.getByRole('link', { name: 'Reviews' })).toHaveAttribute('aria-current', 'page')
+  expect(
+    await screen.findByRole('heading', { name: 'Review inbox' }),
+  ).toBeInTheDocument()
+
+  expect(screen.getByRole('link', { name: 'Reviews' })).toHaveAttribute(
+    'aria-current',
+    'page',
+  )
+
   expect(activeTab()).toBeNull()
-  expect(await screen.findByText('No drafts waiting for review.')).toBeInTheDocument()
+
+  expect(
+    await screen.findByText('No drafts waiting for review.'),
+  ).toBeInTheDocument()
 })
 
 test('a draft link from the inbox opens that draft under Reviews', async () => {
@@ -168,9 +178,11 @@ test('Add sources opens under the Brain tab with the client from the link', asyn
 
   expect(activeTab()).toHaveTextContent('Brain')
 
+  await waitFor(() => {
   expect(
-    await screen.findByRole('combobox', { name: 'Client' }),
+    screen.getByRole('combobox', { name: 'Client' }),
   ).toHaveValue('c1')
+  })
 })
 
 test('following New intake opens Add sources with no client chosen', async () => {
@@ -212,10 +224,20 @@ test('an unknown address shows an empty Page not found', async () => {
 
 // Answers /api/v1/reviews from the queue in order; anything else gets [].
 function mockReviewReplies(...replies: Promise<Response>[]) {
-  const fetchMock = vi.fn((url: string) =>
-    url === '/api/v1/reviews' ? (replies.shift() ?? jsonResponse([])) : jsonResponse([]),
-  )
+  const fetchMock = vi.fn((url: string) => {
+    if (url === '/api/v1/me') {
+      return jsonResponse(mockUser)
+    }
+
+    if (url === '/api/v1/reviews') {
+      return replies.shift() ?? jsonResponse([])
+    }
+
+    return jsonResponse([])
+  })
+
   vi.stubGlobal('fetch', fetchMock)
+
   return fetchMock
 }
 
@@ -227,7 +249,11 @@ function navigate(hash: string) {
 }
 
 async function settled(fetchMock: ReturnType<typeof vi.fn>, calls: number) {
-  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(calls))
+  await waitFor(() =>
+    expect(
+      fetchMock.mock.calls.filter(([url]) => url === '/api/v1/reviews'),
+    ).toHaveLength(calls),
+  )
   await act(async () => {})
 }
 
@@ -270,17 +296,43 @@ test('the count refreshes when the route changes', async () => {
 
 test('a late count from an earlier route is ignored', async () => {
   let answerFirst: (body: unknown) => void = () => {}
+
   const first = new Promise<Response>((resolve) => {
-    answerFirst = (body) => resolve({ ok: true, json: () => Promise.resolve(body) } as Response)
+    answerFirst = (body) =>
+      resolve({
+        ok: true,
+        json: () => Promise.resolve(body),
+      } as Response)
   })
-  mockReviewReplies(first, jsonResponse([{}]))
+
+  const fetchMock = mockReviewReplies(first, jsonResponse([{}]))
+
   openAt('#/brain')
+
+  // Wait until authentication finishes and the first Reviews request starts.
+  await screen.findByRole('link', { name: 'Reviews' })
+
+  await waitFor(() =>
+    expect(
+      fetchMock.mock.calls.filter(([url]) => url === '/api/v1/reviews'),
+    ).toHaveLength(1),
+  )
+
+  // Now navigate so the second request starts.
   navigate('#/workforce')
-  expect(await screen.findByRole('link', { name: 'Reviews, 1 waiting' })).toBeInTheDocument()
 
-  await act(async () => answerFirst([{}, {}, {}]))
+  expect(
+    await screen.findByRole('link', { name: 'Reviews, 1 waiting' }),
+  ).toBeInTheDocument()
 
-  expect(screen.getByRole('link', { name: 'Reviews, 1 waiting' })).toBeInTheDocument()
+  // The older request finishes last and must not overwrite the newer count.
+  await act(async () => {
+    answerFirst([{}, {}, {}])
+  })
+
+  expect(
+    screen.getByRole('link', { name: 'Reviews, 1 waiting' }),
+  ).toBeInTheDocument()
 })
 
 // Only the interval is faked, so React Testing Library's own waiting still works.
@@ -321,7 +373,9 @@ test('no refresh while the tab is hidden', async () => {
   setHidden(true)
   await waitSeconds(90)
 
-  expect(fetchMock).toHaveBeenCalledTimes(1)
+  expect(
+  fetchMock.mock.calls.filter(([url]) => url === '/api/v1/reviews'),
+).toHaveLength(1)
 })
 
 test('the count refreshes as soon as the tab is shown again', async () => {
@@ -333,7 +387,9 @@ test('the count refreshes as soon as the tab is shown again', async () => {
   setHidden(false)
 
   expect(await screen.findByRole('link', { name: 'Reviews, 3 waiting' })).toBeInTheDocument()
-  expect(fetchMock).toHaveBeenCalledTimes(2)
+  expect(
+  fetchMock.mock.calls.filter(([url]) => url === '/api/v1/reviews'),
+).toHaveLength(2)
 })
 
 test('no refresh after the nav has closed', async () => {
@@ -347,5 +403,7 @@ test('no refresh after the nav has closed', async () => {
   await waitSeconds(30)
   setHidden(false)
 
-  expect(fetchMock).toHaveBeenCalledTimes(1)
+ expect(
+  fetchMock.mock.calls.filter(([url]) => url === '/api/v1/reviews'),
+).toHaveLength(1)
 })

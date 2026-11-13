@@ -9,8 +9,7 @@ const TABS: { id: Tab; label: string; href: string }[] = [
   { id: 'workforce', label: 'Workforce', href: '#/workforce' },
 ]
 
-type TopNavProps = {
-  active: Tab | null
+
 type TopNavProps = {
   active: Tab | null
   path: string
