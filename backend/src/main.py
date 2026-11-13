@@ -23,6 +23,7 @@ from src.routers import (
     documents,
     onboarding_jobs,
     playbooks,
+    reviews,
 )
 
 
@@ -59,6 +60,7 @@ app.include_router(documents.router)
 app.include_router(onboarding_jobs.router)
 app.include_router(client_profiles.router)
 app.include_router(playbooks.router)
+app.include_router(reviews.router)
 
 
 @app.get("/health")

@@ -428,3 +428,65 @@ The original documents, failed reply and validation error are supplied as data;
 the repaired response must pass the same full validator. A second invalid reply
 fails the job with no draft saved. Provider failures still use the existing job
 retry policy; they do not trigger this validation repair.
+
+
+## Review inbox (#54)
+
+`GET /api/v1/reviews` lists the profile drafts waiting for a reviewer, newest
+first (by `created_at`, then `version_id`). No drafts returns `200` with `[]`.
+
+```json
+[
+  {
+    "version_id": "<uuid>",
+    "client_profile_id": "<uuid>",
+    "version_number": 2,
+    "client_id": "<uuid>",
+    "client_name": "Maya's Bakery",
+    "created_at": "2026-11-09T14:03:12.511Z",
+    "status": "draft"
+  }
+]
+```
+
+A version is listed when all of these hold:
+
+- it is the highest `version_number` of its profile; an older draft with a
+  newer version (approved or not) is superseded and not listed,
+- its status is `draft` or `in_review` (nothing sets `in_review` yet),
+- its `data` is not empty. This leaves out the `{}` version 1 that
+  `POST /client-profiles` creates. Drafts from the onboarding job, the
+  source-draft endpoint and `PUT` corrections always have data, so a correction
+  to a generated draft replaces it in the inbox.
+
+There is one item per profile, not per client: a client with two profiles that
+both have a pending draft appears twice. `created_at` is when that version was
+saved, which for a generated draft is when it was generated. `version_id` and
+`client_profile_id` are what the draft detail view (#57) needs to open it.
+
+The list is not paginated; it only holds unreviewed drafts. If it grows,
+cursor paging on `(created_at, version_id)` fits the existing order.
+
+## Review draft detail (#57)
+
+`GET /api/v1/reviews/profiles/{profile_id}/versions/{version_id}` returns what
+the review page needs to open one draft, in a single call:
+
+```json
+{
+  "version": { "id": "<uuid>", "client_profile_id": "<uuid>", "version_number": 2,
+               "status": "draft", "data": { "...": "the saved draft" },
+               "created_at": "...", "approved_by": null, "approved_at": null },
+  "client": { "id": "<uuid>", "name": "Maya's Bakery", "created_at": "..." },
+  "documents": [ { "id": "<uuid>", "original_filename": "call.txt",
+                   "kind": "transcript", "...": "same fields as the documents list" } ]
+}
+```
+
+`version` has the same shape as the profile versions list. `documents` are the
+client's source documents (oldest first, no storage key), so the page can show
+which file and kind each quote's `document_id` refers to. Any version can be
+opened, not only drafts awaiting review. The version is looked up within the
+profile: a version of another profile, or an unknown profile or version,
+returns `404`. The route is under `/api/v1` already and does not depend on the
+profile routes moving there.

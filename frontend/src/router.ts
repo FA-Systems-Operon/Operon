@@ -32,3 +32,10 @@ export function useRoute(): Route {
 export function addSourcesHref(clientId?: string): string {
   return clientId ? `#/sources/new?client=${encodeURIComponent(clientId)}` : '#/sources/new'
 }
+
+// Link to one draft in the review inbox (#57 builds the page). Versions are scoped
+// to their profile in the API, so the link carries both IDs.
+export function reviewDraftHref(profileId: string, versionId: string): string {
+  const query = new URLSearchParams({ profile: profileId, version: versionId })
+  return `#/reviews/draft?${query}`
+}

@@ -6,6 +6,8 @@ import TopNav, { type Tab } from './components/TopNav'
 import AddSourcesPage from './pages/AddSourcesPage'
 import CommandPage from './pages/CommandPage'
 import PlaceholderPage from './pages/PlaceholderPage'
+import ReviewDraftPage from './pages/ReviewDraftPage'
+import ReviewInboxPage from './pages/ReviewInboxPage'
 import StatusPage from './pages/StatusPage'
 import LoginPage from './pages/LoginPage'
 import AcceptInvitePage from './pages/AcceptInvitePage'
@@ -62,11 +64,22 @@ function pageFor(
       }
 
     case '/reviews':
+      return { tab: 'reviews', content: <ReviewInboxPage /> }
+    case '/reviews/draft': {
+      const profileId = query.get('profile')
+      const versionId = query.get('version')
+      // The key starts fresh (no selected field) when the link opens another draft.
       return {
         tab: 'reviews',
-        content: <PlaceholderPage title="Reviews" />,
+        content: (
+          <ReviewDraftPage
+            key={`${profileId}/${versionId}`}
+            profileId={profileId}
+            versionId={versionId}
+          />
+        ),
       }
-
+    }
     case '/sources/new': {
       const clientId = query.get('client')
 
@@ -221,14 +234,15 @@ const page = pageFor(path, query, handleSignedIn, currentUser)
 
   return (
     <div className="app">
-      <TopNav
-        active={page.tab}
-        onLogout={handleLogout}
-        isAdmin={currentUser?.role === 'admin'}
-        isLoggingOut={isLoggingOut}
-       logoutError={logoutError}
-      />
-      <main className="page">{page.content}</main>
-    </div>
+   <TopNav
+  active={page.tab}
+  path={path}
+  onLogout={handleLogout}
+  isAdmin={currentUser?.role === 'admin'}
+  isLoggingOut={isLoggingOut}
+  logoutError={logoutError}
+/>
+<main className="page">{page.content}</main>
+</div>
   )
 }

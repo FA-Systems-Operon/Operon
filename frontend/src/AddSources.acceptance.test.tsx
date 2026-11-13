@@ -19,22 +19,29 @@ function fakeApi() {
   const requests: Request[] = []
 
   const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+  // Simulate an authenticated user for the session check.
+  if (url === '/api/v1/me') {
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        id: 'test-user',
+        email: 'staff@example.com',
+        display_name: 'Test User',
+        role: 'reviewer',
+      }),
+    } as Response
+  }
 
-    // NEW: Simulate an authenticated user for the session check.
-    if (url === '/api/v1/me') {
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ({
-          id: 'test-user',
-          email: 'staff@example.com',
-          role: 'staff',
-        }),
-      } as Response
-    }
+  // The nav's waiting-review count isn't part of the upload flow.
+  if (url === '/api/v1/reviews') {
+    return {
+      ok: true,
+      json: async () => [],
+    } as Response
+  }
 
-    // Existing API behavior remains unchanged.
-    const method = init?.method ?? 'GET'
+  const method = init?.method ?? 'GET'
     let body: unknown = null
     let answer: unknown = [
       { id: CLIENT, name: 'Plateau Basements', created_at: '' },

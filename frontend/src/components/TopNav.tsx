@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react'
+import { listReviews } from '../api'
 
 export type Tab = 'command' | 'brain' | 'workforce' | 'reviews'
 
@@ -9,6 +11,9 @@ const TABS: { id: Tab; label: string; href: string }[] = [
 
 type TopNavProps = {
   active: Tab | null
+type TopNavProps = {
+  active: Tab | null
+  path: string
   onLogout: () => Promise<void>
   isLoggingOut: boolean
   logoutError?: string
@@ -17,12 +22,46 @@ type TopNavProps = {
 
 export default function TopNav({
   active,
+  path,
   onLogout,
   isLoggingOut,
   logoutError,
   isAdmin = false,
 }: TopNavProps) {
   const current = (tab: Tab) => (active === tab ? 'page' : undefined)
+  // Drafts waiting for review. Keeps the last count while a refresh is on its way.
+  const [waiting, setWaiting] = useState(0)
+
+  // Fetched on every route change, every 30 seconds while the tab is visible, and as
+  // soon as the tab is shown again, so a draft that finishes in the background shows up.
+  useEffect(() => {
+    // Only the newest request may set the count: an older reply that arrives late, or
+    // one after the route has changed or the nav has closed, is ignored.
+    let newest = 0
+    function refresh() {
+      const request = ++newest
+      listReviews()
+        .then((list) => {
+          if (request === newest) setWaiting(list.length)
+        })
+        .catch(() => {
+          // No error in the nav: just no badge.
+          if (request === newest) setWaiting(0)
+        })
+    }
+    function refreshIfVisible() {
+      if (!document.hidden) refresh()
+    }
+
+    refresh()
+    const timer = window.setInterval(refreshIfVisible, 30_000)
+    document.addEventListener('visibilitychange', refreshIfVisible)
+    return () => {
+      newest++
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', refreshIfVisible)
+    }
+  }, [path])
 
   return (
     <header className="topnav">
@@ -50,32 +89,39 @@ export default function TopNav({
         </ul>
       </nav>
 
-      <div className="topnav-actions">
-        <a
-          className="topnav-reviews"
-          href="#/reviews"
-          aria-current={current('reviews')}
-        >
-          Reviews
-        </a>
+<div className="topnav-actions">
+  <a
+    className="topnav-reviews"
+    href="#/reviews"
+    aria-current={current('reviews')}
+    aria-label={waiting > 0 ? `Reviews, ${waiting} waiting` : undefined}
+  >
+    Reviews
+    {/* The label already says the count, so the number isn't read twice. */}
+    {waiting > 0 && (
+      <span className="topnav-badge" aria-hidden="true">
+        {waiting}
+      </span>
+    )}
+  </a>
 
-        {isAdmin && (
-          <a className="topnav-reviews" href="#/invite">
-            Invite
-          </a>
-        )}
+  {isAdmin && (
+    <a className="topnav-reviews" href="#/invite">
+      Invite
+    </a>
+  )}
 
-        <button
-          type="button"
-          className="topnav-logout"
-          onClick={() => void onLogout()}
-          disabled={isLoggingOut}
-        >
-          {isLoggingOut ? 'Logging out...' : 'Log out'}
-        </button>
+  <button
+    type="button"
+    className="topnav-logout"
+    onClick={() => void onLogout()}
+    disabled={isLoggingOut}
+  >
+    {isLoggingOut ? 'Logging out...' : 'Log out'}
+  </button>
 
-        {logoutError && <span role="alert">{logoutError}</span>}
-      </div>
+  {logoutError && <span role="alert">{logoutError}</span>}
+</div>
     </header>
   )
 }

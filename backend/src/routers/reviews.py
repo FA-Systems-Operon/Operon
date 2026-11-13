@@ -1,0 +1,105 @@
+"""The review inbox (#54) and the draft detail it opens (#57)."""
+
+import uuid
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func, literal, select
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import Session
+
+from src.db import get_db
+from src.models import (
+    Client,
+    ClientProfile,
+    ClientProfileVersion,
+    ReviewStatus,
+    SourceDocument,
+)
+from src.schemas import ReviewDraftOut, ReviewInboxItemOut
+
+router = APIRouter(prefix="/api/v1/reviews", tags=["reviews"])
+
+DbSession = Annotated[Session, Depends(get_db)]
+
+
+@router.get("", response_model=list[ReviewInboxItemOut])
+def list_review_inbox(db: DbSession) -> list[ReviewInboxItemOut]:
+    """Return the latest version of each profile while it awaits review, newest first.
+
+    An older draft with a newer version is superseded, so only the latest counts.
+    The empty {} version 1 that POST /client-profiles creates is not a draft to
+    review; every generated or edited draft has data, so empty data is left out.
+    """
+    latest = (
+        select(
+            ClientProfileVersion.client_profile_id,
+            func.max(ClientProfileVersion.version_number).label("version_number"),
+        )
+        .group_by(ClientProfileVersion.client_profile_id)
+        .subquery()
+    )
+    query = (
+        select(
+            ClientProfileVersion.id.label("version_id"),
+            ClientProfileVersion.client_profile_id,
+            ClientProfileVersion.version_number,
+            ClientProfile.client_id,
+            Client.name.label("client_name"),
+            ClientProfileVersion.created_at,
+            ClientProfileVersion.status,
+        )
+        .join(
+            latest,
+            (latest.c.client_profile_id == ClientProfileVersion.client_profile_id)
+            & (latest.c.version_number == ClientProfileVersion.version_number),
+        )
+        .join(ClientProfile, ClientProfile.id == ClientProfileVersion.client_profile_id)
+        .join(Client, Client.id == ClientProfile.client_id)
+        .where(
+            ClientProfileVersion.status.in_(
+                [ReviewStatus.DRAFT, ReviewStatus.IN_REVIEW]
+            ),
+            ClientProfileVersion.data != literal({}, JSONB),
+        )
+        # id breaks ties between versions saved in the same transaction.
+        .order_by(
+            ClientProfileVersion.created_at.desc(), ClientProfileVersion.id.desc()
+        )
+    )
+    return [ReviewInboxItemOut.model_validate(row) for row in db.execute(query)]
+
+
+@router.get(
+    "/profiles/{profile_id}/versions/{version_id}", response_model=ReviewDraftOut
+)
+def get_review_draft(
+    profile_id: uuid.UUID, version_id: uuid.UUID, db: DbSession
+) -> ReviewDraftOut:
+    """Return one profile version with its client and that client's documents.
+
+    Any version can be opened, not only ones awaiting review, so a draft that is
+    approved while open still loads. The documents let the reviewer see which
+    file each quote came from.
+    """
+    row = db.execute(
+        select(ClientProfileVersion, Client)
+        .join(ClientProfile, ClientProfile.id == ClientProfileVersion.client_profile_id)
+        .join(Client, Client.id == ClientProfile.client_id)
+        # Scoped to the profile: another profile's version is "not found" too.
+        .where(
+            ClientProfileVersion.id == version_id,
+            ClientProfileVersion.client_profile_id == profile_id,
+        )
+    ).one_or_none()
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Profile version not found")
+    version, client = row
+    documents = db.scalars(
+        select(SourceDocument)
+        .where(SourceDocument.client_id == client.id)
+        .order_by(SourceDocument.uploaded_at, SourceDocument.id)
+    )
+    return ReviewDraftOut.model_validate(
+        {"version": version, "client": client, "documents": list(documents)}
+    )
