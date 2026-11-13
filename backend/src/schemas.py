@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictStr
 
 from src.models import DocumentKind, JobStatus, ReviewStatus
 
@@ -130,6 +130,14 @@ class ReviewDraftOut(BaseModel):
     version: ClientProfileVersionOut
     client: ClientOut
     documents: list[SourceDocumentOut]
+
+
+class ReviewEditsIn(BaseModel):
+    """Only field corrections; evidence and review metadata come from storage."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    changes: dict[str, StrictStr | None]
 
 
 class PlaybookOut(BaseModel):

@@ -78,6 +78,7 @@ const evidence = () => within(screen.getByRole('region', { name: /./ }))
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  window.history.replaceState(null, '', '#')
 })
 
 test('shows the client, status, version, generated time and a way back', async () => {
@@ -424,4 +425,152 @@ test('dirty display labels original conflict proposals, source counts and unsupp
     'maya@call.test or maya@form.test',
   )
   expect(row('Email').closest('.review-field')).toHaveTextContent('2 sources')
+})
+
+// #60 save scenarios: reusable by #66; no Approve action is added here.
+const SAVED = {
+  ...DRAFT.version,
+  id: 'v3', version_number: 3, status: 'draft',
+  data: { ...DRAFT.version.data, name: 'Corrected', email: 'chosen@example.test', assessment: null },
+} as ReviewDraft['version']
+
+const approvalBlocked = () => document.querySelector('.review-draft')?.getAttribute('data-approval-blocked')
+
+test('save posts only corrections, adopts the returned version and survives reopening its URL', async () => {
+  const fetchMock = mockDraft(reply(200, DRAFT), reply(201, SAVED), reply(200, { ...DRAFT, version: SAVED }))
+  const view = render(<ReviewDraftPage profileId="p1" versionId="v2" />)
+  await screen.findByRole('heading', { name: 'Plateau Basements' })
+  expect(approvalBlocked()).toBe('false')
+  await edit('Name', 'Corrected')
+  await edit('Email', 'chosen@example.test')
+  expect(approvalBlocked()).toBe('true')
+  await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+  expect(await screen.findByText('Draft edits saved.')).toBeInTheDocument()
+  const [url, init] = fetchMock.mock.calls[1]
+  expect(url).toBe('/api/v1/reviews/profiles/p1/versions/v2/edits')
+  expect(init.method).toBe('POST')
+  expect(JSON.parse(init.body)).toEqual({ changes: { name: 'Corrected', email: 'chosen@example.test' } })
+  expect(screen.getByText('Version 3')).toBeInTheDocument()
+  expect(window.location.hash).toBe('#/reviews/draft?profile=p1&version=v3')
+  expect(approvalBlocked()).toBe('false')
+  expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
+  expect(screen.getByText(/Information checks have not been recomputed/)).toBeInTheDocument()
+  await userEvent.click(row('Email'))
+  expect(screen.getByRole('button', { name: 'Edit Email' })).toHaveTextContent('chosen@example.test')
+  expect(evidence().getAllByRole('listitem')).toHaveLength(2)
+  expect(evidence().getByText(/Conflicts remain unresolved/)).toBeInTheDocument()
+  expect(document.querySelector('[data-flag]')).toBeNull()
+  view.unmount()
+  render(<ReviewDraftPage profileId="p1" versionId="v3" />)
+  expect(await screen.findByRole('button', { name: 'Edit Name' })).toHaveTextContent('Corrected')
+  expect(fetchMock).toHaveBeenLastCalledWith('/api/v1/reviews/profiles/p1/versions/v3')
+  await userEvent.click(row('Name'))
+  expect(evidence().getByText(/retained as history/)).toBeInTheDocument()
+})
+
+test('a second save uses the newly saved version as its base', async () => {
+  const next = { ...SAVED, id: 'v4', version_number: 4, data: { ...SAVED.data, name: 'Second correction' } }
+  const fetchMock = mockDraft(reply(200, DRAFT), reply(201, SAVED), reply(201, next))
+  render(<ReviewDraftPage profileId="p1" versionId="v2" />)
+  await screen.findByRole('heading', { name: 'Plateau Basements' })
+  await edit('Name', 'Corrected')
+  await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+  await screen.findByText('Version 3')
+  await edit('Name', 'Second correction')
+  await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+  await screen.findByText('Version 4')
+  expect(fetchMock.mock.calls[2][0]).toBe('/api/v1/reviews/profiles/p1/versions/v3/edits')
+  expect(JSON.parse(fetchMock.mock.calls[2][1].body)).toEqual({ changes: { name: 'Second correction' } })
+})
+
+test('saving freezes edits and repeat submissions until the save finishes', async () => {
+  let finish!: (response: Response) => void
+  const fetchMock = mockDraft(reply(200, DRAFT), new Promise((resolve) => { finish = resolve }))
+  render(<ReviewDraftPage profileId="p1" versionId="v2" />)
+  await screen.findByRole('heading', { name: 'Plateau Basements' })
+  await edit('Name', 'Corrected')
+  await userEvent.dblClick(screen.getByRole('button', { name: 'Save changes' }))
+  expect(screen.getByRole('button', { name: 'Saving…' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Edit Name' })).toBeDisabled()
+  expect(approvalBlocked()).toBe('true')
+  expect(fetchMock).toHaveBeenCalledTimes(2)
+  await act(async () => finish(await reply(201, SAVED)))
+  expect(screen.getByText('Draft edits saved.')).toBeInTheDocument()
+  expect(approvalBlocked()).toBe('false')
+})
+
+test.each(['network', 'server', 'validation'])('a %s failure retains corrections and blocks approval until a successful retry', async (failure) => {
+  const fetchMock = mockDraft(reply(200, DRAFT))
+  render(<ReviewDraftPage profileId="p1" versionId="v2" />)
+  await screen.findByRole('heading', { name: 'Plateau Basements' })
+  if (failure === 'network') fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'))
+  else fetchMock.mockReturnValueOnce(reply(failure === 'server' ? 500 : 422, { detail: [] }))
+  fetchMock.mockReturnValueOnce(reply(201, SAVED))
+  await edit('Name', 'Corrected')
+  await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+  expect(await screen.findByRole('alert')).toHaveTextContent(/Couldn't/)
+  expect(screen.getByRole('button', { name: 'Edit Name' })).toHaveTextContent('Corrected')
+  expect(screen.getByText('Version 2')).toBeInTheDocument()
+  expect(approvalBlocked()).toBe('true')
+  await userEvent.click(screen.getByRole('button', { name: 'Try saving again' }))
+  expect(await screen.findByText('Draft edits saved.')).toBeInTheDocument()
+  expect(approvalBlocked()).toBe('false')
+})
+
+test('reverting after a failed save still requires a successful freshness check', async () => {
+  mockDraft(reply(200, DRAFT), reply(500, {}), reply(201, DRAFT.version))
+  render(<ReviewDraftPage profileId="p1" versionId="v2" />)
+  await screen.findByRole('heading', { name: 'Plateau Basements' })
+  await edit('Name', 'Corrected')
+  await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+  await screen.findByRole('alert')
+  await edit('Name', 'Maya Chen')
+  expect(approvalBlocked()).toBe('true')
+  await userEvent.click(screen.getByRole('button', { name: 'Try saving again' }))
+  expect(await screen.findByText('Draft edits saved.')).toBeInTheDocument()
+  expect(approvalBlocked()).toBe('false')
+})
+
+test('409 retains local edits and blocks saving and approval without silently loading newer data', async () => {
+  const fetchMock = mockDraft(reply(200, DRAFT), reply(409, { detail: 'Draft changed' }))
+  render(<ReviewDraftPage profileId="p1" versionId="v2" />)
+  await screen.findByRole('heading', { name: 'Plateau Basements' })
+  await edit('Name', 'Corrected')
+  await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+  expect(await screen.findByRole('alert')).toHaveTextContent(/Open the latest draft from the review inbox/)
+  expect(screen.getByRole('button', { name: 'Edit Name' })).toHaveTextContent('Corrected')
+  expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
+  expect(approvalBlocked()).toBe('true')
+  expect(fetchMock).toHaveBeenCalledTimes(2)
+  expect(window.location.hash).not.toContain('version=v3')
+})
+
+test('pending valid or invalid input blocks save and approval before any mutation request', async () => {
+  const fetchMock = mockDraft(reply(200, DRAFT))
+  render(<ReviewDraftPage profileId="p1" versionId="v2" />)
+  await screen.findByRole('heading', { name: 'Plateau Basements' })
+  await edit('Name', 'Corrected')
+  await userEvent.click(screen.getByRole('button', { name: 'Edit Need 1' }))
+  expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
+  expect(approvalBlocked()).toBe('true')
+  await userEvent.clear(screen.getByRole('textbox', { name: 'Need 1' }))
+  await userEvent.keyboard('{Enter}')
+  expect(screen.getByRole('alert')).toHaveTextContent('List items must not be blank')
+  expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
+  await userEvent.keyboard('{Escape}')
+  expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled()
+  expect(fetchMock).toHaveBeenCalledTimes(1)
+})
+
+test('a save response after leaving the page does not change the route', async () => {
+  let finish!: (response: Response) => void
+  mockDraft(reply(200, DRAFT), new Promise((resolve) => { finish = resolve }))
+  const view = render(<ReviewDraftPage profileId="p1" versionId="v2" />)
+  await screen.findByRole('heading', { name: 'Plateau Basements' })
+  await edit('Name', 'Corrected')
+  await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+  view.unmount()
+  window.history.replaceState(null, '', '#/reviews')
+  await act(async () => finish(await reply(201, SAVED)))
+  expect(window.location.hash).toBe('#/reviews')
 })

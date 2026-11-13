@@ -417,8 +417,8 @@ Everything is saved in the existing immutable version JSON; no migration is
 needed. Historical versions without assessment stay unassessed. The generic
 profile update endpoint remains an unvalidated JSON editing endpoint and does not
 recompute completeness or establish conflict-resolution/approval guarantees.
-The future review/edit integration must invalidate or recompute assessment after
-edits. The source-draft endpoint validates the supplied evidence; it does not scan
+The review edit endpoint (#60) invalidates assessment after edits (see below).
+The source-draft endpoint validates the supplied evidence; it does not scan
 all documents a client owns. The onboarding job compares its exact pinned pair.
 
 Resolution and approval blocking are follow-up review-flow work, as described in
@@ -490,3 +490,51 @@ opened, not only drafts awaiting review. The version is looked up within the
 profile: a version of another profile, or an unknown profile or version,
 returns `404`. The route is under `/api/v1` already and does not depend on the
 profile routes moving there.
+
+## Save reviewer edits (#60)
+
+`POST /api/v1/reviews/profiles/{profile_id}/versions/{version_id}/edits`
+accepts only a `changes` map, for example:
+
+```json
+{"changes": {"name": "Corrected name", "email": null, "needs/0": "More bookings"}}
+```
+
+The version in the URL is the loaded base. A transaction locks the profile and
+checks that this is still its latest version, in `draft` or `in_review` with no
+approval timestamp. A superseded or decided base returns `409`; a missing or
+mismatched profile/version returns `404`. Unknown fields, non-text values,
+new/noncanonical list indexes, blank/null list items, and a non-object stored base
+return `422`. Scalars
+are trimmed and may be cleared to null; no extra email/URL/phone formats are imposed.
+
+The server copies the stored base, applies only permitted corrections, and inserts
+an immutable, unapproved version preserving the base's `draft` or `in_review`
+status, using the existing version numbering and unique constraint. Success returns
+the saved version (`201`). Empty or unchanged changes
+still check freshness and return the current base (`200`), without another version;
+this supports retry after reverting local changes. Failure rolls back the save.
+The generic profile PUT now takes the same parent lock (its JSON contract is unchanged).
+Source-draft generation and profile approval already take that lock.
+
+Changed snapshots use the existing nullable `assessment` format: `null` means
+unassessed. Original references and conflict alternatives remain unchanged as
+historical evidence. They do not verify reviewer corrections, and editing a
+conflicted scalar does not resolve the conflict. The source-generation validator
+is unchanged. Prior versions remain intact; no migration is needed. Saving does
+not approve anything, change the latest-approved profile, or mark artifacts stale.
+
+The review page offers explicit Save, retains local edits on errors, and adopts
+the response's version and URL on success, notifying the hash router immediately.
+Pending input and an in-flight request
+disable Save; a known stale response also disables it and directs the reviewer to
+the latest draft in the inbox. Failed requests require a successful retry before
+the local save gate clears, even if the edits are reverted.
+
+`draftSaveGate` supplies the save prerequisite for #62: block approval for unsaved
+edits, pending input, saving, save failure, known staleness, or noneditable status.
+It is not an authorization or conflict-resolution decision. There is no Approve
+button or approval-endpoint change in #60. **Approval-time freshness, permissions,
+and conflict/field decisions remain #62 and the wider review workflow.** No
+navigation guard, autosave or browser storage is added; leaving before a successful
+save discards local edits. #66's full acceptance verification remains separate.
