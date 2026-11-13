@@ -1,5 +1,6 @@
 /* Scoped to the review detail; leave shared navigation/authentication styles alone. */
 .review-draft .review-field-row {
+  align-items: start;
   cursor: default;
 }
 
@@ -22,6 +23,7 @@
 
 .review-draft .inline-draft-field {
   min-width: 0;
+  font-size: 1rem;
 }
 
 .review-draft .inline-draft-field input {
@@ -59,4 +61,10 @@
 
 .review-draft .review-field-row[data-selected='true'] {
   background: var(--surface-raised);
+}
+
+/* Evidence can contain the same unbroken URLs as the field values. */
+.review-draft .review-evidence {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
