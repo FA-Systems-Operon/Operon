@@ -12,6 +12,10 @@ import { formatGenerated } from './ReviewInboxPage'
 const { inbox_item: ITEM, draft: DRAFT } = responses
 const DRAFT_URL = `/api/v1/reviews/profiles/${ITEM.client_profile_id}/versions/${ITEM.version_id}`
 
+const REVIEWER = {
+  id: 'test-user', email: 'staff@example.com', display_name: 'Test User', role: 'reviewer',
+}
+
 type Reply = [status: number, body: unknown]
 
 // Answers every /api/v1/reviews call with the same reply until the test switches it.
@@ -26,12 +30,7 @@ function fakeApi(inbox: Reply) {
       return {
         ok: true,
         status: 200,
-        json: async () => ({
-          id: 'test-user',
-          email: 'staff@example.com',
-          display_name: 'Test User',
-          role: 'reviewer',
-        }),
+        json: async () => REVIEWER,
       } as Response
     }
 
@@ -146,14 +145,18 @@ test('production navigation opens inline editing and reopening discards local ed
   await open()
   expect(screen.getByRole('button', { name: 'Edit Name' })).toHaveTextContent('Maya Chen')
   expect(screen.queryByRole('status')).not.toBeInTheDocument()
-  expect(fetchMock.mock.calls.every((call) => call.length === 1)).toBe(true)
+  for (const call of fetchMock.mock.calls) {
+    expect(call).toEqual(call[0] === '/api/v1/me'
+      ? ['/api/v1/me', { method: 'GET', credentials: 'include' }]
+      : [call[0]])
+  }
 })
 
 
 test('opening another version clears applied changes and invalid typing', async () => {
   const otherVersion = 'another-version'
   vi.stubGlobal('fetch', vi.fn(async (url: string) => {
-    const body = url === '/api/v1/reviews' ? [ITEM]
+    const body = url === '/api/v1/me' ? REVIEWER : url === '/api/v1/reviews' ? [ITEM]
       : { ...DRAFT, version: { ...DRAFT.version, id: url.endsWith(otherVersion) ? otherVersion : ITEM.version_id } }
     return { ok: true, status: 200, json: async () => body } as Response
   }))
