@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 
 TEST_DATABASE_URL = os.getenv(
     "TEST_DATABASE_URL",
-    "postgresql://operon:operon@localhost:5432/operon_test",
+    "postgresql://operon:change-me@localhost:5432/operon_test",
 )
 
 # Safety check: refuse to run (and wipe tables) against a non-test database.
