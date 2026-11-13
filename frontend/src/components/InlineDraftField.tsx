@@ -13,9 +13,10 @@ type Props = {
   onApply: (path: EditablePath, text: string) => void
   // Separate unapplied/invalid typing from the applied session for the future save flow.
   onPendingChange: (path: EditablePath, pending: PendingFieldEdit | null) => void
+  disabled?: boolean
 }
 
-export default function InlineDraftField({ path, label, value, displayValue, onSelect, onApply, onPendingChange }: Props) {
+export default function InlineDraftField({ path, label, value, displayValue, onSelect, onApply, onPendingChange, disabled }: Props) {
   const [pending, setPending] = useState<PendingFieldEdit | null>(null)
   const button = useRef<HTMLButtonElement>(null)
   const errorId = useId()
@@ -48,6 +49,7 @@ export default function InlineDraftField({ path, label, value, displayValue, onS
       <button
         ref={button}
         type="button"
+        disabled={disabled}
         className="review-field-value inline-draft-value"
         aria-label={`Edit ${label}`}
         aria-describedby={valueId}
@@ -62,6 +64,7 @@ export default function InlineDraftField({ path, label, value, displayValue, onS
       {pending && (
         <>
           <input
+            disabled={disabled}
             autoFocus
             aria-label={label}
             aria-invalid={!!pending.error}

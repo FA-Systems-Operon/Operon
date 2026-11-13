@@ -115,6 +115,21 @@ export async function getReviewDraft(profileId: string, versionId: string): Prom
   return response.json()
 }
 
+export async function saveReviewEdits(
+  profileId: string, versionId: string, changes: Record<string, string | null>,
+): Promise<ProfileVersion> {
+  const response = await fetch(
+    `/api/v1/reviews/profiles/${encodeURIComponent(profileId)}/versions/${encodeURIComponent(versionId)}/edits`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ changes }),
+    },
+  )
+  if (!response.ok) throw new ApiError(response.status, await readDetail(response))
+  return response.json()
+}
+
 // FormData is an empty box that can carry files over the internet. We can append files to it, and then send it in a POST request.
 export async function uploadDocument(
   clientId: string,

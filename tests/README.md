@@ -283,10 +283,8 @@ and approval metadata are not changed. Original evidence does not automatically
 verify a reviewer correction. There is only an unsaved-local-changes notice, with
 no navigation guard, browser storage, saving, recomputation or approval gate.
 
-For #66, reuse these local scenarios after #60 adds save/reload, failures,
-concurrent/stale saves, and approval of the edited version. Those persistence and
-approval scenarios are intentionally not implemented by #59. In particular, #60
-must choose a persistence/validation contract for corrected conflicts: the
+For #66, reuse these local scenarios with #60's save scenarios below and #62's
+future approval action. Persistence and approval are outside #59. The
 source-draft validator requires conflicted scalar values to remain null and cannot
 be used unchanged to save a corrected non-null value while retaining its original
 conflict. Generic PUT also accepts arbitrary JSON and does not establish a current
@@ -296,3 +294,38 @@ Manual browser checks remain necessary for real Tab/Shift+Tab/blur focus movemen
 IME behavior, visible focus and error announcement, long values and evidence,
 and the responsive layout below 720px. jsdom interaction checks do not prove
 browser layout, assistive-technology behavior or full #66 persistence acceptance.
+
+## Save draft edits (#60; reuse for AT 4.2, #66)
+
+These are focused implementation/regression checks, not completion of #66.
+
+| Requirement | Tests |
+| --- | --- |
+| Save corrections, reopen the returned version, preserve old snapshots, evidence and unresolved conflicts; invalidate assessment with the existing null format | `test_review_edits.py::test_save_appends_draft_and_reload_keeps_corrections_and_original_history`; `ReviewDraftPage.test.tsx` save/reopen scenario |
+| Nullable scalars, nonblank existing list items, restricted paths/types/metadata; reject invalid saves atomically; non-object base returns a clean 422 | `test_review_edits.py` validation cases, including `test_nonobject_base_data_returns_clean_422_without_writing` |
+| Reject superseded/decided versions without writing | `test_save_from_superseded_version_returns_409_without_writing`; `test_decided_or_stale_version_cannot_be_saved`; page `409` scenario |
+| Serialize competing saves and hold the parent lock until transaction end | `test_simultaneous_saves_have_one_winner_and_one_stale_response`; `test_save_holds_parent_lock_until_the_transaction_finishes` |
+| Storage failures roll back; frontend network/server/validation errors retain corrections and allow retry | `test_storage_failure_rolls_back_the_entire_save`; page failure/retry scenarios |
+| Pending/invalid typing, saving, failure and known stale state block the local save prerequisite for approval | `draftSave.test.ts`; page pending/saving/failure/stale scenarios |
+| Saved version becomes the next save's base and the reload destination, including in the app's hash router | page second-save scenario; `ReviewDraftSave.test.tsx` |
+| Late replies do not navigate after leaving; duplicate submissions are prevented | page late-response and saving scenarios |
+
+The save/reload test covers both `draft` and `in_review` and asserts the new version
+preserves that status. The app route test observes `useRoute` directly without
+injecting a hashchange event; the save flow must notify the router itself.
+
+Run with the existing isolated PostgreSQL `*_test` database and locked dependencies:
+
+```bash
+python -m pytest tests/test_review_edits.py tests/test_reviews.py tests/test_versioning_workflow.py -q
+cd frontend
+npm test
+npm run build
+```
+
+`draftSaveGate` only establishes the local save prerequisite. Approval-time server
+freshness, reviewer permission, conflict decisions and the Approve action remain
+#62; #66 can extend these scenarios through that action. A missing save error does
+not establish that a version is still current when someone later approves it.
+The old generic PUT remains an arbitrary-JSON interface, now sharing the parent
+lock; it does not acquire this endpoint's validation or expected-version contract.
