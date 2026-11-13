@@ -19,15 +19,41 @@ type Reply = [status: number, body: unknown]
 // so both see the same inbox, however many times either asks. The draft URL gets the draft.
 function fakeApi(inbox: Reply) {
   let reply = inbox
+
   const fetchMock = vi.fn(async (url: string) => {
-    if (url !== '/api/v1/reviews' && url !== DRAFT_URL) throw new Error(`Unexpected ${url}`)
+    // Return a signed-in user when the app checks authentication.
+    if (url === '/api/v1/me') {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          id: 'test-user',
+          email: 'staff@example.com',
+          display_name: 'Test User',
+          role: 'reviewer',
+        }),
+      } as Response
+    }
+
+    if (url !== '/api/v1/reviews' && url !== DRAFT_URL) {
+      throw new Error(`Unexpected ${url}`)
+    }
+
     const [status, body]: Reply = url === DRAFT_URL ? [200, DRAFT] : reply
-    return { ok: status < 400, status, json: async () => body } as Response
+
+    return {
+      ok: status < 400,
+      status,
+      json: async () => body,
+    } as Response
   })
+
   vi.stubGlobal('fetch', fetchMock)
+
   const answerInboxWith = (next: Reply) => {
     reply = next
   }
+
   return { fetchMock, answerInboxWith }
 }
 
