@@ -1,12 +1,14 @@
 
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, expect, test, vi } from 'vitest'
 import App from './App'
 
 const mockUser = {
   id: 'test-user',
   email: 'staff@example.com',
-  role: 'staff',
+  display_name: 'Test User',
+  role: 'reviewer',
 }
 
 function mockSession(status: 'authenticated' | 'unauthenticated' | 'error') {
@@ -131,4 +133,76 @@ test('preserves query parameters when redirecting', async () => {
       '#/login?next=%2Fsources%2Fnew%3Fclient%3Dc1',
     )
   })
+})
+
+test('successful login clears a previous session error', async () => {
+  let resolveSession!: (response: Response) => void
+
+  const sessionRequest = new Promise<Response>((resolve) => {
+    resolveSession = resolve
+  })
+
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+
+      if (url === '/api/v1/me') {
+        return sessionRequest
+      }
+
+      if (url === '/api/v1/auth/login') {
+        return new Response(
+          JSON.stringify({
+            user: {
+              id: 'test-user',
+              email: 'staff@example.com',
+              display_name: 'Test User',
+              role: 'reviewer',
+            },
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        )
+      }
+
+      return new Response('[]', { status: 200 })
+    }),
+  )
+
+  window.location.hash = '#/login'
+  render(<App />)
+
+  // The session check fails after the login screen is displayed.
+  await act(async () => {
+    resolveSession(new Response(null, { status: 500 }))
+  })
+
+  const user = userEvent.setup()
+
+  await user.type(
+    screen.getByLabelText('Email address'),
+    'staff@example.com',
+  )
+
+  await user.type(
+    screen.getByLabelText('Password'),
+    'test-password-123',
+  )
+
+  await user.click(screen.getByRole('button', { name: 'Sign in' }))
+
+  await waitFor(() => {
+    expect(window.location.hash).toBe('#/')
+  })
+
+  expect(
+    await screen.findByRole('button', { name: 'Log out' }),
+  ).toBeInTheDocument()
+
+  expect(
+    screen.queryByText('Connection problem'),
+  ).not.toBeInTheDocument()
 })

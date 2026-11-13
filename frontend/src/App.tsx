@@ -113,6 +113,7 @@ export default function App() {
   // think the visitor is signed out and send them straight back to /login.
   function handleSignedIn(user: AuthUser) {
     setCurrentUser(user)
+    setSessionError('')
     setAuthStatus('authenticated')
   }
 
