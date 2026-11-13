@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react'
-import { ApiError, getReviewDraft, type ReviewDraft, type ReviewStatus } from '../api'
+import { useEffect, useRef, useState } from 'react'
+import { ApiError, getReviewDraft, saveReviewEdits, type ProfileVersion, type ReviewDraft, type ReviewStatus } from '../api'
 import { editableReviewRows, reviewRows, type ReviewRow } from '../components/draftSources'
 import InlineDraftField, { type PendingFieldEdit } from '../components/InlineDraftField'
 import { applyEdit, createEditSession, fieldValue, isEditablePath, type EditablePath } from '../draftEdits'
 import { formatGenerated } from './ReviewInboxPage'
+import { draftSaveGate, type SaveStatus } from '../draftSave'
+import { reviewDraftHref } from '../router'
 
 const STATUS_LABELS: Record<ReviewStatus, string> = {
   draft: 'Draft',
@@ -46,6 +48,7 @@ export default function ReviewDraftPage({ profileId, versionId }: ReviewDraftPag
   const [loadFailed, setLoadFailed] = useState(false)
   // Bumped by Try again to fetch the draft once more.
   const [attempt, setAttempt] = useState(0)
+  const [saved, setSaved] = useState(false)
 
   useEffect(() => {
     if (!profileId || !versionId) return
@@ -101,24 +104,71 @@ export default function ReviewDraftPage({ profileId, versionId }: ReviewDraftPag
     )
   }
 
-  return <LoadedDraft key={`${draft.version.client_profile_id}/${draft.version.id}`} draft={draft} back={back} />
+  function onSaved(version: ProfileVersion) {
+    setSaved(true)
+    setDraft((previous) => previous && { ...previous, version })
+    // Replacing avoids leaving a superseded draft as the reload destination.
+    window.history.replaceState(null, '', reviewDraftHref(version.client_profile_id, version.id))
+    // replaceState does not emit hashchange; update the router's snapshot too.
+    window.dispatchEvent(new HashChangeEvent('hashchange'))
+  }
+
+  return <LoadedDraft key={`${draft.version.client_profile_id}/${draft.version.id}`} draft={draft} back={back} saved={saved} onSaved={onSaved} />
 }
 
-function LoadedDraft({ draft, back }: { draft: ReviewDraft; back: React.ReactNode }) {
+function LoadedDraft({ draft, back, saved, onSaved }: {
+  draft: ReviewDraft; back: React.ReactNode; saved: boolean; onSaved: (version: ProfileVersion) => void
+}) {
   const [session, setSession] = useState(() => createEditSession(draft))
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
   const [pendingFields, setPendingFields] = useState<Partial<Record<EditablePath, PendingFieldEdit>>>({})
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
+  const [saveError, setSaveError] = useState('')
+  const saving = useRef(false)
+  const mounted = useRef(true)
+  useEffect(() => {
+    mounted.current = true
+    return () => { mounted.current = false }
+  }, [])
   const dirty = Object.keys(session.changes).length > 0
   const { version, client, documents } = draft
   const editable = version.status === 'draft' || version.status === 'in_review'
+  const pending = Object.keys(pendingFields).length > 0
+  const gate = draftSaveGate(version.status, dirty, pending, saveStatus)
   const rowEdited = (row: ReviewRow) => Object.keys(session.changes).some(
     (path) => path === row.key || path.startsWith(`${row.key}/`),
   )
+  const historicalEvidence = (row: ReviewRow) => rowEdited(row) || version.data.assessment === null
   const rowFlag = (row: ReviewRow) => row.flag === 'missing' && rowEdited(row)
     && fieldValue(session.currentData, row.key as EditablePath) != null ? null : row.flag
   // Evidence always comes from the original version, even after a correction.
   const { rows, unsupported } = (editable ? editableReviewRows : reviewRows)(version.data)
   const selected = rows.find((row) => row.key === selectedKey) ?? rows[0]
+  async function save() {
+    if (!gate.canSave || saving.current) return
+    saving.current = true
+    setSaveStatus('saving')
+    setSaveError('')
+    const changes = Object.fromEntries(Object.entries(session.changes).map(([path, change]) => [path, change!.currentValue]))
+    try {
+      const version = await saveReviewEdits(session.base.profileId, session.base.versionId, changes)
+      if (!mounted.current) return
+      setSession(createEditSession({ ...draft, version }))
+      setSaveStatus('saved')
+      onSaved(version)
+    } catch (error) {
+      if (!mounted.current) return
+      const stale = error instanceof ApiError && error.status === 409
+      setSaveStatus(stale ? 'stale' : 'error')
+      setSaveError(stale
+        ? 'This draft changed or is no longer editable. Your edits are still here. Open the latest draft from the review inbox before continuing.'
+        : error instanceof ApiError && error.status === 422
+          ? "Couldn't save these edits. Check the field values and try saving again."
+          : "Couldn't confirm that your edits were saved. Your edits are still here. Try saving again.")
+    } finally {
+      saving.current = false
+    }
+  }
   function pendingChange(path: EditablePath, pending: PendingFieldEdit | null) {
     setPendingFields((previous) => {
       const next = { ...previous }
@@ -137,13 +187,13 @@ function LoadedDraft({ draft, back }: { draft: ReviewDraft; back: React.ReactNod
 
   function sourceTag(row: ReviewRow) {
     const evidence = evidenceFor(row)
-    if (evidence.length > 1) return `${evidence.length} ${rowEdited(row) ? 'original sources' : 'sources'}`
+    if (evidence.length > 1) return `${evidence.length} ${historicalEvidence(row) ? 'original sources' : 'sources'}`
     if (evidence.length === 0) return ''
     return documents.find(({ id }) => id === evidence[0].document_id)?.kind ?? 'source'
   }
 
   const originalDisplayValue = (row: ReviewRow) =>
-    rowEdited(row) && row.flag === 'conflict' && fieldValue(session.currentData, row.key as EditablePath) == null
+    historicalEvidence(row) && row.flag === 'conflict' && fieldValue(session.currentData, row.key as EditablePath) == null
       ? `Original proposal: ${row.value}` : row.value
 
   function renderEvidence(row: ReviewRow) {
@@ -154,6 +204,7 @@ function LoadedDraft({ draft, back }: { draft: ReviewDraft; back: React.ReactNod
         {rowFlag(row) === 'missing' && <p className="review-flag">○ Missing information</p>}
         <h2 id="evidence-title">{row.label}</h2>
         {rowEdited(row) && <p className="field-note">Original version evidence. These sources do not verify local corrections. {row.conflicts.length > 0 && 'Conflicts remain unresolved.'}</p>}
+        {!rowEdited(row) && historicalEvidence(row) && <p className="field-note">Original source evidence is retained as history and does not verify reviewer corrections. {(version.data.conflicts?.length ?? 0) > 0 && 'Conflicts remain unresolved.'}</p>}
         {row.conflicts.map((conflict, index) => (
           <p key={index} className="field-note">
             {conflict.explanation}
@@ -188,7 +239,7 @@ function LoadedDraft({ draft, back }: { draft: ReviewDraft; back: React.ReactNod
   }
 
   return (
-    <section className="review-draft">
+    <section className="review-draft" data-approval-blocked={gate.blocksApproval}>
       {back}
       <header className="review-draft-head">
         <div>
@@ -203,6 +254,18 @@ function LoadedDraft({ draft, back }: { draft: ReviewDraft; back: React.ReactNod
       </header>
 
       {dirty && <p role="status" className="field-note">Unsaved local changes. Information checks apply to unchanged fields.</p>}
+      {!dirty && saved && saveStatus !== 'error' && saveStatus !== 'stale' && <p role="status" className="field-note">Draft edits saved.</p>}
+      {version.data.assessment === null && <p className="field-note">Information checks have not been recomputed for this version.</p>}
+      {editable && (
+        <div className="review-save">
+          <button className="button" type="button" disabled={!gate.canSave} onClick={save}>
+            {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'error' ? 'Try saving again' : 'Save changes'}
+          </button>
+          {pending && <p className="field-note">Finish or cancel the current edit before saving.</p>}
+          {gate.blocksApproval && <p className="field-note">Approval requires saved edits with no pending input or save errors.</p>}
+          {saveError && <p className="field-error" role="alert">{saveError}</p>}
+        </div>
+      )}
       {Object.values(pendingFields).some((pending) => pending?.error) && (
         <p className="field-error">Some edits have not been applied. Correct them or press Escape to cancel.</p>
       )}
@@ -234,6 +297,7 @@ function LoadedDraft({ draft, back }: { draft: ReviewDraft; back: React.ReactNod
                   </button>
                   {editable && isEditablePath(session.originalData, row.key) ? (
                     <InlineDraftField
+                      disabled={saveStatus === 'saving' || saveStatus === 'stale'}
                       path={row.key}
                       label={row.label}
                       value={fieldValue(session.currentData, row.key)}

@@ -49,7 +49,7 @@ def update_client_profile(
     profile_id: uuid.UUID, data: dict, db: DbSession
 ) -> ClientProfileVersion:
     """Create a new immutable version of a client profile instead of overwriting."""
-    profile = db.get(ClientProfile, profile_id)
+    profile = db.get(ClientProfile, profile_id, with_for_update=True)
     if profile is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Client profile not found")
 

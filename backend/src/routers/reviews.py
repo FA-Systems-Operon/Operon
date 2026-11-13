@@ -3,7 +3,7 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import func, literal, select
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session
@@ -16,11 +16,53 @@ from src.models import (
     ReviewStatus,
     SourceDocument,
 )
-from src.schemas import ReviewDraftOut, ReviewInboxItemOut
+from src.review_edits import StaleReviewError, save_review_edits
+from src.schemas import (
+    ClientProfileVersionOut,
+    ReviewDraftOut,
+    ReviewEditsIn,
+    ReviewInboxItemOut,
+)
 
 router = APIRouter(prefix="/api/v1/reviews", tags=["reviews"])
 
 DbSession = Annotated[Session, Depends(get_db)]
+
+
+@router.post(
+    "/profiles/{profile_id}/versions/{version_id}/edits",
+    response_model=ClientProfileVersionOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def save_draft_edits(
+    profile_id: uuid.UUID,
+    version_id: uuid.UUID,
+    body: ReviewEditsIn,
+    db: DbSession,
+    response: Response,
+) -> ClientProfileVersion:
+    """Validate corrections and append a draft, only if the base is still current."""
+    try:
+        version = save_review_edits(db, profile_id, version_id, body)
+        db.commit()
+    except LookupError as error:
+        db.rollback()
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(error)) from error
+    except StaleReviewError as error:
+        db.rollback()
+        raise HTTPException(status.HTTP_409_CONFLICT, str(error)) from error
+    except ValueError as error:
+        db.rollback()
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT, str(error)
+        ) from error
+    except Exception:
+        db.rollback()
+        raise
+    db.refresh(version)
+    if version.id == version_id:
+        response.status_code = status.HTTP_200_OK
+    return version
 
 
 @router.get("", response_model=list[ReviewInboxItemOut])
