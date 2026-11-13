@@ -9,13 +9,24 @@ const TABS: { id: Tab; label: string; href: string }[] = [
   { id: 'workforce', label: 'Workforce', href: '#/workforce' },
 ]
 
+
 type TopNavProps = {
   active: Tab | null
-  // The current route. The waiting count is fetched again whenever it changes.
   path: string
+  onLogout: () => Promise<void>
+  isLoggingOut: boolean
+  logoutError?: string
+  isAdmin?: boolean
 }
 
-export default function TopNav({ active, path }: TopNavProps) {
+export default function TopNav({
+  active,
+  path,
+  onLogout,
+  isLoggingOut,
+  logoutError,
+  isAdmin = false,
+}: TopNavProps) {
   const current = (tab: Tab) => (active === tab ? 'page' : undefined)
   // Drafts waiting for review. Keeps the last count while a refresh is on its way.
   const [waiting, setWaiting] = useState(0)
@@ -77,20 +88,39 @@ export default function TopNav({ active, path }: TopNavProps) {
         </ul>
       </nav>
 
-      <a
-        className="topnav-reviews"
-        href="#/reviews"
-        aria-current={current('reviews')}
-        aria-label={waiting > 0 ? `Reviews, ${waiting} waiting` : undefined}
-      >
-        Reviews
-        {/* The label already says the count, so the number isn't read twice. */}
-        {waiting > 0 && (
-          <span className="topnav-badge" aria-hidden="true">
-            {waiting}
-          </span>
-        )}
-      </a>
+<div className="topnav-actions">
+  <a
+    className="topnav-reviews"
+    href="#/reviews"
+    aria-current={current('reviews')}
+    aria-label={waiting > 0 ? `Reviews, ${waiting} waiting` : undefined}
+  >
+    Reviews
+    {/* The label already says the count, so the number isn't read twice. */}
+    {waiting > 0 && (
+      <span className="topnav-badge" aria-hidden="true">
+        {waiting}
+      </span>
+    )}
+  </a>
+
+  {isAdmin && (
+    <a className="topnav-reviews" href="#/invite">
+      Invite
+    </a>
+  )}
+
+  <button
+    type="button"
+    className="topnav-logout"
+    onClick={() => void onLogout()}
+    disabled={isLoggingOut}
+  >
+    {isLoggingOut ? 'Logging out...' : 'Log out'}
+  </button>
+
+  {logoutError && <span role="alert">{logoutError}</span>}
+</div>
     </header>
   )
 }

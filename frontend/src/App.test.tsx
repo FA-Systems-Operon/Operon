@@ -2,12 +2,36 @@ import { act, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import App from './App'
 
+// Synthetic user for testing only.
+const mockUser = {
+  id: 'test-user',
+  email: 'staff@example.com',
+  role: 'staff',
+}
+
 function jsonResponse(body: unknown) {
-  return Promise.resolve({ ok: true, json: () => Promise.resolve(body) } as Response)
+  return Promise.resolve({
+    ok: true,
+    status: 200,
+    json: () => Promise.resolve(body),
+  } as Response)
 }
 
 beforeEach(() => {
-  vi.stubGlobal('fetch', vi.fn().mockImplementation(() => jsonResponse([])))
+  // Return an authenticated user for session checks.
+  // Keep the existing empty-array response for other API calls.
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input)
+
+      if (url === '/api/v1/me') {
+        return jsonResponse(mockUser)
+      }
+
+      return jsonResponse([])
+    }),
+  )
 })
 
 afterEach(() => {
@@ -27,36 +51,66 @@ function activeTab() {
   return within(menu).queryByRole('link', { current: 'page' })
 }
 
-test('opens on Command with the New intake entry point', () => {
+test('opens on Command with the New intake entry point', async () => {
   openAt('')
 
-  expect(screen.getByRole('heading', { name: 'Command' })).toBeInTheDocument()
+  expect(
+    await screen.findByRole('heading', { name: 'Command' }),
+  ).toBeInTheDocument()
+
   expect(activeTab()).toHaveTextContent('Command')
+
   expect(screen.getByRole('link', { name: 'New intake' })).toHaveAttribute(
     'href',
     '#/sources/new',
   )
 })
 
-test('shows every menu item with its link', () => {
+test('shows every menu item with its link', async () => {
   openAt('#/')
 
-  const menu = within(screen.getByRole('navigation', { name: 'Main' }))
-  expect(menu.getByRole('link', { name: 'Command' })).toHaveAttribute('href', '#/')
-  expect(menu.getByRole('link', { name: 'Brain' })).toHaveAttribute('href', '#/brain')
-  expect(menu.getByRole('link', { name: 'Workforce' })).toHaveAttribute('href', '#/workforce')
-  expect(screen.getByRole('link', { name: 'Reviews' })).toHaveAttribute('href', '#/reviews')
-  expect(screen.getByRole('link', { name: 'Operon' })).toHaveAttribute('href', '#/')
+  const menu = within(
+    await screen.findByRole('navigation', { name: 'Main' }),
+  )
+
+  expect(menu.getByRole('link', { name: 'Command' })).toHaveAttribute(
+    'href',
+    '#/',
+  )
+
+  expect(menu.getByRole('link', { name: 'Brain' })).toHaveAttribute(
+    'href',
+    '#/brain',
+  )
+
+  expect(menu.getByRole('link', { name: 'Workforce' })).toHaveAttribute(
+    'href',
+    '#/workforce',
+  )
+
+  expect(screen.getByRole('link', { name: 'Reviews' })).toHaveAttribute(
+    'href',
+    '#/reviews',
+  )
+
+  expect(screen.getByRole('link', { name: 'Operon' })).toHaveAttribute(
+    'href',
+    '#/',
+  )
 })
 
 test.each([
   ['#/brain', 'Brain'],
   ['#/workforce', 'Workforce'],
-])('%s is an empty page with its tab marked', (hash, title) => {
+])('%s is an empty page with its tab marked', async (hash, title) => {
   openAt(hash)
 
-  expect(screen.getByRole('heading', { name: title })).toBeInTheDocument()
+  expect(
+    await screen.findByRole('heading', { name: title }),
+  ).toBeInTheDocument()
+
   expect(activeTab()).toHaveTextContent(title)
+
   // The only text is the title kept for screen readers.
   expect(screen.getByRole('main').textContent).toBe(title)
 })
@@ -64,10 +118,20 @@ test.each([
 test('Reviews opens the review inbox and marks the Reviews link', async () => {
   openAt('#/reviews')
 
-  expect(screen.getByRole('heading', { name: 'Review inbox' })).toBeInTheDocument()
-  expect(screen.getByRole('link', { name: 'Reviews' })).toHaveAttribute('aria-current', 'page')
+  expect(
+    await screen.findByRole('heading', { name: 'Review inbox' }),
+  ).toBeInTheDocument()
+
+  expect(screen.getByRole('link', { name: 'Reviews' })).toHaveAttribute(
+    'aria-current',
+    'page',
+  )
+
   expect(activeTab()).toBeNull()
-  expect(await screen.findByText('No drafts waiting for review.')).toBeInTheDocument()
+
+  expect(
+    await screen.findByText('No drafts waiting for review.'),
+  ).toBeInTheDocument()
 })
 
 test('a draft link from the inbox opens that draft under Reviews', async () => {
@@ -89,47 +153,91 @@ test('a draft link from the inbox opens that draft under Reviews', async () => {
 test('Add sources opens under the Brain tab with the client from the link', async () => {
   vi.stubGlobal(
     'fetch',
-    vi.fn().mockImplementation(() =>
-      jsonResponse([{ id: 'c1', name: 'Plateau Basements', created_at: '' }]),
-    ),
+    vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input)
+
+      if (url === '/api/v1/me') {
+        return jsonResponse(mockUser)
+      }
+
+      return jsonResponse([
+        {
+          id: 'c1',
+          name: 'Plateau Basements',
+          created_at: '',
+        },
+      ])
+    }),
   )
+
   openAt('#/sources/new?client=c1')
 
-  expect(screen.getByRole('heading', { name: 'Add sources' })).toBeInTheDocument()
+  expect(
+    await screen.findByRole('heading', { name: 'Add sources' }),
+  ).toBeInTheDocument()
+
   expect(activeTab()).toHaveTextContent('Brain')
-  expect(await screen.findByRole('combobox', { name: 'Client' })).toHaveValue('c1')
+
+  await waitFor(() => {
+  expect(
+    screen.getByRole('combobox', { name: 'Client' }),
+  ).toHaveValue('c1')
+  })
 })
 
 test('following New intake opens Add sources with no client chosen', async () => {
   openAt('#/')
 
+  await screen.findByRole('heading', { name: 'Command' })
+
   window.location.hash = '#/sources/new'
   window.dispatchEvent(new HashChangeEvent('hashchange'))
 
-  expect(await screen.findByRole('heading', { name: 'Add sources' })).toBeInTheDocument()
-  expect(screen.getByRole('combobox', { name: 'Client' })).toHaveValue('')
+  expect(
+    await screen.findByRole('heading', { name: 'Add sources' }),
+  ).toBeInTheDocument()
+
+  expect(
+    await screen.findByRole('combobox', { name: 'Client' }),
+  ).toHaveValue('')
 })
 
-test('the status page is still reachable for developers', () => {
+test('the status page is still reachable for developers', async () => {
   openAt('#/status')
 
-  expect(screen.getByRole('heading', { name: 'Status' })).toBeInTheDocument()
+  expect(
+    await screen.findByRole('heading', { name: 'Status' }),
+  ).toBeInTheDocument()
+
   expect(activeTab()).toBeNull()
 })
 
-test('an unknown address shows an empty Page not found', () => {
+test('an unknown address shows an empty Page not found', async () => {
   openAt('#/nowhere')
 
-  expect(screen.getByRole('heading', { name: 'Page not found' })).toBeInTheDocument()
+  expect(
+    await screen.findByRole('heading', { name: 'Page not found' }),
+  ).toBeInTheDocument()
+
   expect(activeTab()).toBeNull()
 })
 
 // Answers /api/v1/reviews from the queue in order; anything else gets [].
 function mockReviewReplies(...replies: Promise<Response>[]) {
-  const fetchMock = vi.fn((url: string) =>
-    url === '/api/v1/reviews' ? (replies.shift() ?? jsonResponse([])) : jsonResponse([]),
-  )
+  const fetchMock = vi.fn((url: string) => {
+    if (url === '/api/v1/me') {
+      return jsonResponse(mockUser)
+    }
+
+    if (url === '/api/v1/reviews') {
+      return replies.shift() ?? jsonResponse([])
+    }
+
+    return jsonResponse([])
+  })
+
   vi.stubGlobal('fetch', fetchMock)
+
   return fetchMock
 }
 
@@ -141,7 +249,11 @@ function navigate(hash: string) {
 }
 
 async function settled(fetchMock: ReturnType<typeof vi.fn>, calls: number) {
-  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(calls))
+  await waitFor(() =>
+    expect(
+      fetchMock.mock.calls.filter(([url]) => url === '/api/v1/reviews'),
+    ).toHaveLength(calls),
+  )
   await act(async () => {})
 }
 
@@ -184,17 +296,43 @@ test('the count refreshes when the route changes', async () => {
 
 test('a late count from an earlier route is ignored', async () => {
   let answerFirst: (body: unknown) => void = () => {}
+
   const first = new Promise<Response>((resolve) => {
-    answerFirst = (body) => resolve({ ok: true, json: () => Promise.resolve(body) } as Response)
+    answerFirst = (body) =>
+      resolve({
+        ok: true,
+        json: () => Promise.resolve(body),
+      } as Response)
   })
-  mockReviewReplies(first, jsonResponse([{}]))
+
+  const fetchMock = mockReviewReplies(first, jsonResponse([{}]))
+
   openAt('#/brain')
+
+  // Wait until authentication finishes and the first Reviews request starts.
+  await screen.findByRole('link', { name: 'Reviews' })
+
+  await waitFor(() =>
+    expect(
+      fetchMock.mock.calls.filter(([url]) => url === '/api/v1/reviews'),
+    ).toHaveLength(1),
+  )
+
+  // Now navigate so the second request starts.
   navigate('#/workforce')
-  expect(await screen.findByRole('link', { name: 'Reviews, 1 waiting' })).toBeInTheDocument()
 
-  await act(async () => answerFirst([{}, {}, {}]))
+  expect(
+    await screen.findByRole('link', { name: 'Reviews, 1 waiting' }),
+  ).toBeInTheDocument()
 
-  expect(screen.getByRole('link', { name: 'Reviews, 1 waiting' })).toBeInTheDocument()
+  // The older request finishes last and must not overwrite the newer count.
+  await act(async () => {
+    answerFirst([{}, {}, {}])
+  })
+
+  expect(
+    screen.getByRole('link', { name: 'Reviews, 1 waiting' }),
+  ).toBeInTheDocument()
 })
 
 // Only the interval is faked, so React Testing Library's own waiting still works.
@@ -235,7 +373,9 @@ test('no refresh while the tab is hidden', async () => {
   setHidden(true)
   await waitSeconds(90)
 
-  expect(fetchMock).toHaveBeenCalledTimes(1)
+  expect(
+  fetchMock.mock.calls.filter(([url]) => url === '/api/v1/reviews'),
+).toHaveLength(1)
 })
 
 test('the count refreshes as soon as the tab is shown again', async () => {
@@ -247,7 +387,9 @@ test('the count refreshes as soon as the tab is shown again', async () => {
   setHidden(false)
 
   expect(await screen.findByRole('link', { name: 'Reviews, 3 waiting' })).toBeInTheDocument()
-  expect(fetchMock).toHaveBeenCalledTimes(2)
+  expect(
+  fetchMock.mock.calls.filter(([url]) => url === '/api/v1/reviews'),
+).toHaveLength(2)
 })
 
 test('no refresh after the nav has closed', async () => {
@@ -261,5 +403,7 @@ test('no refresh after the nav has closed', async () => {
   await waitSeconds(30)
   setHidden(false)
 
-  expect(fetchMock).toHaveBeenCalledTimes(1)
+ expect(
+  fetchMock.mock.calls.filter(([url]) => url === '/api/v1/reviews'),
+).toHaveLength(1)
 })

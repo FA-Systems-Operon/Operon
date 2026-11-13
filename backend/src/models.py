@@ -6,6 +6,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     DateTime,
     Enum,
     ForeignKey,
@@ -333,6 +334,105 @@ class ArtifactVersion(Base):
     stale_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     artifact: Mapped[Artifact] = relationship(back_populates="versions")
+
+
+# --- Sign-in: roles, users, one-time invitations and sessions ---------------------------
+# Raw tokens (invite links, session cookies, CSRF tokens) are never stored. Only their
+# SHA-256 hashes are, so a database leak does not hand out working tokens.
+
+
+class Role(str, enum.Enum):
+    """What a user is allowed to do. See the permissions table on the wiki."""
+
+    ADMIN = "admin"
+    REVIEWER = "reviewer"
+    VIEWER = "viewer"
+
+
+def _role_column():
+    # Stored as text ("admin"), not a Postgres enum type, so adding a role is not a migration.
+    return Enum(
+        Role,
+        native_enum=False,
+        length=20,
+        values_callable=lambda e: [member.value for member in e],
+    )
+
+
+class User(Base):
+    """A person who can sign in. Created from an invitation (or by the create_admin script)."""
+
+    __tablename__ = "users"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    # Always stored lowercase, so "Maya@x.com" and "maya@x.com" are the same account.
+    email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
+    display_name: Mapped[str] = mapped_column(String(255))
+    # Argon2 hash. The password itself is never stored or logged.
+    password_hash: Mapped[str] = mapped_column(String(255))
+    role: Mapped[Role] = mapped_column(_role_column())
+    # Deactivating a user ends their access on their next request.
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class Invitation(Base):
+    """A one-time invite. Whoever holds the link can create the account, once, until it expires."""
+
+    __tablename__ = "invitations"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    email: Mapped[str] = mapped_column(String(320), index=True)
+    initial_role: Mapped[Role] = mapped_column(_role_column())
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    # Null when the invite was created by a script rather than by a signed-in admin.
+    invited_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # Set when the invite is used. A non-null value means it can never be used again.
+    accepted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class UserSession(Base):
+    """A sign-in. The browser holds a random token in an HttpOnly cookie; we hold its hash.
+
+    Named UserSession (not Session) so it cannot be confused with sqlalchemy.orm.Session.
+    """
+
+    __tablename__ = "sessions"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    # The CSRF token this session expects on every POST, PUT, PATCH and DELETE.
+    csrf_token_hash: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # Set on logout. A revoked session never works again.
+    revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
+class LoginAttempt(Base):
+    """A failed login, kept briefly so repeated password guessing can be slowed down."""
+
+    __tablename__ = "login_attempts"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    # The email that was typed (lowercased), whether or not an account exists for it.
+    email: Mapped[str] = mapped_column(String(320), index=True)
+    attempted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
 
 
 # --- Immutability guard START -----------------
