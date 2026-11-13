@@ -1,5 +1,5 @@
 
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import './App.css'
 
 import TopNav, { type Tab } from './components/TopNav'
@@ -109,6 +109,8 @@ function pageFor(
 }
 
 export default function App() {
+
+  const sessionCheckVersion = useRef(0)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [logoutError, setLogoutError] = useState('')
 
@@ -124,38 +126,43 @@ export default function App() {
 
   // Called by the login and accept-invite pages. Without this the app would still
   // think the visitor is signed out and send them straight back to /login.
+ 
   function handleSignedIn(user: AuthUser) {
-    setCurrentUser(user)
-    setSessionError('')
-    setAuthStatus('authenticated')
-  }
+  // Invalidate any session check started before this successful login.
+  sessionCheckVersion.current += 1
+
+  setCurrentUser(user)
+  setSessionError('')
+  setAuthStatus('authenticated')
+}
 
   // Check the session once when Operon loads.
   useEffect(() => {
-    let active = true
+  let active = true
+  const version = ++sessionCheckVersion.current
 
-    async function checkSession() {
-      try {
-        const user = await getCurrentUser()
+  async function checkSession() {
+    try {
+      const user = await getCurrentUser()
 
-        if (!active) return
+      if (!active || version !== sessionCheckVersion.current) return
 
-        setCurrentUser(user)
-        setAuthStatus(user ? 'authenticated' : 'unauthenticated')
-      } catch {
-        if (!active) return
+      setCurrentUser(user)
+      setAuthStatus(user ? 'authenticated' : 'unauthenticated')
+    } catch {
+      if (!active || version !== sessionCheckVersion.current) return
 
-        setSessionError(
-          'Unable to check your session. Please try again.',
-        )
+      setSessionError(
+        'Unable to check your session. Please try again.',
+         )
+       }
       }
-    }
 
-    void checkSession()
+     void checkSession()
 
-    return () => {
-      active = false
-    }
+      return () => {
+       active = false
+     }
   }, [])
 
   async function handleLogout() {

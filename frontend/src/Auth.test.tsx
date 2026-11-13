@@ -206,3 +206,71 @@ test('successful login clears a previous session error', async () => {
     screen.queryByText('Connection problem'),
   ).not.toBeInTheDocument()
 })
+
+test('a late session check cannot override a successful login', async () => {
+  let resolveSession!: (response: Response) => void
+
+  const sessionRequest = new Promise<Response>((resolve) => {
+    resolveSession = resolve
+  })
+
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+
+      if (url === '/api/v1/me') {
+        return sessionRequest
+      }
+
+      if (url === '/api/v1/auth/login') {
+        return new Response(
+          JSON.stringify({ user: mockUser }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        )
+      }
+
+      return new Response('[]', { status: 200 })
+    }),
+  )
+
+  window.location.hash = '#/login'
+  render(<App />)
+
+  const user = userEvent.setup()
+
+  await user.type(
+    screen.getByLabelText('Email address'),
+    'staff@example.com',
+  )
+
+  await user.type(
+    screen.getByLabelText('Password'),
+    'test-password-123',
+  )
+
+  await user.click(screen.getByRole('button', { name: 'Sign in' }))
+
+  expect(
+    await screen.findByRole('button', { name: 'Log out' }),
+  ).toBeInTheDocument()
+
+  // The original session check finishes AFTER successful login.
+  await act(async () => {
+    resolveSession(new Response(null, { status: 401 }))
+  })
+
+  // The older 401 must not sign the user out.
+  expect(window.location.hash).toBe('#/')
+
+  expect(
+    screen.getByRole('button', { name: 'Log out' }),
+  ).toBeInTheDocument()
+
+  expect(
+    screen.queryByRole('heading', { name: 'Welcome back' }),
+  ).not.toBeInTheDocument()
+})

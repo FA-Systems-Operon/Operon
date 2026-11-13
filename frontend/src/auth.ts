@@ -149,6 +149,14 @@ export async function logout(): Promise<void> {
     headers: { 'X-CSRF-Token': getCsrfToken() },
   })
 
+  // A 401 means the session has already expired.
+  // Treat this as a successful sign-out.
+  if (response.status === 401) {
+    return
+  }
+
+  // Network errors still reject at fetch(), and server errors
+  // must continue to show the retry message.
   if (!response.ok) {
     throw new Error('Unable to log out. Please try again.')
   }
