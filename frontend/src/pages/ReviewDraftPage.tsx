@@ -190,7 +190,7 @@ function LoadedDraft({ draft, back, saved, onSaved, onRejected, canReview }: {
     }
   }
   async function approve() {
-    if (gate.blocksApproval || approving.current || approveStatus === 'stale') return
+    if (gate.blocksApproval || rejecting || approving.current || approveStatus === 'stale') return
     approving.current = true
     setApproveStatus('approving')
     setApproveError('')

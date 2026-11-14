@@ -11,7 +11,6 @@ here fails if the real responses stop matching that file.
 """
 
 import json
-import uuid
 from datetime import datetime
 from pathlib import Path
 
@@ -73,7 +72,7 @@ def evidence(draft):
 
 
 def test_inbox_lists_the_awaiting_draft_with_client_name_and_time(
-    client, client_factory
+    client, client_factory, reviewer_client
 ):
     awaiting = client_factory("Plateau Basements")
     job = generate_draft(client, awaiting)
@@ -83,9 +82,8 @@ def test_inbox_lists_the_awaiting_draft_with_client_name_and_time(
         for item in open_inbox(client)
         if item["client_name"] != "Plateau Basements"
     ]
-    approved = client.post(
+    approved = reviewer_client.post(
         f"/api/v1/client-profiles/{acme['client_profile_id']}/versions/{acme['version_id']}/approve",
-        json={"approved_by": str(uuid.uuid4())},
     )
     assert approved.status_code == 200, approved.text
     northshore = client_factory("Northshore Kitchens")

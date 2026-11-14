@@ -358,3 +358,8 @@ def require_role(*roles: Role):
         return user
 
     return check
+
+
+# Changing a draft or approving a version needs a signed-in reviewer or admin, and
+# the CSRF header (checked by current_auth for every non-GET request).
+ReviewerUser = Annotated[User, Depends(require_role(Role.REVIEWER, Role.ADMIN))]
