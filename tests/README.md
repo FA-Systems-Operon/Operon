@@ -247,7 +247,7 @@ on contact/account fields; these rules follow `profile_flags.py` and
 | Blank list input retains text and an accessible error; correction or Escape clears it | `InlineDraftField.test.tsx`, `ReviewDraftPage.test.tsx` |
 | Existing list indexes, neighboring entries, original evidence and unknown JSON are preserved | `draftEdits.test.ts`, `draftSources.test.ts`, `ReviewDraftPage.test.tsx` |
 | Track original version identity, changed paths, original/current values and absent versus null keys; repeated edits compare to the loaded original | `draftEdits.test.ts` |
-| Applied changes hide assessment-derived badges globally, label original evidence and mark edited values; full revert restores the original display | `ReviewDraftPage.test.tsx` |
+| Applied changes suppress only a filled row's missing marker; untouched and unresolved-conflict markers remain; original evidence and local edited values are labelled; full revert restores the original display | `ReviewDraftPage.test.tsx` |
 | Conflicted scalar input starts empty rather than from joined alternatives; both original claims remain visible after correction | `ReviewDraftPage.test.tsx` |
 | Original API reply is unchanged and editing sends no mutation request | `ReviewDraftPage.test.tsx`, `ReviewInbox.acceptance.test.tsx` |
 | Leaving/reopening or opening another version resets applied edits, invalid text and dirty state | `ReviewInbox.acceptance.test.tsx` |
@@ -278,7 +278,7 @@ can account for unapplied/invalid input. A full revert restores original key
 presence. An empty edit on an absent or malformed scalar is a no-op, preserving
 legacy data; a nonempty correction replaces only that field.
 
-Assessment invalidation is display-only: saved assessment, conflicts, references
+Per-row marker updates are display-only: saved assessment, conflicts, references
 and approval metadata are not changed. Original evidence does not automatically
 verify a reviewer correction. There is only an unsaved-local-changes notice, with
 no navigation guard, browser storage, saving, recomputation or approval gate.

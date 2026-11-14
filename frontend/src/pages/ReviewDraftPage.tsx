@@ -111,6 +111,11 @@ function LoadedDraft({ draft, back }: { draft: ReviewDraft; back: React.ReactNod
   const dirty = Object.keys(session.changes).length > 0
   const { version, client, documents } = draft
   const editable = version.status === 'draft' || version.status === 'in_review'
+  const rowEdited = (row: ReviewRow) => Object.keys(session.changes).some(
+    (path) => path === row.key || path.startsWith(`${row.key}/`),
+  )
+  const rowFlag = (row: ReviewRow) => row.flag === 'missing' && rowEdited(row)
+    && fieldValue(session.currentData, row.key as EditablePath) != null ? null : row.flag
   // Evidence always comes from the original version, even after a correction.
   const { rows, unsupported } = (editable ? editableReviewRows : reviewRows)(version.data)
   const selected = rows.find((row) => row.key === selectedKey) ?? rows[0]
@@ -132,22 +137,23 @@ function LoadedDraft({ draft, back }: { draft: ReviewDraft; back: React.ReactNod
 
   function sourceTag(row: ReviewRow) {
     const evidence = evidenceFor(row)
-    if (evidence.length > 1) return `${evidence.length} ${dirty ? 'original sources' : 'sources'}`
+    if (evidence.length > 1) return `${evidence.length} ${rowEdited(row) ? 'original sources' : 'sources'}`
     if (evidence.length === 0) return ''
     return documents.find(({ id }) => id === evidence[0].document_id)?.kind ?? 'source'
   }
 
   const originalDisplayValue = (row: ReviewRow) =>
-    dirty && row.flag === 'conflict' ? `Original proposal: ${row.value}` : row.value
+    rowEdited(row) && row.flag === 'conflict' && fieldValue(session.currentData, row.key as EditablePath) == null
+      ? `Original proposal: ${row.value}` : row.value
 
   function renderEvidence(row: ReviewRow) {
     const evidence = evidenceFor(row)
     return (
       <section className="review-evidence" aria-live="polite" aria-labelledby="evidence-title">
-        {!dirty && row.flag === 'conflict' && <p className="review-flag">▲ Sources disagree</p>}
-        {!dirty && row.flag === 'missing' && <p className="review-flag">○ Missing information</p>}
+        {rowFlag(row) === 'conflict' && <p className="review-flag">▲ Sources disagree</p>}
+        {rowFlag(row) === 'missing' && <p className="review-flag">○ Missing information</p>}
         <h2 id="evidence-title">{row.label}</h2>
-        {dirty && <p className="field-note">Original version evidence. These sources do not verify local corrections.</p>}
+        {rowEdited(row) && <p className="field-note">Original version evidence. These sources do not verify local corrections. {row.conflicts.length > 0 && 'Conflicts remain unresolved.'}</p>}
         {row.conflicts.map((conflict, index) => (
           <p key={index} className="field-note">
             {conflict.explanation}
@@ -155,7 +161,7 @@ function LoadedDraft({ draft, back }: { draft: ReviewDraft; back: React.ReactNod
         ))}
         {evidence.length === 0 ? (
           <p className="field-note">
-            {!dirty && row.flag === 'missing'
+            {rowFlag(row) === 'missing'
               ? 'Not found in the transcript or intake answers.'
               : 'No source linked to this field.'}
           </p>
@@ -170,7 +176,7 @@ function LoadedDraft({ draft, back }: { draft: ReviewDraft; back: React.ReactNod
                 </li>
               ))}
             </ul>
-            {!dirty && row.flag === 'conflict' && (
+            {rowFlag(row) === 'conflict' && !rowEdited(row) && (
               <p className="field-note">
                 Operon won't pick one. A reviewer decides which value to keep.
               </p>
@@ -196,7 +202,7 @@ function LoadedDraft({ draft, back }: { draft: ReviewDraft; back: React.ReactNod
         </p>
       </header>
 
-      {dirty && <p role="status" className="field-note">Unsaved local changes. Information checks apply to the original version.</p>}
+      {dirty && <p role="status" className="field-note">Unsaved local changes. Information checks apply to unchanged fields.</p>}
       {Object.values(pendingFields).some((pending) => pending?.error) && (
         <p className="field-error">Some edits have not been applied. Correct them or press Escape to cancel.</p>
       )}
@@ -213,7 +219,7 @@ function LoadedDraft({ draft, back }: { draft: ReviewDraft; back: React.ReactNod
               <li key={row.key}>
                 <div
                   className="review-field review-field-row"
-                  data-flag={!dirty ? row.flag ?? undefined : undefined}
+                  data-flag={rowFlag(row) ?? undefined}
                   data-selected={row === selected}
                 >
                   <button
@@ -222,8 +228,8 @@ function LoadedDraft({ draft, back }: { draft: ReviewDraft; back: React.ReactNod
                     aria-pressed={row === selected}
                     onClick={() => setSelectedKey(row.key)}
                   >
-                    {!dirty && row.flag === 'conflict' && <span aria-hidden="true">▲ </span>}
-                    {!dirty && row.flag === 'missing' && <span aria-hidden="true">○ </span>}
+                    {rowFlag(row) === 'conflict' && <span aria-hidden="true">▲ </span>}
+                    {rowFlag(row) === 'missing' && <span aria-hidden="true">○ </span>}
                     {row.label}
                   </button>
                   {editable && isEditablePath(session.originalData, row.key) ? (

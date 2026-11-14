@@ -307,18 +307,21 @@ async function edit(label: string, text: string) {
   await userEvent.keyboard('{Enter}')
 }
 
-test('local edits invalidate every badge and restore on full revert without writes', async () => {
+test('local edits preserve untouched badges and restore edited badges on full revert without writes', async () => {
   const original = structuredClone(DRAFT)
   const fetchMock = mockDraft(reply(200, DRAFT))
   render(<ReviewDraftPage profileId="p1" versionId="v2" />)
   await screen.findByRole('heading', { name: 'Plateau Basements' })
   await edit('Name', 'Corrected')
   expect(screen.getByRole('status')).toHaveTextContent('Unsaved local changes')
-  expect(document.querySelector('[data-flag]')).toBeNull()
+  expect(row('Email').closest('.review-field')).toHaveAttribute('data-flag', 'conflict')
+  expect(row('Website').closest('.review-field')).toHaveAttribute('data-flag', 'missing')
   expect(screen.getByText(/Original version evidence/)).toBeInTheDocument()
   expect(evidence().getByText('Contact name: Maya Chen', { selector: 'q' })).toBeInTheDocument()
   expect(screen.getByText('Reviewer-edited')).toBeInTheDocument()
   await edit('Website', 'example.test')
+  expect(row('Website').closest('.review-field')).not.toHaveAttribute('data-flag')
+  expect(row('Email').closest('.review-field')).toHaveAttribute('data-flag', 'conflict')
   await edit('Name', 'Maya Chen')
   expect(screen.getByRole('status')).toBeInTheDocument()
   await edit('Website', '')
@@ -330,7 +333,7 @@ test('local edits invalidate every badge and restore on full revert without writ
   expect(fetchMock.mock.calls).toEqual([['/api/v1/reviews/profiles/p1/versions/v2']])
 })
 
-test('conflicted scalars start empty and retain both original claims after correction', async () => {
+test('conflicted scalars retain the conflict marker and both original claims after correction', async () => {
   await openDraft()
   await userEvent.click(screen.getByRole('button', { name: 'Edit Email' }))
   expect(screen.getByRole('textbox', { name: 'Email' })).toHaveValue('')
@@ -338,7 +341,10 @@ test('conflicted scalars start empty and retain both original claims after corre
   expect(screen.getByRole('button', { name: 'Edit Email' })).toHaveTextContent('chosen@example.test')
   expect(evidence().getAllByRole('listitem')).toHaveLength(2)
   expect(evidence().getByText('maya@call.test', { selector: 'strong' })).toBeInTheDocument()
-  expect(screen.queryByText('▲ Sources disagree')).not.toBeInTheDocument()
+  expect(screen.getByText('▲ Sources disagree')).toBeInTheDocument()
+  expect(row('Email').closest('.review-field')).toHaveAttribute('data-flag', 'conflict')
+  expect(evidence().getByText(/Conflicts remain unresolved/)).toBeInTheDocument()
+  expect(row('Website').closest('.review-field')).toHaveAttribute('data-flag', 'missing')
   expect(screen.getByText(/Original version evidence/)).toBeInTheDocument()
 })
 
@@ -410,13 +416,13 @@ test('dirty display labels original conflict proposals, source counts and unsupp
   await edit('Name', 'Corrected')
   expect(screen.getByText(/Some original-version warnings/)).toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Edit Email' })).toHaveAccessibleDescription(
-    'Original proposal: maya@call.test or maya@form.test',
+    'maya@call.test or maya@form.test',
   )
-  expect(row('Email').closest('.review-field')).toHaveTextContent('2 original sources')
+  expect(row('Email').closest('.review-field')).toHaveTextContent('2 sources')
   await userEvent.click(row('Email'))
-  expect(evidence().getByText(/Original version evidence/)).toBeInTheDocument()
+  expect(evidence().queryByText(/Original version evidence/)).not.toBeInTheDocument()
   expect(evidence().getByText('The sources give different emails.')).toBeInTheDocument()
-  expect(screen.queryByText('▲ Sources disagree')).not.toBeInTheDocument()
+  expect(screen.getByText('▲ Sources disagree')).toBeInTheDocument()
   await edit('Name', 'Maya Chen')
   expect(screen.queryByText(/Some original-version warnings/)).not.toBeInTheDocument()
   expect(screen.getByText(/Some warnings could not be shown/)).toBeInTheDocument()
@@ -424,4 +430,26 @@ test('dirty display labels original conflict proposals, source counts and unsupp
     'maya@call.test or maya@form.test',
   )
   expect(row('Email').closest('.review-field')).toHaveTextContent('2 sources')
+})
+
+
+test('a missing marker clears only for its own non-null edit and returns when cleared', async () => {
+  await openDraft()
+  await edit('Website', 'example.test')
+  expect(row('Website').closest('.review-field')).not.toHaveAttribute('data-flag')
+  expect(row('Email').closest('.review-field')).toHaveAttribute('data-flag', 'conflict')
+  await edit('Website', '')
+  expect(row('Website').closest('.review-field')).toHaveAttribute('data-flag', 'missing')
+  await userEvent.click(row('Website'))
+  expect(evidence().getByText('○ Missing information')).toBeInTheDocument()
+})
+
+test('clearing a field does not invent a missing marker absent from the recorded assessment', async () => {
+  const data = { ...DRAFT.version.data, website: 'old.example.test', assessment: { rules_version: 1, missing_fields: [] } }
+  mockDraft(reply(200, { ...DRAFT, version: { ...DRAFT.version, data } }))
+  render(<ReviewDraftPage profileId="p1" versionId="v2" />)
+  await screen.findByRole('heading', { name: 'Plateau Basements' })
+  await edit('Website', '')
+  expect(row('Website').closest('.review-field')).not.toHaveAttribute('data-flag')
+  expect(screen.getByRole('button', { name: 'Edit Website' })).toHaveTextContent('Not mentioned')
 })
