@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ApiError, getReviewDraft, saveReviewEdits, type ProfileVersion, type ReviewDraft, type ReviewStatus } from '../api'
 import { editableReviewRows, reviewRows, type ReviewRow } from '../components/draftSources'
 import InlineDraftField, { type PendingFieldEdit } from '../components/InlineDraftField'
+import RejectDraft from '../components/RejectDraft'
 import { applyEdit, createEditSession, fieldValue, isEditablePath, type EditablePath } from '../draftEdits'
 import { formatGenerated } from './ReviewInboxPage'
 import { draftSaveGate, type SaveStatus } from '../draftSave'
@@ -113,17 +114,26 @@ export default function ReviewDraftPage({ profileId, versionId }: ReviewDraftPag
     window.dispatchEvent(new HashChangeEvent('hashchange'))
   }
 
-  return <LoadedDraft key={`${draft.version.client_profile_id}/${draft.version.id}`} draft={draft} back={back} saved={saved} onSaved={onSaved} />
+  // Same version, new status: the page stays put and shows it as rejected.
+  function onRejected(version: ProfileVersion) {
+    setSaved(false)
+    setDraft((previous) => previous && { ...previous, version })
+  }
+
+  return <LoadedDraft key={`${draft.version.client_profile_id}/${draft.version.id}`} draft={draft} back={back} saved={saved} onSaved={onSaved} onRejected={onRejected} />
 }
 
-function LoadedDraft({ draft, back, saved, onSaved }: {
-  draft: ReviewDraft; back: React.ReactNode; saved: boolean; onSaved: (version: ProfileVersion) => void
+function LoadedDraft({ draft, back, saved, onSaved, onRejected }: {
+  draft: ReviewDraft; back: React.ReactNode; saved: boolean
+  onSaved: (version: ProfileVersion) => void; onRejected: (version: ProfileVersion) => void
 }) {
   const [session, setSession] = useState(() => createEditSession(draft))
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
   const [pendingFields, setPendingFields] = useState<Partial<Record<EditablePath, PendingFieldEdit>>>({})
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [saveError, setSaveError] = useState('')
+  // A reject request in flight: Save and Approve wait so its result can't be hidden.
+  const [rejecting, setRejecting] = useState(false)
   const saving = useRef(false)
   const mounted = useRef(true)
   useEffect(() => {
@@ -140,7 +150,7 @@ function LoadedDraft({ draft, back, saved, onSaved }: {
   const { rows, unsupported } = (editable ? editableReviewRows : reviewRows)(version.data)
   const selected = rows.find((row) => row.key === selectedKey) ?? rows[0]
   async function save() {
-    if (!gate.canSave || saving.current) return
+    if (!gate.canSave || rejecting || saving.current) return
     saving.current = true
     setSaveStatus('saving')
     setSaveError('')
@@ -163,6 +173,14 @@ function LoadedDraft({ draft, back, saved, onSaved }: {
     } finally {
       saving.current = false
     }
+  }
+  function rejected(version: ProfileVersion) {
+    // Rejecting drops unsaved edits; the rejected version is read-only.
+    setSession(createEditSession({ ...draft, version }))
+    setPendingFields({})
+    setSaveStatus('idle')
+    setSaveError('')
+    onRejected(version)
   }
   function pendingChange(path: EditablePath, pending: PendingFieldEdit | null) {
     setPendingFields((previous) => {
@@ -250,15 +268,29 @@ function LoadedDraft({ draft, back, saved, onSaved }: {
 
       {dirty && <p role="status" className="field-note">Unsaved local changes. Information checks apply to the original version.</p>}
       {!dirty && saved && saveStatus !== 'error' && saveStatus !== 'stale' && <p role="status" className="field-note">Draft edits saved.</p>}
+      {version.status === 'rejected' && (
+        <div className="review-rejected" role="status">
+          <p><strong>Rejected</strong>{version.rejected_at && <> · <time dateTime={version.rejected_at}>{formatGenerated(version.rejected_at)}</time></>}</p>
+          {version.rejection_reason && <p className="field-note">Reason: {version.rejection_reason}</p>}
+        </div>
+      )}
       {version.data.assessment === null && <p className="field-note">Information checks have not been recomputed for this version.</p>}
       {editable && (
         <div className="review-save">
-          <button className="button" type="button" disabled={!gate.canSave} onClick={save}>
+          <button className="button" type="button" disabled={!gate.canSave || rejecting} onClick={save}>
             {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'error' ? 'Try saving again' : 'Save changes'}
           </button>
           {pending && <p className="field-note">Finish or cancel the current edit before saving.</p>}
           {gate.blocksApproval && <p className="field-note">Approval requires saved edits with no pending input or save errors.</p>}
           {saveError && <p className="field-error" role="alert">{saveError}</p>}
+          <RejectDraft
+            profileId={version.client_profile_id}
+            versionId={version.id}
+            disabled={saveStatus === 'saving' || saveStatus === 'stale'}
+            hasUnsavedEdits={dirty || pending}
+            onRejected={rejected}
+            onRejectingChange={setRejecting}
+          />
         </div>
       )}
       {Object.values(pendingFields).some((pending) => pending?.error) && (

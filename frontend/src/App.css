@@ -705,3 +705,60 @@
 
 
 
+
+/* Reject action (#63): a reason form under the save controls. */
+.review-reject {
+  margin-top: 1rem;
+}
+
+.review-reject-form .field-label {
+  margin-top: 0;
+}
+
+.review-reject-reason {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 36rem;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.9rem;
+  resize: vertical;
+}
+
+.review-reject-reason:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.review-reject-reason[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+
+.review-reject-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.review-rejected {
+  margin: 0 0 1.5rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--danger);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.review-rejected p {
+  margin: 0;
+}
+
+.review-rejected .field-note {
+  margin-top: 0.35rem;
+  overflow-wrap: anywhere;
+}
