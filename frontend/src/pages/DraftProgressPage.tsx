@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   ApiError,
   getOnboardingJob,
@@ -10,13 +10,17 @@ import { reviewDraftHref } from '../router'
 
 // How often the page asks for the job's status while the draft is being made -> every 2s
 const POLL_MS = 2000
+// Stop asking when the status hasn't changed for this long. The backend already
+// treats a job running for over 10 minutes as abandoned and restarts it.
+const STALL_MS = 15 * 60 * 1000
 
 type DraftProgressPageProps = {
   // From the link the upload page opens; null when the link is missing one.
   clientId: string | null
   jobId: string | null
-  // How long to wait between status checks (shorter in tests).
+  // How long to wait between status checks, and before giving up (shorter in tests).
   pollMs?: number
+  stallMs?: number
 }
 
 type StepState = 'done' | 'current' | 'failed' | 'upcoming'
@@ -138,6 +142,7 @@ export default function DraftProgressPage({
   clientId,
   jobId,
   pollMs = POLL_MS,
+  stallMs = STALL_MS,
 }: DraftProgressPageProps) {
   const [job, setJob] = useState<OnboardingJob | null>(null)
   const [clientName, setClientName] = useState<string | null>(null)
@@ -149,6 +154,11 @@ export default function DraftProgressPage({
   const [restarting, setRestarting] = useState(false)
   const [restartFailed, setRestartFailed] = useState(false)
   const [now, setNow] = useState(() => Date.now())
+  // The status stayed the same for STALL_MS, so the page stopped asking.
+  const [stalled, setStalled] = useState(false)
+  // When the status last changed, and what it was. Refs: changing them doesn't redraw.
+  const lastChange = useRef(Date.now())
+  const lastStatus = useRef('')
 
   const finished = job !== null && isFinished(job)
   const running = job?.status === 'running'
@@ -169,34 +179,61 @@ export default function DraftProgressPage({
   }, [clientId])
 
   // Ask for the job's status right away, then again after each answer until it finishes.
+  // Paused while the tab is hidden (like the Reviews badge), and stopped when nothing
+  // has changed for STALL_MS.
   useEffect(() => {
-    if (!clientId || !jobId || notFound || finished) return
+    if (!clientId || !jobId || notFound || finished || stalled) return
+    // Both are set past the line above; the names keep that for the functions below.
+    const client = clientId
+    const id = jobId
     // Ignore an answer that arrives after the page has closed.
     let active = true
-    const timer = window.setTimeout(
-      () => {
-        getOnboardingJob(clientId, jobId)
-          .then((latest) => {
-            if (!active) return
-            setJob(latest)
-            setCheckFailed(false)
-          })
-          .catch((error) => {
-            if (!active) return
-            if (error instanceof ApiError && error.status === 404) setNotFound(true)
-            else setCheckFailed(true)
-          })
-          .finally(() => {
-            if (active) setChecks((previous) => previous + 1)
-          })
-      },
-      checks === 0 ? 0 : pollMs,
-    )
+    // A check came due while the tab was hidden; showing the tab runs it.
+    let paused = false
+
+    function check() {
+      if (document.hidden) {
+        paused = true
+        return
+      }
+      getOnboardingJob(client, id)
+        .then((latest) => {
+          if (!active) return
+          const status = `${latest.status}/${latest.attempts}`
+          if (status !== lastStatus.current) {
+            lastStatus.current = status
+            lastChange.current = Date.now()
+          }
+          setJob(latest)
+          setCheckFailed(false)
+        })
+        .catch((error) => {
+          if (!active) return
+          if (error instanceof ApiError && error.status === 404) setNotFound(true)
+          else setCheckFailed(true)
+        })
+        .finally(() => {
+          if (!active) return
+          if (Date.now() - lastChange.current >= stallMs) setStalled(true)
+          else setChecks((previous) => previous + 1)
+        })
+    }
+
+    function checkWhenShown() {
+      if (paused && !document.hidden) {
+        paused = false
+        check()
+      }
+    }
+
+    const timer = window.setTimeout(check, checks === 0 ? 0 : pollMs)
+    document.addEventListener('visibilitychange', checkWhenShown)
     return () => {
       active = false
       window.clearTimeout(timer)
+      document.removeEventListener('visibilitychange', checkWhenShown)
     }
-  }, [clientId, jobId, notFound, finished, checks, pollMs])
+  }, [clientId, jobId, notFound, finished, stalled, checks, pollMs, stallMs])
 
   // Tick the Drafting timer every second while the agent runs.
   useEffect(() => {
@@ -215,10 +252,17 @@ export default function DraftProgressPage({
       setJob(
         await startOnboardingJob(owner, failed.transcript_document_id, failed.intake_document_id),
       )
+      // A restart is a change, so the 15 minutes start again.
+      lastChange.current = Date.now()
     } catch {
       setRestartFailed(true)
     }
     setRestarting(false)
+  }
+
+  function handleCheckAgain() {
+    lastChange.current = Date.now()
+    setStalled(false)
   }
 
   const back = (
@@ -306,6 +350,12 @@ export default function DraftProgressPage({
           Couldn't restart the draft. Try again.
         </p>
       )}
+      {stalled && (
+        <p className="field-note" role="status">
+          No change for a while, so this page stopped checking. The draft keeps going on the
+          server.
+        </p>
+      )}
 
       <div className="draft-actions">
         {draftHref && (
@@ -322,6 +372,11 @@ export default function DraftProgressPage({
             onClick={() => handleRetry(job, clientId!)}
           >
             Try again
+          </button>
+        )}
+        {stalled && (
+          <button className="button" type="button" onClick={handleCheckAgain}>
+            Check again
           </button>
         )}
         {back}

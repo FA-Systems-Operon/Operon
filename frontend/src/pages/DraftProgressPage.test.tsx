@@ -75,8 +75,17 @@ function runCard() {
   return screen.getByText('Run').nextElementSibling as HTMLElement
 }
 
+// Pretend the browser tab was hidden or shown.
+function setHidden(hidden: boolean) {
+  vi.spyOn(document, 'hidden', 'get').mockReturnValue(hidden)
+  act(() => {
+    document.dispatchEvent(new Event('visibilitychange'))
+  })
+}
+
 afterEach(() => {
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
   vi.useRealTimers()
 })
 
@@ -250,7 +259,8 @@ test('an unknown job says the draft was not found', async () => {
 
 test('keeps asking when a status check fails, and recovers', async () => {
   const fetchMock = mockApi([new TypeError('Failed to fetch'), [200, RUNNING]])
-  renderPage()
+  // A slower next check, so the error stays on screen long enough to be seen.
+  render(<DraftProgressPage clientId="c1" jobId="j1" pollMs={200} />)
 
   expect(await screen.findByRole('alert')).toHaveTextContent(
     "Couldn't load the draft's status. Trying again…",
@@ -261,7 +271,8 @@ test('keeps asking when a status check fails, and recovers', async () => {
 })
 
 test('keeps the last status when a later check fails', async () => {
-  mockApi([[200, RUNNING], new TypeError('Failed to fetch'), [200, RUNNING]])
+  // Every check after the first fails, so the error stays on screen.
+  mockApi([[200, RUNNING], new TypeError('Failed to fetch')])
   renderPage()
 
   expect(await screen.findByRole('alert')).toHaveTextContent(
@@ -305,4 +316,36 @@ test.each([
 
   // Nothing new was asked after the page closed.
   expect(fetchMock.mock.calls.filter(([url]) => url === JOB_URL)).toHaveLength(1)
+})
+
+test('waits while the tab is hidden, and checks as soon as it is shown', async () => {
+  const fetchMock = mockApi([[200, RUNNING]])
+  setHidden(true)
+  renderPage()
+
+  await new Promise((resolve) => setTimeout(resolve, 30))
+  expect(statusChecks(fetchMock)).toBe(0)
+  setHidden(true)
+  expect(statusChecks(fetchMock)).toBe(0)
+
+  setHidden(false)
+  await waitFor(() => expect(runCard()).toHaveTextContent('Running'))
+  // Shown again while already checking: no extra check.
+  const checks = statusChecks(fetchMock)
+  setHidden(false)
+  expect(statusChecks(fetchMock)).toBe(checks)
+})
+
+test('stops asking when nothing changes for a while, and Check again resumes', async () => {
+  const user = userEvent.setup()
+  const fetchMock = mockApi([[200, RUNNING]])
+  render(<DraftProgressPage clientId="c1" jobId="j1" pollMs={5} stallMs={30} />)
+
+  expect(await screen.findByText(/this page stopped checking/)).toBeInTheDocument()
+  const checks = statusChecks(fetchMock)
+  await new Promise((resolve) => setTimeout(resolve, 30))
+  expect(statusChecks(fetchMock)).toBe(checks)
+
+  await user.click(screen.getByRole('button', { name: 'Check again' }))
+  await waitFor(() => expect(statusChecks(fetchMock)).toBeGreaterThan(checks))
 })
