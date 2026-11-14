@@ -33,6 +33,13 @@ export function addSourcesHref(clientId?: string): string {
   return clientId ? `#/sources/new?client=${encodeURIComponent(clientId)}` : '#/sources/new'
 }
 
+// Link to a draft's progress after upload. The job is in the address, so a refresh
+// keeps showing it.
+export function draftProgressHref(clientId: string, jobId: string): string {
+  const query = new URLSearchParams({ client: clientId, job: jobId })
+  return `#/sources/draft?${query}`
+}
+
 // Link to one draft in the review inbox (#57 builds the page). Versions are scoped
 // to their profile in the API, so the link carries both IDs.
 export function reviewDraftHref(profileId: string, versionId: string): string {

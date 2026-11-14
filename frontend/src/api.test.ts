@@ -1,6 +1,7 @@
 import { afterEach, expect, test, vi } from 'vitest'
 import {
   ApiError,
+  getOnboardingJob,
   getReviewDraft,
   listClients,
   listReviews,
@@ -144,4 +145,24 @@ test('startOnboardingJob throws an ApiError with the reason on failure', async (
   expect(error).toBeInstanceOf(ApiError)
   expect(error.status).toBe(404)
   expect(error.detail).toBe('Intake not found')
+})
+
+test('getOnboardingJob asks for one job of the client', async () => {
+  const job = { id: 'j1', status: 'running' }
+  const fetchMock = vi.fn().mockResolvedValue(response(200, job))
+  vi.stubGlobal('fetch', fetchMock)
+
+  await expect(getOnboardingJob('c 1', 'j/1')).resolves.toEqual(job)
+  expect(fetchMock).toHaveBeenCalledWith('/api/v1/clients/c%201/onboarding-jobs/j%2F1')
+})
+
+test('getOnboardingJob throws an ApiError with the reason on failure', async () => {
+  const notFound = response(404, { detail: 'Onboarding job not found' })
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(notFound))
+
+  const error = await getOnboardingJob('c1', 'j1').catch((caught) => caught)
+
+  expect(error).toBeInstanceOf(ApiError)
+  expect(error.status).toBe(404)
+  expect(error.detail).toBe('Onboarding job not found')
 })
