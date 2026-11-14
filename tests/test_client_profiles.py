@@ -4,14 +4,14 @@ import uuid
 
 from sqlalchemy import select
 
-from src.models import AuditEvent
+from src.models import AuditEvent, Role
 
 # --- POST /client-profiles ---
 
 
 def test_create_client_profile(client, demo_client):
     response = client.post(
-        "/client-profiles", params={"client_id": str(demo_client.id)}
+        "/api/v1/client-profiles", params={"client_id": str(demo_client.id)}
     )
 
     assert response.status_code == 201
@@ -32,10 +32,12 @@ def test_create_client_profile(client, demo_client):
 def test_update_client_profile_creates_new_version(
     client, db_session, demo_client, signed_in_user
 ):
-    create = client.post("/client-profiles", params={"client_id": str(demo_client.id)})
+    create = client.post(
+        "/api/v1/client-profiles", params={"client_id": str(demo_client.id)}
+    )
     profile_id = create.json()["client_profile_id"]
 
-    update = client.put(f"/client-profiles/{profile_id}", json={"key": "value"})
+    update = client.put(f"/api/v1/client-profiles/{profile_id}", json={"key": "value"})
 
     assert update.status_code == 200
     assert update.json()["version_number"] == 2
@@ -53,17 +55,19 @@ def test_update_client_profile_creates_new_version(
 
 
 def test_update_client_profile_increments_version_each_time(client, demo_client):
-    create = client.post("/client-profiles", params={"client_id": str(demo_client.id)})
+    create = client.post(
+        "/api/v1/client-profiles", params={"client_id": str(demo_client.id)}
+    )
     profile_id = create.json()["client_profile_id"]
 
-    client.put(f"/client-profiles/{profile_id}", json={})
-    third = client.put(f"/client-profiles/{profile_id}", json={})
+    client.put(f"/api/v1/client-profiles/{profile_id}", json={})
+    third = client.put(f"/api/v1/client-profiles/{profile_id}", json={})
 
     assert third.json()["version_number"] == 3
 
 
 def test_update_unknown_client_profile_returns_404(client):
-    response = client.put(f"/client-profiles/{uuid.uuid4()}", json={})
+    response = client.put(f"/api/v1/client-profiles/{uuid.uuid4()}", json={})
 
     assert response.status_code == 404
 
@@ -74,14 +78,18 @@ def test_update_does_not_inherit_approval_or_touch_old_version(
     """A correction to an approved profile is a NEW unapproved version; v1 is untouched."""
     v1 = profile_factory(approved=True, data={"budget": 1000})
 
-    update = client.put(f"/client-profiles/{v1.client_profile_id}", json=sample_profile)
+    update = client.put(
+        f"/api/v1/client-profiles/{v1.client_profile_id}", json=sample_profile
+    )
 
     new = update.json()
     assert new["status"] == "draft"
     assert new["approved_at"] is None
     assert new["approved_by"] is None
 
-    versions = client.get(f"/client-profiles/{v1.client_profile_id}/versions").json()
+    versions = client.get(
+        f"/api/v1/client-profiles/{v1.client_profile_id}/versions"
+    ).json()
     assert versions[0]["status"] == "approved"
     assert versions[0]["approved_at"] is not None
     assert versions[0]["data"] == {"budget": 1000}  # not overwritten
@@ -92,12 +100,14 @@ def test_update_does_not_inherit_approval_or_touch_old_version(
 
 
 def test_list_client_profile_versions_oldest_first(client, demo_client):
-    create = client.post("/client-profiles", params={"client_id": str(demo_client.id)})
+    create = client.post(
+        "/api/v1/client-profiles", params={"client_id": str(demo_client.id)}
+    )
     profile_id = create.json()["client_profile_id"]
-    client.put(f"/client-profiles/{profile_id}", json={"v": 2})
-    client.put(f"/client-profiles/{profile_id}", json={"v": 3})
+    client.put(f"/api/v1/client-profiles/{profile_id}", json={"v": 2})
+    client.put(f"/api/v1/client-profiles/{profile_id}", json={"v": 3})
 
-    response = client.get(f"/client-profiles/{profile_id}/versions")
+    response = client.get(f"/api/v1/client-profiles/{profile_id}/versions")
 
     assert response.status_code == 200
     versions = response.json()
@@ -106,7 +116,7 @@ def test_list_client_profile_versions_oldest_first(client, demo_client):
 
 
 def test_list_versions_unknown_client_profile_returns_404(client):
-    response = client.get(f"/client-profiles/{uuid.uuid4()}/versions")
+    response = client.get(f"/api/v1/client-profiles/{uuid.uuid4()}/versions")
 
     assert response.status_code == 404
 
@@ -126,6 +136,36 @@ def test_approve_client_profile_version(api, profile_factory):
     assert body["version"]["approved_by"] == api.reviewer
     assert body["version"]["approved_at"] is not None
     assert body["newly_stale_artifact_version_ids"] == []  # nothing depended on it
+
+
+def test_approve_records_the_signed_in_reviewer_not_the_body(api, profile_factory):
+    v1 = profile_factory()
+
+    response = api.http.post(
+        f"/api/v1/client-profiles/{v1.client_profile_id}/versions/{v1.id}/approve",
+        json={"approved_by": str(uuid.uuid4())},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["version"]["approved_by"] == api.reviewer
+
+
+def test_approve_needs_a_signed_in_reviewer_with_csrf(
+    client, db_session, profile_factory, sign_in
+):
+    v1 = profile_factory()
+    path = f"/api/v1/client-profiles/{v1.client_profile_id}/versions/{v1.id}/approve"
+    body = {"approved_by": str(uuid.uuid4())}
+    viewer, _ = sign_in(Role.VIEWER)
+    no_csrf, _ = sign_in(Role.REVIEWER)
+    del no_csrf.headers["X-CSRF-Token"]
+
+    assert client.post(path, json=body).status_code == 401
+    assert viewer.post(path, json=body).status_code == 403
+    assert no_csrf.post(path, json=body).status_code == 403
+    db_session.refresh(v1)
+    assert v1.approved_at is None
+    assert sign_in(Role.ADMIN)[0].post(path).status_code == 200
 
 
 def test_approve_already_approved_version_returns_409(api, db_session, profile_factory):
@@ -166,27 +206,39 @@ def test_approve_version_of_a_different_profile_returns_404(
 
 
 def test_approval_audit_uses_session_actor(
-    client, db_session, profile_factory, signed_in_user
+    api, db_session, profile_factory
 ):
     version = profile_factory()
-    response = client.post(
-        f"/client-profiles/{version.client_profile_id}/versions/{version.id}/approve",
+    response = api.http.post(
+        f"/api/v1/client-profiles/{version.client_profile_id}/versions/{version.id}/approve",
         json={"approved_by": str(uuid.uuid4())},
     )
     assert response.status_code == 200
-    assert response.json()["version"]["approved_by"] == str(signed_in_user.id)
+    assert response.json()["version"]["approved_by"] == api.reviewer
     audit = db_session.scalars(select(AuditEvent)).one()
-    assert audit.actor_id == signed_in_user.id
+    assert audit.actor_id == uuid.UUID(api.reviewer)
     assert audit.action == "approve"
     assert audit.object_id == version.client_profile_id
     assert audit.version_id == version.id
+
+
+def test_approve_needs_no_body(api, profile_factory):
+    """The approver comes from the session, so no approved_by is sent."""
+    v1 = profile_factory()
+
+    response = api.http.post(
+        f"/api/v1/client-profiles/{v1.client_profile_id}/versions/{v1.id}/approve",
+    )
+
+    assert response.status_code == 200
+    assert response.json()["version"]["approved_by"] == api.reviewer
 
 
 # --- GET /client-profiles/{id}/latest-approved ---
 
 
 def test_latest_approved_unknown_profile_returns_404(client):
-    response = client.get(f"/client-profiles/{uuid.uuid4()}/latest-approved")
+    response = client.get(f"/api/v1/client-profiles/{uuid.uuid4()}/latest-approved")
 
     assert response.status_code == 404
 
@@ -194,7 +246,9 @@ def test_latest_approved_unknown_profile_returns_404(client):
 def test_latest_approved_without_any_approval_returns_404(client, profile_factory):
     v1 = profile_factory()
 
-    response = client.get(f"/client-profiles/{v1.client_profile_id}/latest-approved")
+    response = client.get(
+        f"/api/v1/client-profiles/{v1.client_profile_id}/latest-approved"
+    )
 
     assert response.status_code == 404
     assert response.json()["detail"] == "No approved version found"
@@ -203,7 +257,9 @@ def test_latest_approved_without_any_approval_returns_404(client, profile_factor
 def test_latest_approved_returns_the_approved_version(client, profile_factory):
     v1 = profile_factory(approved=True)
 
-    response = client.get(f"/client-profiles/{v1.client_profile_id}/latest-approved")
+    response = client.get(
+        f"/api/v1/client-profiles/{v1.client_profile_id}/latest-approved"
+    )
 
     assert response.status_code == 200
     assert response.json()["id"] == str(v1.id)
@@ -211,9 +267,11 @@ def test_latest_approved_returns_the_approved_version(client, profile_factory):
 
 def test_latest_approved_ignores_newer_unapproved_drafts(client, profile_factory):
     v1 = profile_factory(approved=True)
-    client.put(f"/client-profiles/{v1.client_profile_id}", json={"draft": True})
+    client.put(f"/api/v1/client-profiles/{v1.client_profile_id}", json={"draft": True})
 
-    response = client.get(f"/client-profiles/{v1.client_profile_id}/latest-approved")
+    response = client.get(
+        f"/api/v1/client-profiles/{v1.client_profile_id}/latest-approved"
+    )
 
     assert response.json()["id"] == str(v1.id)
 
@@ -224,12 +282,20 @@ def test_latest_approved_is_highest_version_not_latest_approval(
     """Approving an older version later must not roll the current record back."""
     v1 = profile_factory()
     pid = v1.client_profile_id
-    v2 = client.put(f"/client-profiles/{pid}", json={"n": 2}).json()
-    v3 = client.put(f"/client-profiles/{pid}", json={"n": 3}).json()
+    v2 = api.http.put(f"/api/v1/client-profiles/{pid}", json={"n": 2}).json()
+    v3 = api.http.put(f"/api/v1/client-profiles/{pid}", json={"n": 3}).json()
 
     api.approve_profile(pid, v3["id"])
     api.approve_profile(pid, v2["id"])
 
-    response = client.get(f"/client-profiles/{pid}/latest-approved")
+    response = client.get(f"/api/v1/client-profiles/{pid}/latest-approved")
 
     assert response.json()["id"] == v3["id"]
+
+
+def test_old_unprefixed_client_profiles_path_is_gone(client, demo_client):
+    # Everything the frontend calls lives under /api/v1, which the proxy forwards.
+    response = client.post(
+        "/client-profiles", params={"client_id": str(demo_client.id)}
+    )
+    assert response.status_code == 404

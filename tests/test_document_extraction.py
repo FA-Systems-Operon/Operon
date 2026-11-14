@@ -19,7 +19,7 @@ from src.models import Client, ExtractedText, SourceDocument
 @pytest.mark.parametrize(
     ("filename", "data", "expected"),
     [
-        ("transcript.TXT", b"Alice: Hello.  \r\n", "Alice: Hello."),
+        ("transcript.TXT", b"Alice: Hello.  \r\n", "Alice: Hello.\n"),
         (
             "transcript.md",
             b"# Meeting\n\n**Alice:** Hello.",
@@ -90,7 +90,7 @@ def test_reuses_saved_result_without_reading_file_again(
     assert db_session.scalar(select(func.count()).select_from(ExtractedText)) == 1
 
 
-@pytest.mark.parametrize("saved_text", ["Outdated extractor output", "Alice: Hello."])
+@pytest.mark.parametrize("saved_text", ["Outdated extractor output", "Alice: Hello.\n"])
 def test_force_reextracts_and_refreshes_timestamp(
     db_session, storage, demo_client, stored_document, saved_text
 ):
@@ -112,10 +112,10 @@ def test_force_reextracts_and_refreshes_timestamp(
     result = extract_document(
         demo_client.id, document_id, db_session, storage, force=True
     )
-    assert result.text == "Alice: Hello."
+    assert result.text == "Alice: Hello.\n"
     assert result.extracted_at > old_timestamp
     db_session.expunge_all()
-    assert db_session.get(ExtractedText, document_id).text == "Alice: Hello."
+    assert db_session.get(ExtractedText, document_id).text == "Alice: Hello.\n"
     assert db_session.scalar(select(func.count()).select_from(ExtractedText)) == 1
     assert storage.read(key) == b"Alice: Hello.  \r\n"
 

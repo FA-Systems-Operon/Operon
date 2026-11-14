@@ -36,7 +36,7 @@ os.environ["BACKGROUND_WORKER_ENABLED"] = "false"
 import pytest
 from fastapi.testclient import TestClient
 
-from src.auth import current_user
+from src.auth import create_user, current_user
 from src.db import Base, SessionLocal, engine, get_db
 from src.main import app
 from src.models import (
@@ -90,14 +90,8 @@ def db_session(database):
     session.close()
     # Empty every table so each test starts from a clean database.
     with engine.begin() as conn:
-        conn.execute(
-            text(
-                "TRUNCATE audit_events, onboarding_jobs, artifact_versions, artifacts, "
-                "client_profile_versions, client_profiles, "
-                "playbook_versions, playbooks, "
-                "extracted_texts, source_documents, clients"
-            )
-        )
+        tables = ", ".join(f'"{table.name}"' for table in Base.metadata.sorted_tables)
+        conn.execute(text(f"TRUNCATE {tables}"))
 
 
 @pytest.fixture
@@ -129,6 +123,46 @@ def client(db_session, storage, signed_in_user):
     # run; the database fixture above already created the tables.
     yield TestClient(app)
     app.dependency_overrides.clear()
+
+
+TEST_PASSWORD = "correct horse battery staple"
+
+
+@pytest.fixture
+def sign_in(client, db_session):
+    """Return a TestClient signed in as a new user of that role, plus the user.
+
+    It logs in for real, so the session cookie and CSRF header are both checked;
+    the CSRF header is sent on every request. Uses the same test overrides as client.
+    """
+
+    # Session tests must exercise the real authentication dependency.
+    app.dependency_overrides.pop(current_user, None)
+
+    def as_role(role=Role.REVIEWER):
+        user = create_user(
+            db_session,
+            f"{uuid.uuid4().hex[:12]}@example.test",
+            "Test User",
+            TEST_PASSWORD,
+            role,
+        )
+        signed_in = TestClient(app)
+        response = signed_in.post(
+            "/api/v1/auth/login",
+            json={"email": user.email, "password": TEST_PASSWORD},
+        )
+        assert response.status_code == 200, response.text
+        signed_in.headers["X-CSRF-Token"] = signed_in.cookies.get("operon_csrf")
+        return signed_in, user
+
+    return as_role
+
+
+@pytest.fixture
+def reviewer_client(sign_in):
+    """A TestClient signed in as a reviewer, for endpoints that change drafts."""
+    return sign_in(Role.REVIEWER)[0]
 
 
 @pytest.fixture
@@ -250,33 +284,36 @@ class OperonApi:
     """The HTTP calls the staleness tests act through. Every id argument may be a
     UUID, a str, or None, so ORM rows and JSON responses can be passed alike."""
 
-    def __init__(self, http, reviewer):
+    def __init__(self, http, reviewer_id):
+        # Signed in as a reviewer: profile approval records the signed-in user.
         self.http = http
-        self.reviewer = str(reviewer)
+        self.reviewer = str(reviewer_id)
 
     @staticmethod
     def _s(value):
         return None if value is None else str(value)
 
     def new_profile_version(self, profile_id, data=None):
-        r = self.http.put(f"/client-profiles/{profile_id}", json=data or {"k": "v"})
+        r = self.http.put(
+            f"/api/v1/client-profiles/{profile_id}", json=data or {"k": "v"}
+        )
         assert r.status_code == 200, r.text
         return r.json()
 
     def approve_profile(self, profile_id, version_id):
         return self.http.post(
-            f"/client-profiles/{profile_id}/versions/{version_id}/approve",
+            f"/api/v1/client-profiles/{profile_id}/versions/{version_id}/approve",
             json={"approved_by": self.reviewer},
         )
 
     def new_playbook_version(self, playbook_id):
-        r = self.http.put(f"/playbooks/{playbook_id}", json={"rule": "x"})
+        r = self.http.put(f"/api/v1/playbooks/{playbook_id}", json={"rule": "x"})
         assert r.status_code == 200, r.text
         return r.json()
 
     def approve_playbook(self, playbook_id, version_id):
         return self.http.post(
-            f"/playbooks/{playbook_id}/versions/{version_id}/approve",
+            f"/api/v1/playbooks/{playbook_id}/versions/{version_id}/approve",
             json={"approved_by": self.reviewer},
         )
 
@@ -288,7 +325,7 @@ class OperonApi:
         kind="campaign_brief",
     ):
         return self.http.post(
-            "/artifacts",
+            "/api/v1/artifacts",
             json={
                 "client_id": self._s(client_id),
                 "kind": kind,
@@ -302,7 +339,7 @@ class OperonApi:
         self, artifact_id, profile_version_id, playbook_version_id=None
     ):
         return self.http.post(
-            f"/artifacts/{artifact_id}/versions",
+            f"/api/v1/artifacts/{artifact_id}/versions",
             json={
                 "client_profile_version_id": self._s(profile_version_id),
                 "playbook_version_id": self._s(playbook_version_id),
@@ -312,25 +349,26 @@ class OperonApi:
 
     def approve_artifact(self, artifact_id, version_id):
         return self.http.post(
-            f"/artifacts/{artifact_id}/versions/{version_id}/approve",
+            f"/api/v1/artifacts/{artifact_id}/versions/{version_id}/approve",
             json={"approved_by": self.reviewer},
         )
 
     def history(self, artifact_id) -> list[dict]:
-        r = self.http.get(f"/artifacts/{artifact_id}/versions")
+        r = self.http.get(f"/api/v1/artifacts/{artifact_id}/versions")
         assert r.status_code == 200, r.text
         return r.json()
 
     def stale(self, client_id=None) -> list[dict]:
         params = {"client_id": str(client_id)} if client_id else {}
-        r = self.http.get("/artifacts/stale", params=params)
+        r = self.http.get("/api/v1/artifacts/stale", params=params)
         assert r.status_code == 200, r.text
         return r.json()
 
 
 @pytest.fixture
-def api(client, signed_in_user):
-    return OperonApi(client, signed_in_user.id)
+def api(sign_in):
+    http, reviewer = sign_in(Role.REVIEWER)
+    return OperonApi(http, reviewer.id)
 
 
 @pytest.fixture

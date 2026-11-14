@@ -188,8 +188,8 @@ immutable snapshot data.
 
 | Request | Result |
 | --- | --- |
-| `GET /client-profiles/{profile_id}/latest-approved` | Highest numbered approved version of this profile. |
-| `GET /playbooks/{playbook_id}/latest-approved` | Highest numbered approved version of this playbook. |
+| `GET /api/v1/client-profiles/{profile_id}/latest-approved` | Highest numbered approved version of this profile. |
+| `GET /api/v1/playbooks/{playbook_id}/latest-approved` | Highest numbered approved version of this playbook. |
 
 Both endpoints return `200` with the version ID, parent ID, `version_number`,
 `data`, `created_at`, and `approved_at`. Ordering uses **version number**, not
@@ -269,7 +269,7 @@ CI command are in `tests/README.md`.
 
 ## Source-linked draft profiles (#40)
 
-`POST /client-profiles/{profile_id}/source-drafts` accepts the #39 output:
+`POST /api/v1/client-profiles/{profile_id}/source-drafts` accepts the #39 output:
 `name`, `needs`, `goals`, and `source_references` (each with `field`,
 `document_id`, and `quote`). Create the profile first using the existing endpoint.
 Documents must belong to that profile's client and have saved extracted text.
@@ -280,10 +280,10 @@ provenance, not whether the model's interpretation is correct.
 A successful request returns 201 with a new draft version. Profile values and
 references are stored together in the existing immutable `data` JSON snapshot;
 no migration is required, and old versions remain unchanged. Retrieve evidence
-through `GET /client-profiles/{profile_id}/versions` in each version's `data`.
+through `GET /api/v1/client-profiles/{profile_id}/versions` in each version's `data`.
 The existing latest-approved endpoint continues to return only approved versions.
-This follows the existing profile route prefix; frontend proxy integration is
-separate. Existing generic profile endpoints keep their current behavior.
+Like the other API routes, it lives under `/api/v1`, so the frontend reaches
+it through the Vite dev proxy. Existing generic profile endpoints keep their current behavior.
 
 ## Onboarding draft job (#36)
 
@@ -417,8 +417,8 @@ Everything is saved in the existing immutable version JSON; no migration is
 needed. Historical versions without assessment stay unassessed. The generic
 profile update endpoint remains an unvalidated JSON editing endpoint and does not
 recompute completeness or establish conflict-resolution/approval guarantees.
-The future review/edit integration must invalidate or recompute assessment after
-edits. The source-draft endpoint validates the supplied evidence; it does not scan
+The review edit endpoint (#60) invalidates assessment after edits (see below).
+The source-draft endpoint validates the supplied evidence; it does not scan
 all documents a client owns. The onboarding job compares its exact pinned pair.
 
 Resolution and approval blocking are follow-up review-flow work, as described in
@@ -428,3 +428,176 @@ The original documents, failed reply and validation error are supplied as data;
 the repaired response must pass the same full validator. A second invalid reply
 fails the job with no draft saved. Provider failures still use the existing job
 retry policy; they do not trigger this validation repair.
+
+
+## Review inbox (#54)
+
+`GET /api/v1/reviews` lists the profile drafts waiting for a reviewer, newest
+first (by `created_at`, then `version_id`). No drafts returns `200` with `[]`.
+
+```json
+[
+  {
+    "version_id": "<uuid>",
+    "client_profile_id": "<uuid>",
+    "version_number": 2,
+    "client_id": "<uuid>",
+    "client_name": "Maya's Bakery",
+    "created_at": "2026-11-09T14:03:12.511Z",
+    "status": "draft"
+  }
+]
+```
+
+A version is listed when all of these hold:
+
+- it is the highest `version_number` of its profile; an older draft with a
+  newer version (approved or not) is superseded and not listed,
+- its status is `draft` or `in_review` (nothing sets `in_review` yet),
+- its `data` is not empty. This leaves out the `{}` version 1 that
+  `POST /client-profiles` creates. Drafts from the onboarding job, the
+  source-draft endpoint and `PUT` corrections always have data, so a correction
+  to a generated draft replaces it in the inbox.
+
+There is one item per profile, not per client: a client with two profiles that
+both have a pending draft appears twice. `created_at` is when that version was
+saved, which for a generated draft is when it was generated. `version_id` and
+`client_profile_id` are what the draft detail view (#57) needs to open it.
+
+The list is not paginated; it only holds unreviewed drafts. If it grows,
+cursor paging on `(created_at, version_id)` fits the existing order.
+
+## Review draft detail (#57)
+
+`GET /api/v1/reviews/profiles/{profile_id}/versions/{version_id}` returns what
+the review page needs to open one draft, in a single call:
+
+```json
+{
+  "version": { "id": "<uuid>", "client_profile_id": "<uuid>", "version_number": 2,
+               "status": "draft", "data": { "...": "the saved draft" },
+               "created_at": "...", "approved_by": null, "approved_at": null },
+  "client": { "id": "<uuid>", "name": "Maya's Bakery", "created_at": "..." },
+  "documents": [ { "id": "<uuid>", "original_filename": "call.txt",
+                   "kind": "transcript", "...": "same fields as the documents list" } ]
+}
+```
+
+`version` has the same shape as the profile versions list. `documents` are the
+client's source documents (oldest first, no storage key), so the page can show
+which file and kind each quote's `document_id` refers to. Any version can be
+opened, not only drafts awaiting review. The version is looked up within the
+profile: a version of another profile, or an unknown profile or version,
+returns `404`. The route is under `/api/v1` already and does not depend on the
+profile routes moving there.
+
+## Save reviewer edits (#60)
+
+`POST /api/v1/reviews/profiles/{profile_id}/versions/{version_id}/edits`
+accepts only a `changes` map, for example:
+
+```json
+{"changes": {"name": "Corrected name", "email": null, "needs/0": "More bookings"}}
+```
+
+The version in the URL is the loaded base. A transaction locks the profile and
+checks that this is still its latest version, in `draft` or `in_review` with no
+approval timestamp. A superseded or decided base returns `409`; a missing or
+mismatched profile/version returns `404`. Unknown fields, non-text values,
+new/noncanonical list indexes, blank/null list items, and a non-object stored base
+return `422`. Scalars
+are trimmed and may be cleared to null; no extra email/URL/phone formats are imposed.
+
+The server copies the stored base, applies only permitted corrections, and inserts
+an immutable, unapproved version preserving the base's `draft` or `in_review`
+status, using the existing version numbering and unique constraint. Success returns
+the saved version (`201`). Empty or unchanged changes
+still check freshness and return the current base (`200`), without another version;
+this supports retry after reverting local changes. Failure rolls back the save.
+The generic profile PUT now takes the same parent lock (its JSON contract is unchanged).
+Source-draft generation and profile approval already take that lock.
+
+Changed snapshots use the existing nullable `assessment` format: `null` means
+unassessed. Original references and conflict alternatives remain unchanged as
+historical evidence. They do not verify reviewer corrections, and editing a
+conflicted scalar does not resolve the conflict. The source-generation validator
+is unchanged. Prior versions remain intact; no migration is needed. Saving does
+not approve anything, change the latest-approved profile, or mark artifacts stale.
+
+The review page offers explicit Save, retains local edits on errors, and adopts
+the response's version and URL on success, notifying the hash router immediately.
+Pending input and an in-flight request
+disable Save; a known stale response also disables it and directs the reviewer to
+the latest draft in the inbox. Failed requests require a successful retry before
+the local save gate clears, even if the edits are reverted.
+
+`draftSaveGate` supplies the save prerequisite for #62: block approval for unsaved
+edits, pending input, saving, save failure, known staleness, or noneditable status.
+It is not an authorization or conflict-resolution decision. There is no Approve
+button or approval-endpoint change in #60. **Approval-time freshness, permissions,
+and conflict/field decisions remain #62 and the wider review workflow.** No
+navigation guard, autosave or browser storage is added; leaving before a successful
+save discards local edits. #66's full acceptance verification remains separate.
+
+## Reject a draft (#63)
+
+`POST /api/v1/reviews/profiles/{profile_id}/versions/{version_id}/reject`
+takes a required reason:
+
+```json
+{"reason": "Intake belongs to a different client"}
+```
+
+The reason is trimmed and must be 1–500 characters (`422` otherwise; unknown keys
+are also `422`). The same freshness check as saving edits applies: the version
+must be the profile's latest, in `draft` or `in_review`, and unapproved, or the
+request returns `409`; a missing or mismatched profile/version returns `404`.
+
+Rejecting updates that version in place: `status` becomes `rejected`, and
+`rejection_reason` and `rejected_at` are stored. No new version is created and no
+approval fields are set, so the latest-approved profile and artifact staleness are
+unchanged. Once set, the reason and time cannot be changed (immutability guard).
+Rejected drafts leave the review inbox, and approving a rejected version returns
+`409`. Since #62 the signed-in reviewer is stored as `rejected_by`.
+
+The review page shows a Reject button beside Save. It opens a reason form, blocks
+an empty reason, warns that unsaved edits will be discarded, and on success shows
+the draft as rejected with its reason. Dedicated rejection tests are #64.
+
+For an existing database, apply
+`backend/migrations/006_add_profile_version_rejection.sql` after 005.
+
+## Approve a draft (#62)
+
+`POST /api/v1/reviews/profiles/{profile_id}/versions/{version_id}/approve` (no
+body) saves the loaded draft, including any saved reviewer edits, as a **new**
+version with `status: approved`, `approved_by` (the signed-in user) and
+`approved_at`. It returns `201` with `{"version": ..., "newly_stale_artifact_version_ids": [...]}`.
+The draft row itself is not rewritten. Artifacts built from older profile versions
+are marked stale in the same transaction.
+
+The version must still be the profile's latest, in `draft` or `in_review`, and
+unapproved; otherwise `409`. A repeated submit or a second reviewer approving at
+the same time therefore gets `409` instead of a second approved copy (the profile
+row lock serialises them). A page that missed a newer save, approval or rejection
+also gets `409`. An empty version (the `{}` placeholder) is `422`; a missing or
+mismatched profile/version is `404`.
+
+**Permissions.** Edit, reject and approve now need a signed-in `reviewer` or
+`admin` and the `X-CSRF-Token` header: `401` when signed out, `403` for a viewer
+or a missing/wrong CSRF token. The frontend sends the session cookie and token on
+these calls and hides the review controls from viewers. Reading drafts and the
+inbox is unchanged.
+
+The review page's Approve button sits next to Save. It is disabled until edits are
+saved with nothing pending (`draftSaveGate`) and while a request is in flight; on
+success the page opens the new approved version.
+
+The older `POST /api/v1/client-profiles/{id}/versions/{vid}/approve` (approves
+in place) has the same checks: a signed-in `reviewer` or `admin` with the CSRF
+header. It records the signed-in user as `approved_by`; an `approved_by` in the
+request body is ignored, and no body is needed. Unresolved source conflicts do not
+block approval; the reviewer decides by editing the field before approving.
+
+For an existing database, apply
+`backend/migrations/007_add_profile_version_rejected_by.sql` after 006.

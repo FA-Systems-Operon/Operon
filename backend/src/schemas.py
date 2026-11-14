@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator
 
 from src.models import DocumentKind, JobStatus, ReviewStatus
 
@@ -107,6 +107,63 @@ class ClientProfileVersionOut(BaseModel):
     created_at: datetime
     approved_by: uuid.UUID | None = None
     approved_at: datetime | None = None
+    rejection_reason: str | None = None
+    rejected_at: datetime | None = None
+    rejected_by: uuid.UUID | None = None
+
+
+class ReviewInboxItemOut(BaseModel):
+    """One profile draft awaiting review, with what the inbox shows at a glance."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    version_id: uuid.UUID
+    client_profile_id: uuid.UUID
+    version_number: int
+    client_id: uuid.UUID
+    client_name: str
+    # When the draft version was saved, i.e. when it was generated.
+    created_at: datetime
+    status: ReviewStatus
+
+
+class ReviewDraftOut(BaseModel):
+    """One profile version opened for review, with the client's source documents."""
+
+    version: ClientProfileVersionOut
+    client: ClientOut
+    documents: list[SourceDocumentOut]
+
+
+class ReviewEditsIn(BaseModel):
+    """Only field corrections; evidence and review metadata come from storage."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    changes: dict[str, StrictStr | None]
+
+
+REJECTION_REASON_MAX_LENGTH = 500
+
+
+class ReviewRejectIn(BaseModel):
+    """Why the reviewer is rejecting the draft; required, short and not blank."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    reason: StrictStr
+
+    @field_validator("reason")
+    @classmethod
+    def reason_is_short_and_not_blank(cls, reason: str) -> str:
+        reason = reason.strip()
+        if not reason:
+            raise ValueError("A rejection reason is required")
+        if len(reason) > REJECTION_REASON_MAX_LENGTH:
+            raise ValueError(
+                f"Keep the rejection reason to {REJECTION_REASON_MAX_LENGTH} characters"
+            )
+        return reason
 
 
 class PlaybookOut(BaseModel):

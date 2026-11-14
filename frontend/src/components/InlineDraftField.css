@@ -1,0 +1,70 @@
+/* Scoped to the review detail; leave shared navigation/authentication styles alone. */
+.review-draft .review-field-row {
+  align-items: start;
+  cursor: default;
+}
+
+.review-draft .review-field-selector,
+.review-draft .inline-draft-value {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.review-draft .inline-draft-value {
+  color: var(--text);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.review-draft .inline-draft-field {
+  min-width: 0;
+  font-size: 1rem;
+}
+
+.review-draft .inline-draft-field input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.review-draft .inline-draft-field input:focus,
+.review-draft .inline-draft-value:focus-visible,
+.review-draft .review-field-selector:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.review-draft .review-edited {
+  display: block;
+  margin-top: 0.3rem;
+  color: var(--accent);
+  font-size: 0.75rem;
+}
+
+@media (max-width: 720px) {
+  .review-draft .inline-draft-field {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
+
+.review-draft .review-field-row[data-selected='true'] {
+  background: var(--surface-raised);
+}
+
+/* Evidence can contain the same unbroken URLs as the field values. */
+.review-draft .review-evidence {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

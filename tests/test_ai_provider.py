@@ -14,6 +14,7 @@ from src.ai import (
     get_provider,
 )
 from src.ai.ollama import OllamaProvider
+from src.ai.redaction import RedactingProvider
 from src.config import settings
 
 
@@ -110,7 +111,8 @@ def test_get_provider_builds_ollama_from_settings(monkeypatch):
 
     provider = get_provider()
 
-    assert isinstance(provider, OllamaProvider)
+    assert isinstance(provider, RedactingProvider)
+    assert isinstance(provider.inner, OllamaProvider)
     assert provider.base_url == "http://ollama:11434"
     assert provider.model == "llama3.2:3b"
     assert provider.timeout == 30.0

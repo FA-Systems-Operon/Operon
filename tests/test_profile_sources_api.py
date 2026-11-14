@@ -19,7 +19,7 @@ def test_api_persists_and_returns_source_draft(
     document = stored_document()
     add_text(db_session, document)
     payload = make_draft(document.id).model_dump()
-    url = f"/client-profiles/{original.client_profile_id}"
+    url = f"/api/v1/client-profiles/{original.client_profile_id}"
     response = client.post(f"{url}/source-drafts", json=payload)
     assert response.status_code == 201
     payload["assessment"] = assess_missing(payload, []).model_dump()
@@ -56,7 +56,8 @@ def test_api_rejects_invalid_evidence_without_saving(
     elif case == "missing_reference":
         payload["source_references"] = []
     response = client.post(
-        f"/client-profiles/{original.client_profile_id}/source-drafts", json=payload
+        f"/api/v1/client-profiles/{original.client_profile_id}/source-drafts",
+        json=payload,
     )
     assert response.status_code == 422
     assert (
@@ -67,7 +68,7 @@ def test_api_rejects_invalid_evidence_without_saving(
 def test_api_returns_404_for_missing_profile(client):
     payload = {"name": None, "needs": [], "goals": [], "source_references": []}
     response = client.post(
-        f"/client-profiles/{uuid.uuid4()}/source-drafts", json=payload
+        f"/api/v1/client-profiles/{uuid.uuid4()}/source-drafts", json=payload
     )
     assert response.status_code == 404
 
@@ -83,7 +84,7 @@ def test_database_failure_rolls_back_draft(
         pytest.raises(SQLAlchemyError),
     ):
         client.post(
-            f"/client-profiles/{original.client_profile_id}/source-drafts",
+            f"/api/v1/client-profiles/{original.client_profile_id}/source-drafts",
             json=make_draft(document.id).model_dump(),
         )
     assert (

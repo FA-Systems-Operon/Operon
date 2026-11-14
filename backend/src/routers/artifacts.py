@@ -30,7 +30,7 @@ from src.versioning import (
     next_artifact_version,
 )
 
-router = APIRouter(prefix="/artifacts", tags=["artifacts"])
+router = APIRouter(prefix="/api/v1/artifacts", tags=["artifacts"])
 
 DbSession = Annotated[Session, Depends(get_db)]
 

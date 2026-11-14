@@ -17,7 +17,7 @@ from src.versioning import (
     next_playbook_version,
 )
 
-router = APIRouter(prefix="/playbooks", tags=["playbooks"])
+router = APIRouter(prefix="/api/v1/playbooks", tags=["playbooks"])
 
 DbSession = Annotated[Session, Depends(get_db)]
 

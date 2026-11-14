@@ -60,6 +60,7 @@ def get_provider() -> ModelProvider:
     """Build the provider selected by AI_PROVIDER in the settings."""
     # Imported here because ollama.py imports this module for the error types.
     from src.ai.ollama import OllamaProvider
+    from src.ai.redaction import RedactingProvider
 
     name = settings.AI_PROVIDER.strip().lower()
     if name != "ollama":
@@ -70,8 +71,11 @@ def get_provider() -> ModelProvider:
         raise ProviderConfigError(
             "OLLAMA_MODEL is not set. Add it to your .env (see .env.example)."
         )
-    return OllamaProvider(
-        base_url=settings.OLLAMA_BASE_URL,
-        model=settings.OLLAMA_MODEL,
-        timeout=settings.OLLAMA_TIMEOUT_SECONDS,
+    # Every model call goes through here, so redacting here covers all of them (M14).
+    return RedactingProvider(
+        OllamaProvider(
+            base_url=settings.OLLAMA_BASE_URL,
+            model=settings.OLLAMA_MODEL,
+            timeout=settings.OLLAMA_TIMEOUT_SECONDS,
+        )
     )

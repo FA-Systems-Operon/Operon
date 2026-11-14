@@ -242,6 +242,13 @@ class ClientProfileVersion(Base):
     approved_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # Set together by the Reject action (#63); a rejected draft never gets approved.
+    rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    rejected_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # The signed-in user who rejected it (#62). Not a foreign key, like approved_by.
+    rejected_by: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
     profile: Mapped[ClientProfile] = relationship(back_populates="versions")
 
 
@@ -462,11 +469,21 @@ def _make_guard(fields: tuple[str, ...]):
                 )
         approved = state.attrs.approved_at.history
         if (
-                approved.has_changes()
-                and approved.deleted
-                and approved.deleted[0] is not None
+            approved.has_changes()
+            and approved.deleted
+            and approved.deleted[0] is not None
         ):
             raise ValueError("approved_at is already set and cannot be changed")
+        for name in ("rejection_reason", "rejected_at", "rejected_by"):
+            if name not in state.attrs:
+                continue
+            rejected = state.attrs[name].history
+            if (
+                rejected.has_changes()
+                and rejected.deleted
+                and rejected.deleted[0] is not None
+            ):
+                raise ValueError(f"{name} is already set and cannot be changed")
 
     return guard
 

@@ -188,3 +188,144 @@ TEST_DATABASE_URL='<dedicated PostgreSQL URL ending in _test>' \
 As with the existing baseline live-model test, these opt-in functions are
 excluded from CI coverage because CI has no Ollama service. They are run
 separately and their results are documented in the evaluation status.
+
+## Review inbox and draft detail (AT 4.1, #65)
+
+Criteria: (1) given a draft awaiting review, when a reviewer opens the review
+inbox, it is listed with the client name and generation time; (2) given a
+reviewer selects it, the detail view shows the evidence and the proposed
+profile fields side by side. Drafts are generated the way the app makes them:
+both files are uploaded through the API, then the onboarding job drafts them with
+a faked model, so CI needs no Ollama.
+
+| Criterion | Evidence |
+| --- | --- |
+| (1) The awaiting draft is listed with its client name and the time the job saved it; an approved draft and the empty placeholder are not | `test_review_inbox_acceptance.py::test_inbox_lists_the_awaiting_draft_with_client_name_and_time` |
+| (1) The inbox row shows the client name and the formatted generation time | `frontend/src/pages/ReviewInbox.acceptance.test.tsx` (criterion 1) |
+| (2) Opening the item with the IDs the inbox returned gives the proposed fields, and every quote cites a returned document and occurs in the uploaded file of that kind | `test_review_inbox_acceptance.py::test_selected_draft_opens_with_its_fields_and_evidence` |
+| (2) Clicking the row opens the detail page: field list and evidence panel in the same two-column body; choosing a field shows its quote and source document | `ReviewInbox.acceptance.test.tsx` (criterion 2) |
+| The frontend's API replies have the real response shape | `test_review_inbox_acceptance.py::test_frontend_fixture_has_the_real_response_shape` against `fixtures/review_inbox/responses.json` |
+| Empty state: no drafts gives `[]` and the inbox says so | `test_inbox_is_empty_when_no_draft_awaits_review`; `ReviewInbox.acceptance.test.tsx` (empty) |
+| Error state: the inbox says it couldn't load, and Try again loads it | `ReviewInbox.acceptance.test.tsx` (error) |
+
+Detailed filtering, ordering and 404 cases are in `test_reviews.py`, and the page
+states in `ReviewInboxPage.test.tsx` and `ReviewDraftPage.test.tsx`.
+
+```bash
+python -m pytest tests/test_review_inbox_acceptance.py tests/test_reviews.py -q
+cd frontend && npm test && npm run build
+```
+
+The frontend test was checked to fail when the inbox shows the wrong client
+name or time, links to the wrong draft, drops a field, shows no quotes, loses its
+empty message, or Try again does nothing. The backend test has not run locally
+yet (Postgres was down); once it is up, confirm it fails when `reviews.py`
+returns the client's `created_at` as the generation time, drops the
+`data != {}` filter, or returns another client's documents, then revert.
+
+**Limitations:** there is no authentication yet, so "a reviewer" is anyone who
+opens the page. "Side by side" is checked in the markup (both columns inside
+the two-column body), not visually; the CSS stacks them under 720px.
+
+## Inline field editing (#59; reuse for AT 4.2, #66)
+
+Task #59 covers local editing on the production review detail page only. Editable
+statuses are `draft` and `in_review`; historical statuses remain read-only. The
+name and nine onboarding fields accept nullable text. Boundary whitespace is
+trimmed; clearing a scalar produces null. Existing needs/goals items accept
+nonblank text, keeping their saved indexes. No list additions, deletions or
+reordering are supported. Empty lists stay empty. No format validation is imposed
+on contact/account fields; these rules follow `profile_flags.py` and
+`source_prompt.py`, not the generic update endpoint's arbitrary JSON contract.
+
+| Requirement / reusable scenario | Automated coverage |
+| --- | --- |
+| Clicking a value edits it in the detail view; label selection still opens evidence | `ReviewDraftPage.test.tsx`, `ReviewInbox.acceptance.test.tsx` |
+| Every scalar, including absent/missing/conflicted values, is editable in draft/in_review | `ReviewDraftPage.test.tsx` |
+| Other statuses stay read-only and still show evidence | `ReviewDraftPage.test.tsx` |
+| Enter applies; Escape cancels current typing and restores focus; Tab/Shift+Tab and blur apply valid text; IME Enter does not apply | `InlineDraftField.test.tsx` |
+| Blank list input retains text and an accessible error; correction or Escape clears it | `InlineDraftField.test.tsx`, `ReviewDraftPage.test.tsx` |
+| Existing list indexes, neighboring entries, original evidence and unknown JSON are preserved | `draftEdits.test.ts`, `draftSources.test.ts`, `ReviewDraftPage.test.tsx` |
+| Track original version identity, changed paths, original/current values and absent versus null keys; repeated edits compare to the loaded original | `draftEdits.test.ts` |
+| Applied changes hide assessment-derived badges globally, label original evidence and mark edited values; full revert restores the original display | `ReviewDraftPage.test.tsx` |
+| Conflicted scalar input starts empty rather than from joined alternatives; both original claims remain visible after correction | `ReviewDraftPage.test.tsx` |
+| Original API reply is unchanged and editing sends no mutation request | `ReviewDraftPage.test.tsx`, `ReviewInbox.acceptance.test.tsx` |
+| Leaving/reopening or opening another version resets applied edits, invalid text and dirty state | `ReviewInbox.acceptance.test.tsx` |
+
+Paths above are under `frontend/src/` (helper), `frontend/src/components/`, or
+`frontend/src/pages/` as appropriate. The production navigation tests reuse
+`tests/fixtures/review_inbox/responses.json`; page tests use a synthetic draft with
+missing and conflicting fields. Existing evidence, loading/error, retry and
+late-response regressions remain in the page and source suites.
+
+Run with Node 24 and locked dependencies, from `frontend`:
+
+```bash
+npm ci --ignore-scripts
+npx vitest run src/draftEdits.test.ts src/components/InlineDraftField.test.tsx \
+  src/components/draftSources.test.ts src/pages/ReviewDraftPage.test.tsx \
+  src/pages/ReviewInbox.acceptance.test.tsx
+npm test
+npm run build
+```
+
+The local session stores `base` (client/profile/version IDs, version number and
+created timestamp), `originalData`, `currentData`, and `changes[path]` with
+`originalPresent`, `originalValue` and `currentValue`. Applied changes are separate
+from editor callbacks: `onApply(path, text)`, `onPendingChange(path, {text, error} | null)`
+and `onSelect()`. The page tracks pending fields separately, so a future save flow
+can account for unapplied/invalid input. A full revert restores original key
+presence. An empty edit on an absent or malformed scalar is a no-op, preserving
+legacy data; a nonempty correction replaces only that field.
+
+Assessment invalidation is display-only: saved assessment, conflicts, references
+and approval metadata are not changed. Original evidence does not automatically
+verify a reviewer correction. There is only an unsaved-local-changes notice, with
+no navigation guard, browser storage, saving, recomputation or approval gate.
+
+For #66, reuse these local scenarios with #60's save scenarios below and #62's
+future approval action. Persistence and approval are outside #59. The
+source-draft validator requires conflicted scalar values to remain null and cannot
+be used unchanged to save a corrected non-null value while retaining its original
+conflict. Generic PUT also accepts arbitrary JSON and does not establish a current
+assessment or a conflict-resolution guarantee.
+
+Manual browser checks remain necessary for real Tab/Shift+Tab/blur focus movement,
+IME behavior, visible focus and error announcement, long values and evidence,
+and the responsive layout below 720px. jsdom interaction checks do not prove
+browser layout, assistive-technology behavior or full #66 persistence acceptance.
+
+## Save draft edits (#60; reuse for AT 4.2, #66)
+
+These are focused implementation/regression checks, not completion of #66.
+
+| Requirement | Tests |
+| --- | --- |
+| Save corrections, reopen the returned version, preserve old snapshots, evidence and unresolved conflicts; invalidate assessment with the existing null format | `test_review_edits.py::test_save_appends_draft_and_reload_keeps_corrections_and_original_history`; `ReviewDraftPage.test.tsx` save/reopen scenario |
+| Nullable scalars, nonblank existing list items, restricted paths/types/metadata; reject invalid saves atomically; non-object base returns a clean 422 | `test_review_edits.py` validation cases, including `test_nonobject_base_data_returns_clean_422_without_writing` |
+| Reject superseded/decided versions without writing | `test_save_from_superseded_version_returns_409_without_writing`; `test_decided_or_stale_version_cannot_be_saved`; page `409` scenario |
+| Serialize competing saves and hold the parent lock until transaction end | `test_simultaneous_saves_have_one_winner_and_one_stale_response`; `test_save_holds_parent_lock_until_the_transaction_finishes` |
+| Storage failures roll back; frontend network/server/validation errors retain corrections and allow retry | `test_storage_failure_rolls_back_the_entire_save`; page failure/retry scenarios |
+| Pending/invalid typing, saving, failure and known stale state block the local save prerequisite for approval | `draftSave.test.ts`; page pending/saving/failure/stale scenarios |
+| Saved version becomes the next save's base and the reload destination, including in the app's hash router | page second-save scenario; `ReviewDraftSave.test.tsx` |
+| Late replies do not navigate after leaving; duplicate submissions are prevented | page late-response and saving scenarios |
+
+The save/reload test covers both `draft` and `in_review` and asserts the new version
+preserves that status. The app route test observes `useRoute` directly without
+injecting a hashchange event; the save flow must notify the router itself.
+
+Run with the existing isolated PostgreSQL `*_test` database and locked dependencies:
+
+```bash
+python -m pytest tests/test_review_edits.py tests/test_reviews.py tests/test_versioning_workflow.py -q
+cd frontend
+npm test
+npm run build
+```
+
+`draftSaveGate` only establishes the local save prerequisite. Approval-time server
+freshness, reviewer permission, conflict decisions and the Approve action remain
+#62; #66 can extend these scenarios through that action. A missing save error does
+not establish that a version is still current when someone later approves it.
+The old generic PUT remains an arbitrary-JSON interface, now sharing the parent
+lock; it does not acquire this endpoint's validation or expected-version contract.

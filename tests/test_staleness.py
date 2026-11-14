@@ -139,7 +139,7 @@ def test_late_approval_of_older_version_does_not_roll_back(
     assert r.json()["newly_stale_artifact_version_ids"] == []
     assert status_of(api, art["artifact_id"]) == "draft"
 
-    latest = client.get(f"/client-profiles/{pid}/latest-approved").json()
+    latest = client.get(f"/api/v1/client-profiles/{pid}/latest-approved").json()
     assert latest["id"] == v3["id"]
 
 
@@ -308,3 +308,8 @@ def test_is_artifact_stale_playbook(db_session, api, profile_factory, playbook_f
     api.approve_playbook(pb1.playbook_id, pb2["id"])
     assert is_artifact_stale(db_session, pv.id, pb1.id) is True
     assert is_artifact_stale(db_session, pv.id, uuid.UUID(pb2["id"])) is False
+
+
+def test_old_unprefixed_artifacts_path_is_gone(client):
+    # Everything the frontend calls lives under /api/v1, which the proxy forwards.
+    assert client.get("/artifacts/stale").status_code == 404

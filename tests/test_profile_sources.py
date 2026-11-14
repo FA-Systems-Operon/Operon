@@ -45,11 +45,13 @@ def test_draft_round_trip_preserves_evidence_and_old_version(
     expected["assessment"] = assess_missing(expected, []).model_dump()
     assert version.data == expected
     assert original.data == {"name": "Old"}
-    response = client.get(f"/client-profiles/{original.client_profile_id}/versions")
+    response = client.get(
+        f"/api/v1/client-profiles/{original.client_profile_id}/versions"
+    )
     assert response.status_code == 200
     assert response.json()[-1]["data"] == expected
     approved = client.get(
-        f"/client-profiles/{original.client_profile_id}/latest-approved"
+        f"/api/v1/client-profiles/{original.client_profile_id}/latest-approved"
     )
     assert approved.json()["id"] == str(original.id)
 

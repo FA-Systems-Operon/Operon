@@ -176,7 +176,7 @@ def test_api_saves_conflict_only_evidence_and_preserves_approved_history(
     # Alternate UUID spellings must be normalized without losing the evidence.
     alternative = payload["conflicts"][0]["alternatives"][0]
     alternative["document_id"] = uuid.UUID(alternative["document_id"]).hex
-    url = f"/client-profiles/{old.client_profile_id}"
+    url = f"/api/v1/client-profiles/{old.client_profile_id}"
     response = client.post(f"{url}/source-drafts", json=payload)
     assert response.status_code == 201, response.text
     saved = client.get(f"{url}/versions").json()[-1]
@@ -215,7 +215,7 @@ def test_api_rejects_invalid_conflict_without_a_new_version(
     elif failure == "bad_quote":
         payload["conflicts"][0]["alternatives"][1]["quote"] = "Invented"
     response = client.post(
-        f"/client-profiles/{old.client_profile_id}/source-drafts", json=payload
+        f"/api/v1/client-profiles/{old.client_profile_id}/source-drafts", json=payload
     )
     assert response.status_code == 422
     assert (
