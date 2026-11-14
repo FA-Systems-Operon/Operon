@@ -538,3 +538,32 @@ button or approval-endpoint change in #60. **Approval-time freshness, permission
 and conflict/field decisions remain #62 and the wider review workflow.** No
 navigation guard, autosave or browser storage is added; leaving before a successful
 save discards local edits. #66's full acceptance verification remains separate.
+
+## Reject a draft (#63)
+
+`POST /api/v1/reviews/profiles/{profile_id}/versions/{version_id}/reject`
+takes a required reason:
+
+```json
+{"reason": "Intake belongs to a different client"}
+```
+
+The reason is trimmed and must be 1–500 characters (`422` otherwise; unknown keys
+are also `422`). The same freshness check as saving edits applies: the version
+must be the profile's latest, in `draft` or `in_review`, and unapproved, or the
+request returns `409`; a missing or mismatched profile/version returns `404`.
+
+Rejecting updates that version in place: `status` becomes `rejected`, and
+`rejection_reason` and `rejected_at` are stored. No new version is created and no
+approval fields are set, so the latest-approved profile and artifact staleness are
+unchanged. Once set, the reason and time cannot be changed (immutability guard).
+Rejected drafts leave the review inbox, and approving a rejected version returns
+`409`. Who rejected is not recorded yet: like approval, that waits on the review
+endpoints using the signed-in user (#62).
+
+The review page shows a Reject button beside Save. It opens a reason form, blocks
+an empty reason, warns that unsaved edits will be discarded, and on success shows
+the draft as rejected with its reason. Dedicated rejection tests are #64.
+
+For an existing database, apply
+`backend/migrations/006_add_profile_version_rejection.sql` after 005.

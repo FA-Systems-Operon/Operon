@@ -3,13 +3,14 @@
 import re
 import uuid
 from copy import deepcopy
+from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from src.models import ClientProfile, ClientProfileVersion, ReviewStatus
 from src.profile_flags import SCALAR_FIELDS
-from src.schemas import ReviewEditsIn
+from src.schemas import ReviewEditsIn, ReviewRejectIn
 from src.versioning import next_client_profile_version
 
 
@@ -17,10 +18,10 @@ class StaleReviewError(Exception):
     """The loaded version is no longer the editable profile head."""
 
 
-def save_review_edits(
-    db: Session, profile_id: uuid.UUID, version_id: uuid.UUID, body: ReviewEditsIn
+def _lock_editable_head(
+    db: Session, profile_id: uuid.UUID, version_id: uuid.UUID
 ) -> ClientProfileVersion:
-    """Caller owns commit/rollback; hold the parent lock through the commit."""
+    """Lock the profile and return the version only if it is the open draft head."""
     if db.get(ClientProfile, profile_id, with_for_update=True) is None:
         raise LookupError("Client profile not found")
     base = db.scalar(
@@ -43,7 +44,14 @@ def save_review_edits(
         or base.approved_at is not None
     ):
         raise StaleReviewError("Draft changed or is no longer editable. Reload it.")
+    return base
 
+
+def save_review_edits(
+    db: Session, profile_id: uuid.UUID, version_id: uuid.UUID, body: ReviewEditsIn
+) -> ClientProfileVersion:
+    """Caller owns commit/rollback; hold the parent lock through the commit."""
+    base = _lock_editable_head(db, profile_id, version_id)
     if not isinstance(base.data, dict):
         raise ValueError("Draft data must be a JSON object")  # noqa: TRY004 -- maps to 422
     data = deepcopy(base.data)
@@ -81,3 +89,19 @@ def save_review_edits(
     db.add(version)
     db.flush()
     return version
+
+
+def reject_review_draft(
+    db: Session, profile_id: uuid.UUID, version_id: uuid.UUID, body: ReviewRejectIn
+) -> ClientProfileVersion:
+    """Mark the open draft rejected with its reason. Caller owns commit/rollback.
+
+    Rejection never creates a version and never sets approval metadata, so the
+    latest approved profile stays whatever it was before.
+    """
+    draft = _lock_editable_head(db, profile_id, version_id)
+    draft.status = ReviewStatus.REJECTED
+    draft.rejection_reason = body.reason
+    draft.rejected_at = datetime.now(timezone.utc)
+    db.flush()
+    return draft

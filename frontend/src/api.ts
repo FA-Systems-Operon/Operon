@@ -55,6 +55,9 @@ export type ProfileVersion = {
   created_at: string
   approved_by: string | null
   approved_at: string | null
+  // Set when a reviewer rejected the draft (#63).
+  rejection_reason?: string | null
+  rejected_at?: string | null
 }
 
 // Everything the review page needs to open one draft, in one call (#57).
@@ -124,6 +127,25 @@ export async function saveReviewEdits(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ changes }),
+    },
+  )
+  if (!response.ok) throw new ApiError(response.status, await readDetail(response))
+  return response.json()
+}
+
+// Must match REJECTION_REASON_MAX_LENGTH in backend/src/schemas.py.
+export const REJECTION_REASON_MAX_LENGTH = 500
+
+// Marks the draft rejected with the reviewer's reason. No approved version is created.
+export async function rejectReviewDraft(
+  profileId: string, versionId: string, reason: string,
+): Promise<ProfileVersion> {
+  const response = await fetch(
+    `/api/v1/reviews/profiles/${encodeURIComponent(profileId)}/versions/${encodeURIComponent(versionId)}/reject`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason }),
     },
   )
   if (!response.ok) throw new ApiError(response.status, await readDetail(response))
