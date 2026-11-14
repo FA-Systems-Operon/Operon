@@ -44,6 +44,9 @@ services:
     build: ./frontend
     environment:
       API_URL: http://api:8000
+      # Unfinished pages stay hidden unless set to true (see frontend/README.md).
+      FEATURE_BRAIN: ${FEATURE_BRAIN:-false}
+      FEATURE_WORKFORCE: ${FEATURE_WORKFORCE:-false}
     volumes:
       - ./frontend:/app
       - /app/node_modules
