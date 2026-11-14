@@ -50,6 +50,34 @@ To run the tests locally, install the dev lock into a virtualenv:
 pip install --require-hashes --only-binary=:all: -r backend/requirements-dev.lock
 ```
 
+## Logging
+
+Set `LOG_LEVEL` to `DEBUG`, `INFO` (default), `WARNING`, `ERROR` or `CRITICAL`
+(in `.env` for compose; `compose.prod.yaml` uses `WARNING`). An unknown value
+stops the app at startup. It sets the level for the app's own loggers; uvicorn's
+request and startup lines follow its own `--log-level`.
+
+| Level | What you see |
+|---|---|
+| `DEBUG` | Everything below, plus each model call's duration and prompt/reply sizes, and skipped job claims. |
+| `INFO` | Uploads, extractions and job attempts starting and succeeding (IDs, sizes, durations). |
+| `WARNING` | Retries scheduled, jobs recovered after a crash, lost claims. |
+| `ERROR` | Jobs that failed for good, and failures with their tracebacks. |
+
+**Logs never contain document text.** Log IDs, kinds, counts, sizes, durations
+and error types; never uploaded or extracted text, filenames, prompts, model
+replies or profile values. Use `logging.getLogger(__name__)` and pass values as
+`%s` arguments.
+
+Exception messages are the risk you can't see at the call site (a pydantic
+`ValidationError` quotes the model reply; SQLAlchemy errors quote SQL values),
+so `src/logging_config.py` prints tracebacks with every frame and exception
+type, but withholds the message unless the type is listed in
+`SAFE_MESSAGE_TYPES` (our provider and document errors, whose messages we write).
+Add a type there only if its message can never contain document data.
+`tests/test_logging.py` runs failing jobs with marker text and checks it never
+reaches the logs.
+
 ## Database schema (no migrations yet)
 
 Tables are created when the app starts, using `Base.metadata.create_all()` in

@@ -1,6 +1,7 @@
 """Endpoints for client documents, metadata, and extracted plain text."""
 
 import hashlib
+import logging
 import uuid
 from typing import Annotated
 
@@ -19,6 +20,8 @@ from src.document_extraction import (
 from src.models import Client, DocumentKind, ExtractedText, SourceDocument
 from src.schemas import ExtractedTextOut, SourceDocumentOut
 from src.storage import DocumentStorage, get_storage
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/clients/{client_id}/documents", tags=["documents"])
 
@@ -95,6 +98,14 @@ def upload_document(
         storage.delete(storage_key)
         raise
     db.refresh(document)  # loads uploaded_at, which Postgres fills in
+    # No filename: users name files after clients.
+    log.info(
+        "Stored document %s for client %s (%s, %d bytes)",
+        document.id,
+        client_id,
+        kind.value if kind else "no kind",
+        len(data),
+    )
     return document
 
 

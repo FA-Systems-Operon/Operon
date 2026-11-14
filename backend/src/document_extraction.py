@@ -1,5 +1,6 @@
 """Connect stored uploads, format-specific extractors, and text persistence."""
 
+import logging
 import uuid
 from collections.abc import Callable
 from pathlib import Path
@@ -12,6 +13,8 @@ from src.models import ExtractedText, SourceDocument
 from src.pdf_extraction import extract_pdf
 from src.storage import DocumentStorage
 from src.txt_extraction import extract_txt
+
+log = logging.getLogger(__name__)
 
 
 class DocumentNotFoundError(LookupError):
@@ -92,6 +95,13 @@ def extract_document(
                 result.extracted_at = func.now()
             db.flush()
             db.refresh(result)
+            # Length only: the text itself must never be logged.
+            log.info(
+                "Extracted document %s (%s, %d characters)",
+                document_id,
+                document.kind.value if document.kind else "no kind",
+                len(text),
+            )
         db.commit()
         return result
     except Exception:

@@ -1,5 +1,6 @@
 """ModelProvider implementation for Ollama's HTTP API."""
 
+import logging
 import time
 
 import httpx
@@ -14,6 +15,8 @@ from src.ai.provider import (
 # Shared by every provider built without its own client, so building one per
 # request (as get_provider() callers do) doesn't open a new connection pool each time.
 _default_client = httpx.Client()
+
+log = logging.getLogger(__name__)
 
 
 class OllamaProvider:
@@ -70,6 +73,14 @@ class OllamaProvider:
                 f"Ollama 'response' is {type(text).__name__}, not a string"
             )
 
+        # Sizes only: prompts and replies carry document text.
+        log.debug(
+            "Ollama %s replied in %d ms (prompt %d chars, reply %d chars)",
+            self.model,
+            duration_ms,
+            len(prompt),
+            len(text),
+        )
         return ModelResponse(
             text=text, provider=self.name, model=self.model, duration_ms=duration_ms
         )
