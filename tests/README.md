@@ -278,7 +278,7 @@ can account for unapplied/invalid input. A full revert restores original key
 presence. An empty edit on an absent or malformed scalar is a no-op, preserving
 legacy data; a nonempty correction replaces only that field.
 
-Assessment invalidation is display-only: saved assessment, conflicts, references
+Per-row marker updates are display-only: saved assessment, conflicts, references
 and approval metadata are not changed. Original evidence does not automatically
 verify a reviewer correction. There is only an unsaved-local-changes notice, with
 no navigation guard, browser storage, saving, recomputation or approval gate.

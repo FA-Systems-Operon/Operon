@@ -1,0 +1,178 @@
+{
+  "evaluated_at": "2026-11-11T23:52:08.812868+00:00",
+  "status": "completed",
+  "cases": [
+    {
+      "case": "missing_information",
+      "prompt_sha256": "46b1ed75e14b6516331bad0b6000c0b310cc73ee1e4237d6a103a6e4806068a6",
+      "expected": {
+        "missing_fields": [
+          "business_number",
+          "phone_number"
+        ],
+        "conflict_fields": [],
+        "email_values": []
+      },
+      "sources": [
+        {
+          "document_id": "2f25d764-5b90-53fb-96d5-5c185257bd8a",
+          "kind": "transcript",
+          "text": "Discovery call\nWebsite: https://example.test\nDomain platform: Example Registrar\nMeta Business Manager: BM-12345\nFacebook Page: https://facebook.com/example\nInstagram: @example\nEmail: sales@example.test\nBusiness address: 123 Example Street, Montreal"
+        },
+        {
+          "document_id": "abbe2d5f-eb71-5e1b-be87-db0a07a416a4",
+          "kind": "intake",
+          "text": "Intake form\nWebsite: https://example.test\nDomain platform: Example Registrar\nMeta Business Manager: BM-12345\nFacebook Page: https://facebook.com/example\nInstagram: @example\nEmail: sales@example.test\nBusiness address: 123 Example Street, Montreal"
+        }
+      ],
+      "schema_sha256": "c50b10ad8d56c4c7f5433e7868b5db5eeab501fe2078616191a3926c3b9eadff",
+      "missed_missing": [],
+      "false_missing": [],
+      "missed_conflicts": [],
+      "false_conflicts": [],
+      "draft": {
+        "business_number": null,
+        "website": "https://example.test",
+        "domain_platform": "Example Registrar",
+        "meta_business_manager": "BM-12345",
+        "facebook_page": "https://facebook.com/example",
+        "instagram": "@example",
+        "phone_number": null,
+        "email": "sales@example.test",
+        "business_address": "123 Example Street, Montreal",
+        "name": null,
+        "needs": [],
+        "goals": [],
+        "source_references": [
+          {
+            "field": "website",
+            "document_id": "2f25d764-5b90-53fb-96d5-5c185257bd8a",
+            "quote": "Website: https://example.test"
+          },
+          {
+            "field": "website",
+            "document_id": "abbe2d5f-eb71-5e1b-be87-db0a07a416a4",
+            "quote": "Website: https://example.test"
+          },
+          {
+            "field": "domain_platform",
+            "document_id": "2f25d764-5b90-53fb-96d5-5c185257bd8a",
+            "quote": "Domain platform: Example Registrar"
+          },
+          {
+            "field": "domain_platform",
+            "document_id": "abbe2d5f-eb71-5e1b-be87-db0a07a416a4",
+            "quote": "Domain platform: Example Registrar"
+          },
+          {
+            "field": "meta_business_manager",
+            "document_id": "2f25d764-5b90-53fb-96d5-5c185257bd8a",
+            "quote": "Meta Business Manager: BM-12345"
+          },
+          {
+            "field": "meta_business_manager",
+            "document_id": "abbe2d5f-eb71-5e1b-be87-db0a07a416a4",
+            "quote": "Meta Business Manager: BM-12345"
+          },
+          {
+            "field": "facebook_page",
+            "document_id": "2f25d764-5b90-53fb-96d5-5c185257bd8a",
+            "quote": "Facebook Page: https://facebook.com/example"
+          },
+          {
+            "field": "facebook_page",
+            "document_id": "abbe2d5f-eb71-5e1b-be87-db0a07a416a4",
+            "quote": "Facebook Page: https://facebook.com/example"
+          },
+          {
+            "field": "instagram",
+            "document_id": "2f25d764-5b90-53fb-96d5-5c185257bd8a",
+            "quote": "Instagram: @example"
+          },
+          {
+            "field": "instagram",
+            "document_id": "abbe2d5f-eb71-5e1b-be87-db0a07a416a4",
+            "quote": "Instagram: @example"
+          },
+          {
+            "field": "email",
+            "document_id": "2f25d764-5b90-53fb-96d5-5c185257bd8a",
+            "quote": "Email: sales@example.test"
+          },
+          {
+            "field": "email",
+            "document_id": "abbe2d5f-eb71-5e1b-be87-db0a07a416a4",
+            "quote": "Email: sales@example.test"
+          },
+          {
+            "field": "business_address",
+            "document_id": "2f25d764-5b90-53fb-96d5-5c185257bd8a",
+            "quote": "Business address: 123 Example Street, Montreal"
+          },
+          {
+            "field": "business_address",
+            "document_id": "abbe2d5f-eb71-5e1b-be87-db0a07a416a4",
+            "quote": "Business address: 123 Example Street, Montreal"
+          }
+        ],
+        "conflicts": [],
+        "assessment": {
+          "rules_version": 1,
+          "missing_fields": [
+            "business_number",
+            "phone_number"
+          ]
+        }
+      },
+      "alternative_values_match": true,
+      "passed": true,
+      "model_calls": 1,
+      "attempt_prompt_sha256": [
+        "46b1ed75e14b6516331bad0b6000c0b310cc73ee1e4237d6a103a6e4806068a6"
+      ],
+      "provider": "ollama",
+      "model": "qwen2.5:14b",
+      "duration_ms": 481229
+    },
+    {
+      "case": "phone_conflict_prose",
+      "prompt_sha256": "d3313d6e1ba10d16dba790b0a5769277b47e92cd70d7b3327d725bc20a55fb06",
+      "expected": {
+        "missing_fields": [],
+        "conflict_fields": [
+          "phone_number"
+        ],
+        "conflict_values": {
+          "phone_number": [
+            "+1 438 555 0142",
+            "+1 438 555 0199"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "document_id": "3ebeaf3d-57c2-5ac7-b2a3-7a27ff13d50a",
+          "kind": "transcript",
+          "text": "Owner of Rivage Studio: Our business number is NEQ-987654321. Our website is https://rivage.example. The domain is managed through Northstar Domains. Our Meta Business Manager ID is 987654. Our Facebook page is facebook.com/rivagestudio and Instagram is @rivagestudio. The current business phone is +1 438 555 0142. For email, use team@rivage.example. Our business address is 72 Harbour Road, Quebec City."
+        },
+        {
+          "document_id": "eeb0e2b7-6eaf-5b9e-850e-dea48fee138a",
+          "kind": "intake",
+          "text": "Business: Rivage Studio\nBusiness number: NEQ-987654321\nWebsite: https://rivage.example\nDomain platform: Northstar Domains\nMeta Business Manager: 987654\nFacebook Page: facebook.com/rivagestudio\nInstagram: @rivagestudio\nCurrent business phone: +1 438 555 0199\nEmail: team@rivage.example\nBusiness address: 72 Harbour Road, Quebec City"
+        }
+      ],
+      "schema_sha256": "c38390967e0561ab9ada988877b4975dfe10a8f02f1f75039a71e8a3a097ed8e",
+      "passed": false,
+      "error": "ValueError",
+      "model_calls": 2,
+      "attempt_prompt_sha256": [
+        "d3313d6e1ba10d16dba790b0a5769277b47e92cd70d7b3327d725bc20a55fb06",
+        "896d1518b979ac9aaa5b9c999cb05c38866be83bf1b3b56c689a257fdfc1ef22"
+      ],
+      "provider": "ollama",
+      "model": "qwen2.5:14b",
+      "duration_ms": 848338
+    }
+  ],
+  "passed": false
+}

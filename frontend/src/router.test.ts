@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { addSourcesHref, parseHash, reviewDraftHref } from './router'
+import { addSourcesHref, draftProgressHref, parseHash, reviewDraftHref } from './router'
 
 test.each([
   ['', '/'],
@@ -29,6 +29,14 @@ test('addSourcesHref links to a new intake without a client', () => {
 test('addSourcesHref puts the client in the link', () => {
   expect(addSourcesHref('a b')).toBe('#/sources/new?client=a%20b')
   expect(parseHash(addSourcesHref('a b')).query.get('client')).toBe('a b')
+})
+
+test('draftProgressHref puts the client and job in the link', () => {
+  const href = draftProgressHref('c 1', 'j&2')
+  const { path, query } = parseHash(href)
+  expect(path).toBe('/sources/draft')
+  expect(query.get('client')).toBe('c 1')
+  expect(query.get('job')).toBe('j&2')
 })
 
 test('reviewDraftHref puts the profile and version in the link', () => {
