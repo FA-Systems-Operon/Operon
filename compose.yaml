@@ -28,6 +28,7 @@ services:
       JOB_TIMEOUT_SECONDS: ${JOB_TIMEOUT_SECONDS:-600}
       STORAGE_DIR: /code/storage
       MAX_UPLOAD_BYTES: "20971520"
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:

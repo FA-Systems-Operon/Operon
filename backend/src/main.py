@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
@@ -14,6 +15,7 @@ from src.ai import (
 from src.ai.ollama import OllamaProvider
 from src.config import settings
 from src.db import Base, engine
+from src.logging_config import configure_logging
 from src.onboarding_jobs import start_worker
 from src.routers import (
     artifacts,
@@ -25,6 +27,10 @@ from src.routers import (
     playbooks,
     reviews,
 )
+
+# Before anything logs. Raises on an unknown LOG_LEVEL so a typo fails loudly.
+configure_logging(settings.LOG_LEVEL)
+log = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -48,10 +54,11 @@ app = FastAPI(
     openapi_url="/api/v1/openapi.json",
     lifespan=lifespan,
 )
-print(
-    f"Ollama URL: {settings.OLLAMA_BASE_URL} | "
-    f"model: {settings.OLLAMA_MODEL or '(OLLAMA_MODEL not set)'}",
-    flush=True,
+log.info(
+    "Ollama URL: %s | model: %s | log level: %s",
+    settings.OLLAMA_BASE_URL,
+    settings.OLLAMA_MODEL or "(OLLAMA_MODEL not set)",
+    settings.LOG_LEVEL,
 )
 app.include_router(auth.router)
 app.include_router(artifacts.router)
