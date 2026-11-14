@@ -114,3 +114,23 @@ test('viewers see the draft without edit, reject or approve controls', async () 
   expect(screen.queryByRole('button', { name: 'Reject' })).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Save changes' })).not.toBeInTheDocument()
 })
+
+test('approve waits while a rejection is in flight, and the rejection error stays visible', async () => {
+  const user = userEvent.setup()
+  let finish: (value: Response) => void = () => {}
+  const pending = new Promise<Response>((resolve) => { finish = resolve })
+  const fetchMock = await openDraft({}, pending)
+
+  await user.click(screen.getByRole('button', { name: 'Reject' }))
+  await user.type(screen.getByLabelText('Reason for rejecting'), 'Wrong client')
+  await user.click(screen.getByRole('button', { name: 'Reject draft' }))
+
+  expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
+  await user.click(screen.getByRole('button', { name: 'Approve' }))
+  finish(await reply(500, {}))
+
+  expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't confirm the draft was rejected.")
+  expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled()
+  expect(fetchMock).toHaveBeenCalledTimes(2)
+})

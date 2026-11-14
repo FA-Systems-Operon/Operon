@@ -9,12 +9,16 @@ type RejectDraftProps = {
   // Unsaved edits are dropped by rejecting, so the form says so.
   hasUnsavedEdits: boolean
   onRejected: (version: ProfileVersion) => void
+  // Told when a reject request starts and ends, so Approve can wait for it.
+  onRejectingChange?: (rejecting: boolean) => void
 }
 
 type Status = 'idle' | 'rejecting' | 'error' | 'stale'
 
 // #63: Reject asks for a short reason, then marks the draft rejected. It never approves.
-export default function RejectDraft({ profileId, versionId, disabled, hasUnsavedEdits, onRejected }: RejectDraftProps) {
+export default function RejectDraft({
+  profileId, versionId, disabled, hasUnsavedEdits, onRejected, onRejectingChange,
+}: RejectDraftProps) {
   const [open, setOpen] = useState(false)
   const [reason, setReason] = useState('')
   const [touched, setTouched] = useState(false)
@@ -48,6 +52,7 @@ export default function RejectDraft({ profileId, versionId, disabled, hasUnsaved
     setTouched(true)
     if (reasonError || busy.current || status === 'stale') return
     busy.current = true
+    onRejectingChange?.(true)
     setStatus('rejecting')
     setError('')
     try {
@@ -66,6 +71,7 @@ export default function RejectDraft({ profileId, versionId, disabled, hasUnsaved
               : 'Couldn\'t confirm the draft was rejected. Try again.')
     } finally {
       busy.current = false
+      onRejectingChange?.(false)
     }
   }
 

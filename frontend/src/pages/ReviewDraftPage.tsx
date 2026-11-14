@@ -140,6 +140,8 @@ function LoadedDraft({ draft, back, saved, onSaved, onRejected, canReview }: {
   const [saveError, setSaveError] = useState('')
   const [approveStatus, setApproveStatus] = useState<'idle' | 'approving' | 'error' | 'stale'>('idle')
   const [approveError, setApproveError] = useState('')
+  // A reject request in flight: Save and Approve wait so its result can't be hidden.
+  const [rejecting, setRejecting] = useState(false)
   const saving = useRef(false)
   const approving = useRef(false)
   const mounted = useRef(true)
@@ -157,7 +159,7 @@ function LoadedDraft({ draft, back, saved, onSaved, onRejected, canReview }: {
   const { rows, unsupported } = (editable ? editableReviewRows : reviewRows)(version.data)
   const selected = rows.find((row) => row.key === selectedKey) ?? rows[0]
   async function save() {
-    if (!gate.canSave || saving.current) return
+    if (!gate.canSave || rejecting || saving.current) return
     saving.current = true
     setSaveStatus('saving')
     setSaveError('')
@@ -182,7 +184,7 @@ function LoadedDraft({ draft, back, saved, onSaved, onRejected, canReview }: {
     }
   }
   async function approve() {
-    if (gate.blocksApproval || approving.current || approveStatus === 'stale') return
+    if (gate.blocksApproval || rejecting || approving.current || approveStatus === 'stale') return
     approving.current = true
     setApproveStatus('approving')
     setApproveError('')
@@ -314,13 +316,13 @@ function LoadedDraft({ draft, back, saved, onSaved, onRejected, canReview }: {
       {editable && canReview && (
         <div className="review-save">
           <div className="review-actions">
-            <button className="button" type="button" disabled={!gate.canSave || approveStatus === 'approving'} onClick={save}>
+            <button className="button" type="button" disabled={!gate.canSave || approveStatus === 'approving' || rejecting} onClick={save}>
               {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'error' ? 'Try saving again' : 'Save changes'}
             </button>
             <button
               className="button button-primary"
               type="button"
-              disabled={gate.blocksApproval || approveStatus === 'approving' || approveStatus === 'stale'}
+              disabled={gate.blocksApproval || rejecting || approveStatus === 'approving' || approveStatus === 'stale'}
               onClick={approve}
             >
               {approveStatus === 'approving' ? 'Approving…' : approveStatus === 'error' ? 'Try approving again' : 'Approve'}
@@ -336,6 +338,7 @@ function LoadedDraft({ draft, back, saved, onSaved, onRejected, canReview }: {
             disabled={saveStatus === 'saving' || saveStatus === 'stale' || approveStatus === 'approving' || approveStatus === 'stale'}
             hasUnsavedEdits={dirty || pending}
             onRejected={rejected}
+            onRejectingChange={setRejecting}
           />
         </div>
       )}

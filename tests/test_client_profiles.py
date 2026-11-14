@@ -2,6 +2,8 @@
 
 import uuid
 
+from src.models import Role
+
 # --- POST /client-profiles ---
 
 
@@ -122,6 +124,36 @@ def test_approve_client_profile_version(api, profile_factory):
     assert body["newly_stale_artifact_version_ids"] == []  # nothing depended on it
 
 
+def test_approve_records_the_signed_in_reviewer_not_the_body(api, profile_factory):
+    v1 = profile_factory()
+
+    response = api.http.post(
+        f"/api/v1/client-profiles/{v1.client_profile_id}/versions/{v1.id}/approve",
+        json={"approved_by": str(uuid.uuid4())},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["version"]["approved_by"] == api.reviewer
+
+
+def test_approve_needs_a_signed_in_reviewer_with_csrf(
+    client, db_session, profile_factory, sign_in
+):
+    v1 = profile_factory()
+    path = f"/api/v1/client-profiles/{v1.client_profile_id}/versions/{v1.id}/approve"
+    body = {"approved_by": str(uuid.uuid4())}
+    viewer, _ = sign_in(Role.VIEWER)
+    no_csrf, _ = sign_in(Role.REVIEWER)
+    del no_csrf.headers["X-CSRF-Token"]
+
+    assert client.post(path, json=body).status_code == 401
+    assert viewer.post(path, json=body).status_code == 403
+    assert no_csrf.post(path, json=body).status_code == 403
+    db_session.refresh(v1)
+    assert v1.approved_at is None
+    assert sign_in(Role.ADMIN)[0].post(path).status_code == 200
+
+
 def test_approve_already_approved_version_returns_409(api, profile_factory):
     v1 = profile_factory(approved=True)
 
@@ -158,15 +190,16 @@ def test_approve_version_of_a_different_profile_returns_404(
     assert response.status_code == 404
 
 
-def test_approve_requires_approved_by(client, profile_factory):
+def test_approve_needs_no_body(api, profile_factory):
+    """The approver comes from the session, so no approved_by is sent."""
     v1 = profile_factory()
 
-    response = client.post(
+    response = api.http.post(
         f"/api/v1/client-profiles/{v1.client_profile_id}/versions/{v1.id}/approve",
-        json={},
     )
 
-    assert response.status_code == 422
+    assert response.status_code == 200
+    assert response.json()["version"]["approved_by"] == api.reviewer
 
 
 # --- GET /client-profiles/{id}/latest-approved ---

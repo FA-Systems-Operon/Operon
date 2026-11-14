@@ -593,10 +593,11 @@ The review page's Approve button sits next to Save. It is disabled until edits a
 saved with nothing pending (`draftSaveGate`) and while a request is in flight; on
 success the page opens the new approved version.
 
-Not changed: the older `POST /api/v1/client-profiles/{id}/versions/{vid}/approve`
-(approver in the body, approves in place) is still there and unauthenticated; the
-staleness and versioning tests use it. Unresolved source conflicts do not block
-approval; the reviewer decides by editing the field before approving.
+The older `POST /api/v1/client-profiles/{id}/versions/{vid}/approve` (approves
+in place) has the same checks: a signed-in `reviewer` or `admin` with the CSRF
+header. It records the signed-in user as `approved_by`; an `approved_by` in the
+request body is ignored, and no body is needed. Unresolved source conflicts do not
+block approval; the reviewer decides by editing the field before approving.
 
 For an existing database, apply
 `backend/migrations/007_add_profile_version_rejected_by.sql` after 006.

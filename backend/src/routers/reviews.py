@@ -8,16 +8,14 @@ from sqlalchemy import func, literal, select
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session
 
-from src.auth import require_role
+from src.auth import ReviewerUser
 from src.db import get_db
 from src.models import (
     Client,
     ClientProfile,
     ClientProfileVersion,
     ReviewStatus,
-    Role,
     SourceDocument,
-    User,
 )
 from src.review_edits import (
     StaleReviewError,
@@ -37,9 +35,6 @@ from src.schemas import (
 router = APIRouter(prefix="/api/v1/reviews", tags=["reviews"])
 
 DbSession = Annotated[Session, Depends(get_db)]
-# Changing a draft (edit, reject, approve) needs a signed-in reviewer or admin, and
-# the CSRF header (checked by current_auth for every non-GET request).
-Reviewer = Annotated[User, Depends(require_role(Role.REVIEWER, Role.ADMIN))]
 
 
 @router.post(
@@ -53,7 +48,7 @@ def save_draft_edits(
     body: ReviewEditsIn,
     db: DbSession,
     response: Response,
-    _reviewer: Reviewer,
+    _reviewer: ReviewerUser,
 ) -> ClientProfileVersion:
     """Validate corrections and append a draft, only if the base is still current."""
     try:
@@ -88,7 +83,7 @@ def reject_draft(
     version_id: uuid.UUID,
     body: ReviewRejectIn,
     db: DbSession,
-    reviewer: Reviewer,
+    reviewer: ReviewerUser,
 ) -> ClientProfileVersion:
     """Reject the open draft with a short reason; no approved version is created."""
     try:
@@ -116,7 +111,7 @@ def approve_draft(
     profile_id: uuid.UUID,
     version_id: uuid.UUID,
     db: DbSession,
-    reviewer: Reviewer,
+    reviewer: ReviewerUser,
 ) -> ProfileApprovalOut:
     """Save the open (possibly edited) draft as a new approved profile version."""
     try:
