@@ -1,3 +1,4 @@
+import { getCsrfToken } from './auth'
 import type { SourceLinkedDraft } from './components/draftSources'
 
 export type Client = {
@@ -58,6 +59,13 @@ export type ProfileVersion = {
   // Set when a reviewer rejected the draft (#63).
   rejection_reason?: string | null
   rejected_at?: string | null
+  rejected_by?: string | null
+}
+
+// What approving returns: the new approved version and any outputs it made stale.
+export type ProfileApproval = {
+  version: ProfileVersion
+  newly_stale_artifact_version_ids: string[]
 }
 
 // Everything the review page needs to open one draft, in one call (#57).
@@ -118,17 +126,23 @@ export async function getReviewDraft(profileId: string, versionId: string): Prom
   return response.json()
 }
 
+// Changing a draft needs the signed-in session and the CSRF token (#62).
+function signedInPost(body?: unknown): RequestInit {
+  return {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  }
+}
+
+const reviewVersionUrl = (profileId: string, versionId: string) =>
+  `/api/v1/reviews/profiles/${encodeURIComponent(profileId)}/versions/${encodeURIComponent(versionId)}`
+
 export async function saveReviewEdits(
   profileId: string, versionId: string, changes: Record<string, string | null>,
 ): Promise<ProfileVersion> {
-  const response = await fetch(
-    `/api/v1/reviews/profiles/${encodeURIComponent(profileId)}/versions/${encodeURIComponent(versionId)}/edits`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ changes }),
-    },
-  )
+  const response = await fetch(`${reviewVersionUrl(profileId, versionId)}/edits`, signedInPost({ changes }))
   if (!response.ok) throw new ApiError(response.status, await readDetail(response))
   return response.json()
 }
@@ -140,14 +154,14 @@ export const REJECTION_REASON_MAX_LENGTH = 500
 export async function rejectReviewDraft(
   profileId: string, versionId: string, reason: string,
 ): Promise<ProfileVersion> {
-  const response = await fetch(
-    `/api/v1/reviews/profiles/${encodeURIComponent(profileId)}/versions/${encodeURIComponent(versionId)}/reject`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ reason }),
-    },
-  )
+  const response = await fetch(`${reviewVersionUrl(profileId, versionId)}/reject`, signedInPost({ reason }))
+  if (!response.ok) throw new ApiError(response.status, await readDetail(response))
+  return response.json()
+}
+
+// Saves the loaded draft as a new approved version. 409 means it is no longer the latest.
+export async function approveReviewDraft(profileId: string, versionId: string): Promise<ProfileApproval> {
+  const response = await fetch(`${reviewVersionUrl(profileId, versionId)}/approve`, signedInPost())
   if (!response.ok) throw new ApiError(response.status, await readDetail(response))
   return response.json()
 }

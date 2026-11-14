@@ -10,6 +10,12 @@ from src.models import ClientProfileVersion, ReviewStatus
 DRAFT = {"name": "Maya Chen", "needs": ["More bookings"], "goals": ["Fill winter"]}
 
 
+@pytest.fixture
+def client(reviewer_client):
+    """Changing a draft needs a signed-in reviewer (#62)."""
+    return reviewer_client
+
+
 def reject_url(version, *, profile_id=None, version_id=None):
     return (
         f"/api/v1/reviews/profiles/{profile_id or version.client_profile_id}"

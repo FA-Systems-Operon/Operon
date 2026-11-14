@@ -558,8 +558,7 @@ Rejecting updates that version in place: `status` becomes `rejected`, and
 approval fields are set, so the latest-approved profile and artifact staleness are
 unchanged. Once set, the reason and time cannot be changed (immutability guard).
 Rejected drafts leave the review inbox, and approving a rejected version returns
-`409`. Who rejected is not recorded yet: like approval, that waits on the review
-endpoints using the signed-in user (#62).
+`409`. Since #62 the signed-in reviewer is stored as `rejected_by`.
 
 The review page shows a Reject button beside Save. It opens a reason form, blocks
 an empty reason, warns that unsaved edits will be discarded, and on success shows
@@ -567,3 +566,38 @@ the draft as rejected with its reason. Dedicated rejection tests are #64.
 
 For an existing database, apply
 `backend/migrations/006_add_profile_version_rejection.sql` after 005.
+
+## Approve a draft (#62)
+
+`POST /api/v1/reviews/profiles/{profile_id}/versions/{version_id}/approve` (no
+body) saves the loaded draft, including any saved reviewer edits, as a **new**
+version with `status: approved`, `approved_by` (the signed-in user) and
+`approved_at`. It returns `201` with `{"version": ..., "newly_stale_artifact_version_ids": [...]}`.
+The draft row itself is not rewritten. Artifacts built from older profile versions
+are marked stale in the same transaction.
+
+The version must still be the profile's latest, in `draft` or `in_review`, and
+unapproved; otherwise `409`. A repeated submit or a second reviewer approving at
+the same time therefore gets `409` instead of a second approved copy (the profile
+row lock serialises them). A page that missed a newer save, approval or rejection
+also gets `409`. An empty version (the `{}` placeholder) is `422`; a missing or
+mismatched profile/version is `404`.
+
+**Permissions.** Edit, reject and approve now need a signed-in `reviewer` or
+`admin` and the `X-CSRF-Token` header: `401` when signed out, `403` for a viewer
+or a missing/wrong CSRF token. The frontend sends the session cookie and token on
+these calls and hides the review controls from viewers. Reading drafts and the
+inbox is unchanged.
+
+The review page's Approve button sits next to Save. It is disabled until edits are
+saved with nothing pending (`draftSaveGate`) and while a request is in flight; on
+success the page opens the new approved version.
+
+The older `POST /api/v1/client-profiles/{id}/versions/{vid}/approve` (approves
+in place) has the same checks: a signed-in `reviewer` or `admin` with the CSRF
+header. It records the signed-in user as `approved_by`; an `approved_by` in the
+request body is ignored, and no body is needed. Unresolved source conflicts do not
+block approval; the reviewer decides by editing the field before approving.
+
+For an existing database, apply
+`backend/migrations/007_add_profile_version_rejected_by.sql` after 006.

@@ -36,6 +36,7 @@ os.environ["BACKGROUND_WORKER_ENABLED"] = "false"
 import pytest
 from fastapi.testclient import TestClient
 
+from src.auth import create_user
 from src.db import Base, SessionLocal, engine, get_db
 from src.main import app
 from src.models import (
@@ -48,6 +49,7 @@ from src.models import (
     Playbook,
     PlaybookVersion,
     ReviewStatus,
+    Role,
     SourceDocument,
 )
 from src.storage import LocalFileStorage, get_storage
@@ -106,6 +108,43 @@ def client(db_session, storage):
     # run; the database fixture above already created the tables.
     yield TestClient(app)
     app.dependency_overrides.clear()
+
+
+TEST_PASSWORD = "correct horse battery staple"
+
+
+@pytest.fixture
+def sign_in(client, db_session):
+    """Return a TestClient signed in as a new user of that role, plus the user.
+
+    It logs in for real, so the session cookie and CSRF header are both checked;
+    the CSRF header is sent on every request. Uses the same test overrides as client.
+    """
+
+    def as_role(role=Role.REVIEWER):
+        user = create_user(
+            db_session,
+            f"{uuid.uuid4().hex[:12]}@example.test",
+            "Test User",
+            TEST_PASSWORD,
+            role,
+        )
+        signed_in = TestClient(app)
+        response = signed_in.post(
+            "/api/v1/auth/login",
+            json={"email": user.email, "password": TEST_PASSWORD},
+        )
+        assert response.status_code == 200, response.text
+        signed_in.headers["X-CSRF-Token"] = signed_in.cookies.get("operon_csrf")
+        return signed_in, user
+
+    return as_role
+
+
+@pytest.fixture
+def reviewer_client(sign_in):
+    """A TestClient signed in as a reviewer, for endpoints that change drafts."""
+    return sign_in(Role.REVIEWER)[0]
 
 
 @pytest.fixture
@@ -227,9 +266,10 @@ class OperonApi:
     """The HTTP calls the staleness tests act through. Every id argument may be a
     UUID, a str, or None, so ORM rows and JSON responses can be passed alike."""
 
-    def __init__(self, http):
+    def __init__(self, http, reviewer_id):
+        # Signed in as a reviewer: profile approval records the signed-in user.
         self.http = http
-        self.reviewer = str(uuid.uuid4())
+        self.reviewer = str(reviewer_id)
 
     @staticmethod
     def _s(value):
@@ -308,8 +348,9 @@ class OperonApi:
 
 
 @pytest.fixture
-def api(client):
-    return OperonApi(client)
+def api(sign_in):
+    http, reviewer = sign_in(Role.REVIEWER)
+    return OperonApi(http, reviewer.id)
 
 
 @pytest.fixture

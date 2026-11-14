@@ -2,8 +2,8 @@ import type { ReviewStatus } from './api'
 
 export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error' | 'stale'
 
-// #62 must also enforce permissions, conflict decisions and freshness at approval
-// time. This is only the local save prerequisite, never server authorization.
+// The local prerequisite for the Approve button. The approve endpoint (#62) does
+// the real checks: signed-in reviewer, and the draft is still the latest version.
 export function draftSaveGate(status: ReviewStatus, dirty: boolean, pending: boolean, saveStatus: SaveStatus) {
   const editable = status === 'draft' || status === 'in_review'
   return {

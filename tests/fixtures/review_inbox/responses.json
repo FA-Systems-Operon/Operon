@@ -31,7 +31,8 @@
       "approved_by": null,
       "approved_at": null,
       "rejection_reason": null,
-      "rejected_at": null
+      "rejected_at": null,
+      "rejected_by": null
     },
     "client": {
       "id": "5c0f9a1e-0000-4000-8000-000000000001",
