@@ -132,6 +132,8 @@ function LoadedDraft({ draft, back, saved, onSaved, onRejected }: {
   const [pendingFields, setPendingFields] = useState<Partial<Record<EditablePath, PendingFieldEdit>>>({})
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [saveError, setSaveError] = useState('')
+  // A reject request in flight: Save and Approve wait so its result can't be hidden.
+  const [rejecting, setRejecting] = useState(false)
   const saving = useRef(false)
   const mounted = useRef(true)
   useEffect(() => {
@@ -148,7 +150,7 @@ function LoadedDraft({ draft, back, saved, onSaved, onRejected }: {
   const { rows, unsupported } = (editable ? editableReviewRows : reviewRows)(version.data)
   const selected = rows.find((row) => row.key === selectedKey) ?? rows[0]
   async function save() {
-    if (!gate.canSave || saving.current) return
+    if (!gate.canSave || rejecting || saving.current) return
     saving.current = true
     setSaveStatus('saving')
     setSaveError('')
@@ -275,7 +277,7 @@ function LoadedDraft({ draft, back, saved, onSaved, onRejected }: {
       {version.data.assessment === null && <p className="field-note">Information checks have not been recomputed for this version.</p>}
       {editable && (
         <div className="review-save">
-          <button className="button" type="button" disabled={!gate.canSave} onClick={save}>
+          <button className="button" type="button" disabled={!gate.canSave || rejecting} onClick={save}>
             {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'error' ? 'Try saving again' : 'Save changes'}
           </button>
           {pending && <p className="field-note">Finish or cancel the current edit before saving.</p>}
@@ -287,6 +289,7 @@ function LoadedDraft({ draft, back, saved, onSaved, onRejected }: {
             disabled={saveStatus === 'saving' || saveStatus === 'stale'}
             hasUnsavedEdits={dirty || pending}
             onRejected={rejected}
+            onRejectingChange={setRejecting}
           />
         </div>
       )}

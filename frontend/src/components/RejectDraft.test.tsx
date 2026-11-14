@@ -95,3 +95,30 @@ test('cancel closes the form without rejecting', async () => {
   expect(screen.getByRole('button', { name: 'Reject' })).toBeInTheDocument()
   expect(fetchMock).toHaveBeenCalledTimes(1)
 })
+
+test('save waits while a rejection is in flight, and the rejection error stays visible', async () => {
+  const user = userEvent.setup()
+  let finish: (value: Response) => void = () => {}
+  const pending = new Promise<Response>((resolve) => { finish = resolve })
+  const fetchMock = await openDraft(pending)
+
+  // An unsaved edit, so Save is available before rejecting.
+  await user.click(screen.getByRole('button', { name: 'Edit Name' }))
+  await user.clear(screen.getByRole('textbox', { name: 'Name' }))
+  await user.type(screen.getByRole('textbox', { name: 'Name' }), 'Corrected')
+  await user.keyboard('{Enter}')
+  expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled()
+
+  await user.click(screen.getByRole('button', { name: 'Reject' }))
+  await user.type(screen.getByLabelText('Reason for rejecting'), 'Wrong client')
+  await user.click(screen.getByRole('button', { name: 'Reject draft' }))
+
+  expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
+  await user.click(screen.getByRole('button', { name: 'Save changes' }))
+  finish(await reply(500, {}))
+
+  expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't confirm the draft was rejected.")
+  expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled()
+  // Only the draft load and the reject request: no save slipped through.
+  expect(fetchMock).toHaveBeenCalledTimes(2)
+})
