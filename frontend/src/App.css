@@ -810,3 +810,45 @@
     padding: 0.25rem 1rem;
   }
 }
+
+
+.topnav-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+
+.topnav-logout {
+  border: 1px solid #3a3d43;
+  border-radius: 8px;
+  background: transparent;
+  color: #ffffff;
+  padding: 10px 16px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.topnav-logout:hover:not(:disabled) {
+  background: #25282e;
+  border-color: #d9ff64;
+}
+
+.topnav-logout:focus-visible {
+  outline: 2px solid #d9ff64;
+  outline-offset: 2px;
+}
+
+.topnav-logout:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.topnav-actions [role="alert"] {
+  color: #ff8585;
+  font-size: 12px;
+}
+
+
+

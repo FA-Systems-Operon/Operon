@@ -31,30 +31,71 @@ const JOB_ANSWER = {
 type Request = { method: string; url: string; body: unknown }
 
 // A fake API that answers like the backend and records every request it gets.
+
 function fakeApi() {
   const requests: Request[] = []
+
   const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
-    // The nav's waiting-review count isn't part of the upload flow.
-    if (url === '/api/v1/reviews') return { ok: true, json: async () => [] } as Response
-    const method = init?.method ?? 'GET'
+  // Simulate an authenticated user for the session check.
+  if (url === '/api/v1/me') {
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        id: 'test-user',
+        email: 'staff@example.com',
+        display_name: 'Test User',
+        role: 'reviewer',
+      }),
+    } as Response
+  }
+
+  // The nav's waiting-review count isn't part of the upload flow.
+  if (url === '/api/v1/reviews') {
+    return {
+      ok: true,
+      json: async () => [],
+    } as Response
+  }
+
+  const method = init?.method ?? 'GET'
     let body: unknown = null
-    let answer: unknown = [{ id: CLIENT, name: 'Plateau Basements', created_at: '' }]
+    let answer: unknown = [
+      { id: CLIENT, name: 'Plateau Basements', created_at: '' },
+    ]
+
     if (init?.body instanceof FormData) {
       const kind = init.body.get('kind')
-      body = { kind, file: (init.body.get('file') as File).name }
-      answer = { id: kind === 'transcript' ? TRANSCRIPT : INTAKE, client_id: CLIENT, kind }
+      body = {
+        kind,
+        file: (init.body.get('file') as File).name,
+      }
+
+      answer = {
+        id: kind === 'transcript' ? TRANSCRIPT : INTAKE,
+        client_id: CLIENT,
+        kind,
+      }
     } else if (typeof init?.body === 'string') {
       body = JSON.parse(init.body)
       answer = JOB_ANSWER
     } else if (url.includes('/onboarding-jobs/')) {
       answer = JOB_ANSWER
     }
+
     requests.push({ method, url, body })
-    return { ok: true, status: method === 'POST' ? 201 : 200, json: async () => answer } as Response
+
+    return {
+      ok: true,
+      status: method === 'POST' ? 201 : 200,
+      json: async () => answer,
+    } as Response
   })
+
   vi.stubGlobal('fetch', fetchMock)
   return requests
 }
+
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -66,7 +107,9 @@ test('uploading both files from New intake starts the draft with no other step, 
   const user = userEvent.setup()
   render(<App />)
 
-  await user.click(screen.getByRole('link', { name: 'New intake' }))
+  await user.click(
+    await screen.findByRole('link', { name: 'New intake' }),
+  )
   expect(await screen.findByRole('heading', { name: 'Add sources' })).toBeInTheDocument()
   await user.selectOptions(await screen.findByRole('combobox', { name: 'Client' }), CLIENT)
   await user.upload(
