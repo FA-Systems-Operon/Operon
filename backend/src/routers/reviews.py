@@ -16,12 +16,13 @@ from src.models import (
     ReviewStatus,
     SourceDocument,
 )
-from src.review_edits import StaleReviewError, save_review_edits
+from src.review_edits import StaleReviewError, reject_review_draft, save_review_edits
 from src.schemas import (
     ClientProfileVersionOut,
     ReviewDraftOut,
     ReviewEditsIn,
     ReviewInboxItemOut,
+    ReviewRejectIn,
 )
 
 router = APIRouter(prefix="/api/v1/reviews", tags=["reviews"])
@@ -62,6 +63,33 @@ def save_draft_edits(
     db.refresh(version)
     if version.id == version_id:
         response.status_code = status.HTTP_200_OK
+    return version
+
+
+@router.post(
+    "/profiles/{profile_id}/versions/{version_id}/reject",
+    response_model=ClientProfileVersionOut,
+)
+def reject_draft(
+    profile_id: uuid.UUID,
+    version_id: uuid.UUID,
+    body: ReviewRejectIn,
+    db: DbSession,
+) -> ClientProfileVersion:
+    """Reject the open draft with a short reason; no approved version is created."""
+    try:
+        version = reject_review_draft(db, profile_id, version_id, body)
+        db.commit()
+    except LookupError as error:
+        db.rollback()
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(error)) from error
+    except StaleReviewError as error:
+        db.rollback()
+        raise HTTPException(status.HTTP_409_CONFLICT, str(error)) from error
+    except Exception:
+        db.rollback()
+        raise
+    db.refresh(version)
     return version
 
 

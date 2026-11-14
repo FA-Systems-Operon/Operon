@@ -143,6 +143,8 @@ def approve_client_profile_version(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Profile version not found")
     if version.approved_at is not None:
         raise HTTPException(status.HTTP_409_CONFLICT, "Version is already approved")
+    if version.status == ReviewStatus.REJECTED:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Version was rejected")
 
     version.status = ReviewStatus.APPROVED
     version.approved_by = body.approved_by
