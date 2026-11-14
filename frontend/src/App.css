@@ -762,3 +762,22 @@
   margin-top: 0.35rem;
   overflow-wrap: anywhere;
 }
+
+/* Approve action (#62): Save and Approve side by side. */
+.review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.review-approved {
+  margin: 0 0 1.5rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.review-approved p {
+  margin: 0;
+}

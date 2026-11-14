@@ -8,9 +8,15 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from src.models import ClientProfile, ClientProfileVersion, ReviewStatus
+from src.models import (
+    ArtifactVersion,
+    ClientProfile,
+    ClientProfileVersion,
+    ReviewStatus,
+)
 from src.profile_flags import SCALAR_FIELDS
 from src.schemas import ReviewEditsIn, ReviewRejectIn
+from src.staleness import mark_stale_for_client_profile
 from src.versioning import next_client_profile_version
 
 
@@ -92,7 +98,11 @@ def save_review_edits(
 
 
 def reject_review_draft(
-    db: Session, profile_id: uuid.UUID, version_id: uuid.UUID, body: ReviewRejectIn
+    db: Session,
+    profile_id: uuid.UUID,
+    version_id: uuid.UUID,
+    body: ReviewRejectIn,
+    rejected_by: uuid.UUID,
 ) -> ClientProfileVersion:
     """Mark the open draft rejected with its reason. Caller owns commit/rollback.
 
@@ -103,5 +113,34 @@ def reject_review_draft(
     draft.status = ReviewStatus.REJECTED
     draft.rejection_reason = body.reason
     draft.rejected_at = datetime.now(timezone.utc)
+    draft.rejected_by = rejected_by
     db.flush()
     return draft
+
+
+def approve_review_draft(
+    db: Session, profile_id: uuid.UUID, version_id: uuid.UUID, approved_by: uuid.UUID
+) -> tuple[ClientProfileVersion, list[ArtifactVersion]]:
+    """Save the open draft as a new approved version. Caller owns commit/rollback.
+
+    The draft must still be the profile's latest version, so a repeated submit or
+    an approval from a page that missed a newer save/approval/rejection is a
+    StaleReviewError, not a second approved copy. The draft row is left as it was;
+    the new head carries the approval. Artifacts built from older versions are
+    marked stale in the same transaction.
+    """
+    draft = _lock_editable_head(db, profile_id, version_id)
+    if not isinstance(draft.data, dict) or not draft.data:
+        raise ValueError("This version has no draft data to approve")
+    approved = ClientProfileVersion(
+        client_profile_id=profile_id,
+        version_number=next_client_profile_version(db, profile_id),
+        status=ReviewStatus.APPROVED,
+        data=deepcopy(draft.data),
+        approved_by=approved_by,
+        approved_at=datetime.now(timezone.utc),
+    )
+    db.add(approved)
+    db.flush()
+    stale = mark_stale_for_client_profile(db, profile_id)
+    return approved, stale

@@ -244,6 +244,8 @@ class ClientProfileVersion(Base):
     rejected_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # The signed-in user who rejected it (#62). Not a foreign key, like approved_by.
+    rejected_by: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
     profile: Mapped[ClientProfile] = relationship(back_populates="versions")
 
 
@@ -469,7 +471,7 @@ def _make_guard(fields: tuple[str, ...]):
             and approved.deleted[0] is not None
         ):
             raise ValueError("approved_at is already set and cannot be changed")
-        for name in ("rejection_reason", "rejected_at"):
+        for name in ("rejection_reason", "rejected_at", "rejected_by"):
             if name not in state.attrs:
                 continue
             rejected = state.attrs[name].history

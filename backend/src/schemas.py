@@ -109,6 +109,7 @@ class ClientProfileVersionOut(BaseModel):
     approved_at: datetime | None = None
     rejection_reason: str | None = None
     rejected_at: datetime | None = None
+    rejected_by: uuid.UUID | None = None
 
 
 class ReviewInboxItemOut(BaseModel):

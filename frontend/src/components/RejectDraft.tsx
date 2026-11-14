@@ -56,13 +56,14 @@ export default function RejectDraft({ profileId, versionId, disabled, hasUnsaved
       onRejected(version)
     } catch (caught) {
       if (!mounted.current) return
-      const stale = caught instanceof ApiError && caught.status === 409
-      setStatus(stale ? 'stale' : 'error')
-      setError(stale
+      const code = caught instanceof ApiError ? caught.status : 0
+      setStatus(code === 409 ? 'stale' : 'error')
+      setError(code === 409
         ? 'This draft changed or was already reviewed. Open the latest draft from the review inbox.'
-        : caught instanceof ApiError && caught.status === 422
-          ? 'Couldn\'t reject with that reason. Keep it short and not blank.'
-          : 'Couldn\'t confirm the draft was rejected. Try again.')
+        : code === 422 ? 'Couldn\'t reject with that reason. Keep it short and not blank.'
+          : code === 401 ? 'Your session has ended. Sign in again to reject.'
+            : code === 403 ? 'Your role cannot reject drafts.'
+              : 'Couldn\'t confirm the draft was rejected. Try again.')
     } finally {
       busy.current = false
     }
