@@ -123,6 +123,8 @@ test('follows the job from queued to drafting to ready, then stops asking', asyn
   expect(
     screen.getByText('You can leave this page. The draft will be waiting in Reviews.'),
   ).toBeInTheDocument()
+  // The client name can load before the job; wait for the job's steps too.
+  await screen.findByRole('list')
   expect(step('Files saved')).toHaveAttribute('data-state', 'done')
   expect(step('Queued')).toHaveAttribute('aria-current', 'step')
   expect(step('Drafting')).toHaveAttribute('data-state', 'upcoming')
