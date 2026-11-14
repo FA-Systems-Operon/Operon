@@ -19,11 +19,13 @@ from src.logging_config import configure_logging
 from src.onboarding_jobs import start_worker
 from src.routers import (
     artifacts,
+    auth,
     client_profiles,
     clients,
     documents,
     onboarding_jobs,
     playbooks,
+    reviews,
 )
 
 # Before anything logs. Raises on an unknown LOG_LEVEL so a typo fails loudly.
@@ -58,13 +60,14 @@ log.info(
     settings.OLLAMA_MODEL or "(OLLAMA_MODEL not set)",
     settings.LOG_LEVEL,
 )
-
+app.include_router(auth.router)
 app.include_router(artifacts.router)
 app.include_router(clients.router)
 app.include_router(documents.router)
 app.include_router(onboarding_jobs.router)
 app.include_router(client_profiles.router)
 app.include_router(playbooks.router)
+app.include_router(reviews.router)
 
 
 @app.get("/health")

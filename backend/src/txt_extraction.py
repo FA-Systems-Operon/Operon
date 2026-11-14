@@ -10,8 +10,12 @@ def extract_txt(data: bytes) -> str:
     UTF-8 is the default when no BOM is present. Decode strictly so malformed
     bytes are rejected instead of silently replaced. Raises ValueError for
     unsupported UTF-32 BOMs, invalid encoding, NUL characters, or empty text.
+    Keeps the file's last newline, since the model's draft can change without
+    it (#156).
     """
-    text = normalize_text(decode_text(data))
+    decoded = decode_text(data)
+    text = normalize_text(decoded)
     if not text.strip():
         raise ValueError("Text is empty or contains only whitespace")
-    return text
+    ends_with_newline = decoded.rstrip(" \t").endswith(("\n", "\r"))
+    return text + "\n" if ends_with_newline else text

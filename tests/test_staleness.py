@@ -308,3 +308,8 @@ def test_is_artifact_stale_playbook(db_session, api, profile_factory, playbook_f
     api.approve_playbook(pb1.playbook_id, pb2["id"])
     assert is_artifact_stale(db_session, pv.id, pb1.id) is True
     assert is_artifact_stale(db_session, pv.id, uuid.UUID(pb2["id"])) is False
+
+
+def test_old_unprefixed_artifacts_path_is_gone(client):
+    # Everything the frontend calls lives under /api/v1, which the proxy forwards.
+    assert client.get("/artifacts/stale").status_code == 404

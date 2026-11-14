@@ -205,3 +205,8 @@ def test_latest_approved_is_highest_version_not_latest_approval(
     response = client.get(f"/api/v1/playbooks/{pid}/latest-approved")
 
     assert response.json()["id"] == v3["id"]
+
+
+def test_old_unprefixed_playbooks_path_is_gone(client):
+    # Everything the frontend calls lives under /api/v1, which the proxy forwards.
+    assert client.post("/playbooks").status_code == 404
