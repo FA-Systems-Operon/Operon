@@ -183,7 +183,7 @@
 }
 
 .page {
-  padding: 4rem 2rem;
+  padding: 2.5rem 2rem 4rem;
 }
 
 .placeholder,
@@ -572,6 +572,147 @@
   letter-spacing: -0.01em;
 }
 
+/* ---- Draft progress (After upload) ---- */
+
+.draft-progress {
+  max-width: 46rem;
+  margin: 0 auto;
+}
+
+.draft-progress h1 {
+  margin: 0 0 1rem;
+  font-size: 3rem;
+  letter-spacing: -0.03em;
+}
+
+.draft-progress .lead {
+  margin-bottom: 2rem;
+}
+
+.draft-steps {
+  margin: 0;
+  padding: 0.25rem 1.5rem;
+  border-radius: 12px;
+  background: var(--surface);
+  list-style: none;
+}
+
+.draft-step {
+  display: grid;
+  grid-template-columns: 1.15rem 1fr auto;
+  align-items: center;
+  gap: 1.1rem;
+  padding: 0.9rem 0;
+}
+
+.draft-step + .draft-step {
+  border-top: 1px solid var(--border);
+}
+
+.draft-step p {
+  margin: 0;
+}
+
+.draft-step-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.draft-step .draft-step-detail {
+  margin-top: 0.2rem;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+/* Done: a filled dot. In progress: a spinning ring. Not started: an empty ring. */
+.draft-step-mark {
+  width: 1.15rem;
+  height: 1.15rem;
+  border: 2px solid var(--border);
+  border-radius: 50%;
+}
+
+.draft-step[data-state='done'] .draft-step-mark {
+  border-color: var(--text);
+  background: var(--text);
+}
+
+.draft-step[data-state='current'] .draft-step-mark {
+  border-color: var(--border);
+  border-top-color: var(--progress);
+  animation: draft-spin 1s linear infinite;
+}
+
+.draft-step[data-state='current'] .draft-step-title {
+  color: var(--progress);
+}
+
+.draft-step[data-state='failed'] .draft-step-mark {
+  border-color: var(--danger);
+}
+
+.draft-step[data-state='failed'] .draft-step-title,
+.draft-step[data-state='failed'] .draft-step-detail {
+  color: var(--danger);
+}
+
+.draft-step[data-state='upcoming'] .draft-step-title {
+  color: var(--faint);
+}
+
+@keyframes draft-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .draft-step[data-state='current'] .draft-step-mark {
+    animation: none;
+  }
+}
+
+.draft-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 1rem;
+  margin: 1rem 0 0;
+}
+
+.draft-summary-item {
+  padding: 0.85rem 1.25rem;
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.draft-summary dt {
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.draft-summary dd {
+  margin: 0.25rem 0 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.draft-summary dd[data-status='running'],
+.draft-summary dd[data-status='pending'] {
+  color: var(--progress);
+}
+
+.draft-summary dd[data-status='failed'] {
+  color: var(--danger);
+}
+
+.draft-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 2rem;
+}
+
 /* ---- Status (developer page) ---- */
 
 .status-page {
@@ -608,7 +749,7 @@
   }
 
   .page {
-    padding: 2.5rem 1rem;
+    padding: 1.5rem 1rem 2.5rem;
   }
 
   .add-sources h1,
@@ -659,5 +800,13 @@
   .submit-row {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .draft-progress h1 {
+    font-size: 2.25rem;
+  }
+
+  .draft-steps {
+    padding: 0.25rem 1rem;
   }
 }

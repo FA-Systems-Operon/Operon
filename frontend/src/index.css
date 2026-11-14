@@ -10,6 +10,8 @@
   --accent: #d7ff5f;
   --accent-text: #111214;
   --danger: #ff8a80;
+  /* A step that is in progress, like Drafting on the After upload frame. */
+  --progress: #b7a6ff;
   --font: Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 
