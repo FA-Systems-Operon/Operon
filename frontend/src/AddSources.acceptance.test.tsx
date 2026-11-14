@@ -6,10 +6,27 @@ import App from './App'
 // AT 3.1 (#47): a staff member on the upload screen uploads a transcript and intake
 // answers for a client, and the draft starts with no other step. This checks what the
 // page sends; tests/test_upload_acceptance.py sends the same requests to the real API
-// and checks the job is saved as pending and the draft is generated.
+// and checks the job is saved as pending and the draft is generated. 
+// Then (#178) app follows the draft on its own page.
+// App now needs more params in the URL to show the draft progress
 const CLIENT = '0b7d3c1e-0000-4000-8000-000000000001'
 const TRANSCRIPT = '0b7d3c1e-0000-4000-8000-000000000002'
 const INTAKE = '0b7d3c1e-0000-4000-8000-000000000003'
+const JOB = '0b7d3c1e-0000-4000-8000-000000000004'
+const JOB_ANSWER = {
+  id: JOB,
+  client_id: CLIENT,
+  transcript_document_id: TRANSCRIPT,
+  intake_document_id: INTAKE,
+  status: 'pending',
+  error: null,
+  result_version_id: null,
+  result_profile_id: null,
+  attempts: 0,
+  created_at: '2026-11-12T09:14:00Z',
+  started_at: null,
+  finished_at: null,
+}
 
 type Request = { method: string; url: string; body: unknown }
 
@@ -61,7 +78,9 @@ function fakeApi() {
       }
     } else if (typeof init?.body === 'string') {
       body = JSON.parse(init.body)
-      answer = { id: 'job-1', status: 'pending' }
+      answer = JOB_ANSWER
+    } else if (url.includes('/onboarding-jobs/')) {
+      answer = JOB_ANSWER
     }
 
     requests.push({ method, url, body })
@@ -83,7 +102,7 @@ afterEach(() => {
   window.location.hash = ''
 })
 
-test('uploading both files from New intake starts the draft with no other step', async () => {
+test('uploading both files from New intake starts the draft with no other step, then shows its progress', async () => {
   const requests = fakeApi()
   const user = userEvent.setup()
   render(<App />)
@@ -103,11 +122,11 @@ test('uploading both files from New intake starts the draft with no other step',
   )
   await user.click(screen.getByRole('button', { name: 'Upload and draft' }))
 
-  expect(
-    await screen.findByText('Draft started for Plateau Basements. It takes about a minute.'),
-  ).toBeInTheDocument()
+  // The app moves on to the draft's progress, with the job in the address.
+  expect(await screen.findByRole('heading', { name: 'Drafting Plateau Basements' })).toBeVisible()
+  expect(window.location.hash).toBe(`#/sources/draft?client=${CLIENT}&job=${JOB}`)
   // One click sent both files, then started the draft from the two saved documents.
-  expect(requests).toEqual([
+  expect(requests.slice(0, 4)).toEqual([
     { method: 'GET', url: '/api/v1/clients', body: null },
     {
       method: 'POST',
@@ -125,5 +144,12 @@ test('uploading both files from New intake starts the draft with no other step',
       body: { transcript_document_id: TRANSCRIPT, intake_document_id: INTAKE },
     },
   ])
+  // The progress page only asks for the client's name and the job's status.
+  expect(requests.slice(4)).toContainEqual({
+    method: 'GET',
+    url: `/api/v1/clients/${CLIENT}/onboarding-jobs/${JOB}`,
+    body: null,
+  })
+  expect(requests.slice(4).every(({ method }) => method === 'GET')).toBe(true)
   expect(screen.queryByRole('alert')).not.toBeInTheDocument()
 })
