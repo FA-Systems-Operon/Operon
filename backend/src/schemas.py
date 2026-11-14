@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field, StrictStr
+from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator
 
 from src.models import DocumentKind, JobStatus, ReviewStatus
 
@@ -107,6 +107,8 @@ class ClientProfileVersionOut(BaseModel):
     created_at: datetime
     approved_by: uuid.UUID | None = None
     approved_at: datetime | None = None
+    rejection_reason: str | None = None
+    rejected_at: datetime | None = None
 
 
 class ReviewInboxItemOut(BaseModel):
@@ -138,6 +140,29 @@ class ReviewEditsIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     changes: dict[str, StrictStr | None]
+
+
+REJECTION_REASON_MAX_LENGTH = 500
+
+
+class ReviewRejectIn(BaseModel):
+    """Why the reviewer is rejecting the draft; required, short and not blank."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    reason: StrictStr
+
+    @field_validator("reason")
+    @classmethod
+    def reason_is_short_and_not_blank(cls, reason: str) -> str:
+        reason = reason.strip()
+        if not reason:
+            raise ValueError("A rejection reason is required")
+        if len(reason) > REJECTION_REASON_MAX_LENGTH:
+            raise ValueError(
+                f"Keep the rejection reason to {REJECTION_REASON_MAX_LENGTH} characters"
+            )
+        return reason
 
 
 class PlaybookOut(BaseModel):
