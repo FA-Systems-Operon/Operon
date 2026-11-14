@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   mapSourceReferences,
+  editableReviewRows,
   reviewRows,
   type ProfileConflict,
   type SourceLinkedDraft,
@@ -182,4 +183,17 @@ describe('draft data of the wrong type', () => {
       ['email', null, [{ field: 'email', document_id: DOC, quote }], []],
     ])
   })
+})
+
+
+it('editable rows add absent scalars but preserve raw list paths and group conflict evidence', () => {
+  const input = { needs: [null, 'Need'], goals: [], conflicts: [conflict('goals')], source_references: [] } as unknown as SourceLinkedDraft
+  const original = structuredClone(input)
+  const result = editableReviewRows(input)
+  expect(result.rows.map(({ key }) => key)).toEqual([
+    'name', 'needs/1', 'goals', 'business_number', 'website', 'domain_platform',
+    'meta_business_manager', 'facebook_page', 'instagram', 'phone_number', 'email', 'business_address',
+  ])
+  expect(result.rows.find(({ key }) => key === 'goals')?.conflicts).toEqual([conflict('goals')])
+  expect(input).toEqual(original)
 })

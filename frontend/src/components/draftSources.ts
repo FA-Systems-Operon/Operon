@@ -190,3 +190,16 @@ export function reviewRows(input: Partial<SourceLinkedDraft>): {
   rows.sort((a, b) => rank(a.key) - rank(b.key))
   return { rows, unsupported }
 }
+
+/** Editing adds absent scalars without changing the reusable read-only renderer. */
+export function editableReviewRows(input: Partial<SourceLinkedDraft>) {
+  const result = reviewRows(input)
+  for (const { key, label } of [{ key: 'name', label: 'Name' }, ...ONBOARDING_FIELDS]) {
+    if (!result.rows.some((row) => row.key === key)) {
+      result.rows.push({ key, label, value: 'Not mentioned', references: [], flag: null, conflicts: [] })
+    }
+  }
+  const rank = (key: string) => ROW_ORDER.indexOf(key.split('/')[0]) * 2 + (key.includes('/') ? 1 : 0)
+  result.rows.sort((a, b) => rank(a.key) - rank(b.key))
+  return result
+}
