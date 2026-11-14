@@ -34,7 +34,14 @@ def stored_files(tmp_path) -> list:
     ],
 )
 def test_upload_succeeds(
-    client, db_session, storage, demo_client, signed_in_user, filename, content, content_type
+    client,
+    db_session,
+    storage,
+    demo_client,
+    signed_in_user,
+    filename,
+    content,
+    content_type,
 ):
     response = client.post(
         documents_url(demo_client.id),
@@ -57,7 +64,10 @@ def test_upload_succeeds(
     assert storage.read(document.storage_key) == content
     event = db_session.scalars(select(AuditEvent)).one()
     assert (event.action, event.object_type, event.object_id, event.actor_id) == (
-        "upload", "source_document", document.id, signed_in_user.id
+        "upload",
+        "source_document",
+        document.id,
+        signed_in_user.id,
     )
 
     retrieved = client.get(f"{documents_url(demo_client.id)}/{body['id']}")

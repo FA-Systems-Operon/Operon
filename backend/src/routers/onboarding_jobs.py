@@ -16,7 +16,14 @@ from sqlalchemy.orm import Session
 from src.audit import record_audit_event
 from src.auth import current_user
 from src.db import get_db
-from src.models import Client, DocumentKind, JobStatus, OnboardingJob, SourceDocument, User
+from src.models import (
+    Client,
+    DocumentKind,
+    JobStatus,
+    OnboardingJob,
+    SourceDocument,
+    User,
+)
 from src.onboarding_jobs import run_onboarding_job
 from src.schemas import OnboardingJobIn, OnboardingJobOut
 from src.storage import DocumentStorage, get_storage
@@ -126,10 +133,12 @@ def get_onboarding_job(
 
 def _job_for_pair(db: Session, body: OnboardingJobIn) -> OnboardingJob | None:
     return db.scalar(
-        select(OnboardingJob).where(
+        select(OnboardingJob)
+        .where(
             OnboardingJob.transcript_document_id == body.transcript_document_id,
             OnboardingJob.intake_document_id == body.intake_document_id,
-        ).with_for_update()
+        )
+        .with_for_update()
     )
 
 

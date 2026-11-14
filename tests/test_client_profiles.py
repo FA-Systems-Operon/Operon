@@ -205,9 +205,7 @@ def test_approve_version_of_a_different_profile_returns_404(
     assert response.status_code == 404
 
 
-def test_approval_audit_uses_session_actor(
-    api, db_session, profile_factory
-):
+def test_approval_audit_uses_session_actor(api, db_session, profile_factory):
     version = profile_factory()
     response = api.http.post(
         f"/api/v1/client-profiles/{version.client_profile_id}/versions/{version.id}/approve",
