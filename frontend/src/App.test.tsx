@@ -100,6 +100,22 @@ test('Add sources opens under the Brain tab with the client from the link', asyn
   expect(await screen.findByRole('combobox', { name: 'Client' })).toHaveValue('c1')
 })
 
+test('a draft progress link (or a refresh) shows that job under the Brain tab', async () => {
+  const fetchMock = vi.fn().mockImplementation((url: string) =>
+    jsonResponse(
+      url === '/api/v1/clients'
+        ? [{ id: 'c1', name: 'Plateau Basements', created_at: '' }]
+        : { id: 'j1', client_id: 'c1', status: 'running', attempts: 1, created_at: '' },
+    ),
+  )
+  vi.stubGlobal('fetch', fetchMock)
+  openAt('#/sources/draft?client=c1&job=j1')
+
+  expect(await screen.findByRole('heading', { name: 'Drafting Plateau Basements' })).toBeVisible()
+  expect(activeTab()).toHaveTextContent('Brain')
+  expect(fetchMock).toHaveBeenCalledWith('/api/v1/clients/c1/onboarding-jobs/j1')
+})
+
 test('following New intake opens Add sources with no client chosen', async () => {
   openAt('#/')
 

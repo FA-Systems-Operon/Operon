@@ -1,17 +1,24 @@
 import type { ReactNode } from 'react'
 import './App.css'
+import type { OnboardingJob } from './api'
 import TopNav, { type Tab } from './components/TopNav'
 import AddSourcesPage from './pages/AddSourcesPage'
 import CommandPage from './pages/CommandPage'
+import DraftProgressPage from './pages/DraftProgressPage'
 import PlaceholderPage from './pages/PlaceholderPage'
 import ReviewDraftPage from './pages/ReviewDraftPage'
 import ReviewInboxPage from './pages/ReviewInboxPage'
 import StatusPage from './pages/StatusPage'
-import { useRoute } from './router'
+import { draftProgressHref, useRoute } from './router'
 
 type Page = {
   tab: Tab | null
   content: ReactNode
+}
+
+// Once both files are saved and the draft has started, follow it on its own page.
+function showProgress(job: OnboardingJob) {
+  window.location.hash = draftProgressHref(job.client_id, job.id)
 }
 
 // To add a page: add a case here, and a tab in TopNav if it belongs in the menu.
@@ -45,7 +52,21 @@ function pageFor(path: string, query: URLSearchParams): Page {
       // The key starts a fresh form when the chosen client in the link changes.
       return {
         tab: 'brain',
-        content: <AddSourcesPage key={clientId ?? ''} initialClientId={clientId} />,
+        content: (
+          <AddSourcesPage
+            key={clientId ?? ''}
+            initialClientId={clientId}
+            onDraftStarted={showProgress}
+          />
+        ),
+      }
+    }
+    case '/sources/draft': {
+      const clientId = query.get('client')
+      const jobId = query.get('job')
+      return {
+        tab: 'brain',
+        content: <DraftProgressPage key={`${clientId}/${jobId}`} clientId={clientId} jobId={jobId} />,
       }
     }
     case '/status':
