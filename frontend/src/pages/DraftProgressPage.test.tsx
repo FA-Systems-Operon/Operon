@@ -111,7 +111,9 @@ test('follows the job from queued to drafting to ready, then stops asking', asyn
 
   // Queued: the first steps are done or in progress, the rest not started.
   expect(await screen.findByRole('heading', { name: 'Drafting Plateau Basements' })).toBeVisible()
-  expect(screen.getByText('You can leave this page. The draft will be waiting in Reviews.'))
+  expect(
+    screen.getByText('You can leave this page. The draft will be waiting in Reviews.'),
+  ).toBeInTheDocument()
   expect(step('Files saved')).toHaveAttribute('data-state', 'done')
   expect(step('Queued')).toHaveAttribute('aria-current', 'step')
   expect(step('Drafting')).toHaveAttribute('data-state', 'upcoming')
@@ -163,7 +165,9 @@ test('shows the files and queue times, and a running timer while drafting', asyn
 
 test('a failed draft shows the reason, and Try again restarts the same job', async () => {
   const user = userEvent.setup()
-  const fetchMock = mockApi([[200, FAILED], [200, PENDING]], { start: [200, PENDING] })
+  // A reply naming another client must not change where Try again sends the request.
+  const reply = { ...FAILED, client_id: '../other' }
+  const fetchMock = mockApi([[200, reply], [200, PENDING]], { start: [200, PENDING] })
   renderPage()
 
   expect(
@@ -177,7 +181,8 @@ test('a failed draft shows the reason, and Try again restarts the same job', asy
 
   await user.click(screen.getByRole('button', { name: 'Try again' }))
 
-  // The same two files, so the API restarts this job instead of starting another.
+  // The same two files, so the API restarts this job instead of starting another. The
+  // client comes from the page's link, not from the reply.
   const [url, init] = fetchMock.mock.calls.find(([, options]) => options?.method === 'POST')!
   expect(url).toBe('/api/v1/clients/c1/onboarding-jobs')
   expect(JSON.parse(init!.body as string)).toEqual({

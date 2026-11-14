@@ -205,17 +205,15 @@ export default function DraftProgressPage({
     return () => window.clearInterval(timer)
   }, [running])
 
-  // Asking for the same two files again restarts a failed job
-  async function handleRetry(failed: OnboardingJob) {
+  // Asking for the same two files again restarts a failed job. The address uses the
+  // client from this page's link, not one from the reply: the API only answered
+  // with this job because it belongs to that client.
+  async function handleRetry(failed: OnboardingJob, owner: string) {
     setRestarting(true)
     setRestartFailed(false)
     try {
       setJob(
-        await startOnboardingJob(
-          failed.client_id,
-          failed.transcript_document_id,
-          failed.intake_document_id,
-        ),
+        await startOnboardingJob(owner, failed.transcript_document_id, failed.intake_document_id),
       )
     } catch {
       setRestartFailed(true)
@@ -320,7 +318,8 @@ export default function DraftProgressPage({
             className="button button-primary"
             type="button"
             disabled={restarting}
-            onClick={() => handleRetry(job)}
+            // A job only loads when the link has a client, so clientId is set here.
+            onClick={() => handleRetry(job, clientId!)}
           >
             Try again
           </button>
