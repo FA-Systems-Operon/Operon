@@ -47,9 +47,12 @@ def save_review_edits(
     if not isinstance(base.data, dict):
         raise ValueError("Draft data must be a JSON object")  # noqa: TRY004 -- maps to 422
     data = deepcopy(base.data)
+    changed_nonnull_paths: list[str] = []
     for path, raw_value in body.changes.items():
         value = (raw_value.strip() or None) if raw_value is not None else None
         if path in SCALAR_FIELDS:
+            if data.get(path) != value and value is not None:
+                changed_nonnull_paths.append(path)
             data[path] = value
             continue
         match = re.fullmatch(r"(needs|goals)/(0|[1-9][0-9]*)", path)
@@ -64,14 +67,27 @@ def save_review_edits(
             raise ValueError(
                 "List edits require an existing text item and nonblank value"
             )
+        if items[index] != value:
+            changed_nonnull_paths.append(path)
         items[index] = value
 
     if data == base.data:
         return base
 
-    # Existing nullable assessment format means unassessed. Evidence/conflicts are
-    # retained as history, not validated claims about the reviewer's new values.
-    data["assessment"] = None
+    # Remove only existing missing claims for actual non-null corrections. Clearing
+    # a value preserves its recorded marker; never add new missing claims here.
+    # Conflict/evidence history is unchanged. Unknown assessments stay as-is.
+    assessment = data.get("assessment")
+    if (
+        isinstance(assessment, dict)
+        and assessment.get("rules_version") == 1
+        and isinstance(assessment.get("missing_fields"), list)
+    ):
+        assessment["missing_fields"] = [
+            path
+            for path in assessment["missing_fields"]
+            if path not in changed_nonnull_paths
+        ]
     version = ClientProfileVersion(
         client_profile_id=profile_id,
         version_number=next_client_profile_version(db, profile_id),

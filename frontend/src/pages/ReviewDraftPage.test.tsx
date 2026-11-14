@@ -459,7 +459,7 @@ test('clearing a field does not invent a missing marker absent from the recorded
 const SAVED = {
   ...DRAFT.version,
   id: 'v3', version_number: 3, status: 'draft',
-  data: { ...DRAFT.version.data, name: 'Corrected', email: 'chosen@example.test', assessment: null },
+  data: { ...DRAFT.version.data, name: 'Corrected', email: 'chosen@example.test' },
 } as ReviewDraft['version']
 
 const approvalBlocked = () => document.querySelector('.review-draft')?.getAttribute('data-approval-blocked')
@@ -482,18 +482,56 @@ test('save posts only corrections, adopts the returned version and survives reop
   expect(window.location.hash).toBe('#/reviews/draft?profile=p1&version=v3')
   expect(approvalBlocked()).toBe('false')
   expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
-  expect(screen.getByText(/Information checks have not been recomputed/)).toBeInTheDocument()
+  expect(screen.queryByText(/Information checks have not been recomputed/)).not.toBeInTheDocument()
   await userEvent.click(row('Email'))
   expect(screen.getByRole('button', { name: 'Edit Email' })).toHaveTextContent('chosen@example.test')
   expect(evidence().getAllByRole('listitem')).toHaveLength(2)
-  expect(evidence().getByText(/Conflicts remain unresolved/)).toBeInTheDocument()
-  expect(document.querySelector('[data-flag]')).toBeNull()
+  expect(screen.getByText('▲ Sources disagree')).toBeInTheDocument()
+  expect(row('Email').closest('.review-field')).toHaveAttribute('data-flag', 'conflict')
+  expect(row('Website').closest('.review-field')).toHaveAttribute('data-flag', 'missing')
   view.unmount()
   render(<ReviewDraftPage profileId="p1" versionId="v3" />)
   expect(await screen.findByRole('button', { name: 'Edit Name' })).toHaveTextContent('Corrected')
   expect(fetchMock).toHaveBeenLastCalledWith('/api/v1/reviews/profiles/p1/versions/v3')
+  expect(row('Email').closest('.review-field')).toHaveAttribute('data-flag', 'conflict')
+  expect(row('Website').closest('.review-field')).toHaveAttribute('data-flag', 'missing')
   await userEvent.click(row('Name'))
-  expect(evidence().getByText(/retained as history/)).toBeInTheDocument()
+  expect(evidence().getByText('Contact name: Maya Chen', { selector: 'q' })).toBeInTheDocument()
+  expect(screen.queryByText('Reviewer-edited')).not.toBeInTheDocument()
+})
+
+test('a missing marker clears only for its own non-null edit and returns when cleared', async () => {
+  await openDraft()
+  await edit('Website', 'example.test')
+  expect(row('Website').closest('.review-field')).not.toHaveAttribute('data-flag')
+  expect(row('Email').closest('.review-field')).toHaveAttribute('data-flag', 'conflict')
+  await edit('Website', '')
+  expect(row('Website').closest('.review-field')).toHaveAttribute('data-flag', 'missing')
+  await userEvent.click(row('Website'))
+  expect(evidence().getByText('○ Missing information')).toBeInTheDocument()
+})
+
+test('clearing a field does not invent a missing marker absent from the recorded assessment', async () => {
+  const data = { ...DRAFT.version.data, website: 'old.example.test', assessment: { rules_version: 1, missing_fields: [] } }
+  mockDraft(reply(200, { ...DRAFT, version: { ...DRAFT.version, data } }))
+  render(<ReviewDraftPage profileId="p1" versionId="v2" />)
+  await screen.findByRole('heading', { name: 'Plateau Basements' })
+  await edit('Website', '')
+  expect(row('Website').closest('.review-field')).not.toHaveAttribute('data-flag')
+  expect(screen.getByRole('button', { name: 'Edit Website' })).toHaveTextContent('Not mentioned')
+})
+
+test('legacy null assessments stay unassessed without hiding unresolved conflict markers', async () => {
+  const version = { ...SAVED, data: { ...SAVED.data, assessment: null } }
+  mockDraft(reply(200, { ...DRAFT, version }))
+  render(<ReviewDraftPage profileId="p1" versionId="v3" />)
+  await screen.findByRole('heading', { name: 'Plateau Basements' })
+  expect(screen.getByText(/Information checks have not been recomputed/)).toBeInTheDocument()
+  expect(row('Email').closest('.review-field')).toHaveAttribute('data-flag', 'conflict')
+  await userEvent.click(row('Email'))
+  expect(screen.getByRole('button', { name: 'Edit Email' })).toHaveTextContent('chosen@example.test')
+  expect(evidence().getByText('▲ Sources disagree')).toBeInTheDocument()
+  expect(evidence().getByText(/Conflicts remain unresolved/)).toBeInTheDocument()
 })
 
 test('a second save uses the newly saved version as its base', async () => {

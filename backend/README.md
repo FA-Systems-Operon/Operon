@@ -501,7 +501,7 @@ Everything is saved in the existing immutable version JSON; no migration is
 needed. Historical versions without assessment stay unassessed. The generic
 profile update endpoint remains an unvalidated JSON editing endpoint and does not
 recompute completeness or establish conflict-resolution/approval guarantees.
-The review edit endpoint (#60) invalidates assessment after edits (see below).
+The review edit endpoint (#60) preserves untouched assessment entries (see below).
 The source-draft endpoint validates the supplied evidence; it does not scan
 all documents a client owns. The onboarding job compares its exact pinned pair.
 
@@ -601,12 +601,25 @@ this supports retry after reverting local changes. Failure rolls back the save.
 The generic profile PUT now takes the same parent lock (its JSON contract is unchanged).
 Source-draft generation and profile approval already take that lock.
 
-Changed snapshots use the existing nullable `assessment` format: `null` means
-unassessed. Original references and conflict alternatives remain unchanged as
-historical evidence. They do not verify reviewer corrections, and editing a
-conflicted scalar does not resolve the conflict. The source-generation validator
-is unchanged. Prior versions remain intact; no migration is needed. Saving does
-not approve anything, change the latest-approved profile, or mark artifacts stale.
+Changed snapshots keep the original `assessment`. For supported rule version 1,
+only existing `missing_fields` entries for fields actually changed to a non-null
+saved value are removed. Clearing a value retains its existing entry; no new
+missing entries are added. This preserves recorded checks, not a recomputation of
+current completeness. Legacy null/absent or unknown assessments stay as-is.
+
+Original references and conflict alternatives remain unchanged as historical
+evidence. Editing a conflicted scalar does not resolve its conflict. Missing
+markers are computed per row during local editing, with conflict markers always
+retained, including after save/reload. There is no stored edited-path list or
+persistent Reviewer-edited marker. Prior versions remain intact; no migration is
+needed. Saving does not approve anything, change the latest-approved profile, or
+mark artifacts stale.
+
+Saved-version response models accept retained assessment and populated conflicted
+fields; review detail, version history, the inbox and existing approval read those
+snapshots without applying generation validation. The source-generation/evidence
+validator is unchanged and still requires generated conflicted scalars to be null.
+It must not be used to revalidate reviewer-corrected snapshots as generated output.
 
 The review page offers explicit Save, retains local edits on errors, and adopts
 the response's version and URL on success, notifying the hash router immediately.

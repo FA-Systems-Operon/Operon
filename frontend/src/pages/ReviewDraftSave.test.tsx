@@ -18,7 +18,7 @@ test('the app keeps the saved version when its route changes and reloads it on r
   const { draft } = responses
   const saved = {
     ...draft.version, id: 'saved-v3', version_number: 3,
-    data: { ...draft.version.data, name: 'Reviewer correction', assessment: null },
+    data: { ...draft.version.data, name: 'Reviewer correction' },
   }
   const baseUrl = `/api/v1/reviews/profiles/${draft.version.client_profile_id}/versions/`
   const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {

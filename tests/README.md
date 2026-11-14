@@ -301,7 +301,9 @@ These are focused implementation/regression checks, not completion of #66.
 
 | Requirement | Tests |
 | --- | --- |
-| Save corrections, reopen the returned version, preserve old snapshots, evidence and unresolved conflicts; invalidate assessment with the existing null format | `test_review_edits.py::test_save_appends_draft_and_reload_keeps_corrections_and_original_history`; `ReviewDraftPage.test.tsx` save/reopen scenario |
+| Save corrections, reopen the returned version, preserve old snapshots, evidence and unresolved conflicts; retain the original assessment except existing missing entries for actual non-null corrections | `test_review_edits.py::test_save_appends_draft_and_reload_keeps_corrections_and_original_history`; `test_save_preserves_untouched_missing_fields_and_conflicts`; `ReviewDraftPage.test.tsx` save/reopen scenario |
+| Clearing a value retains existing missing entries, without adding new ones; unchanged paths keep their recorded checks | `test_clearing_a_field_keeps_existing_missing_markers_without_adding_entries`; `test_save_does_not_remove_missing_claim_for_an_unchanged_path`; page missing-marker/clear scenarios |
+| Kept assessment plus a populated conflicted field passes read models, version history/detail, inbox, repeat save, existing approval, latest-approved and artifact-input reads | `test_saved_conflict_correction_passes_read_models_inbox_and_existing_approval` |
 | Nullable scalars, nonblank existing list items, restricted paths/types/metadata; reject invalid saves atomically; non-object base returns a clean 422 | `test_review_edits.py` validation cases, including `test_nonobject_base_data_returns_clean_422_without_writing` |
 | Reject superseded/decided versions without writing | `test_save_from_superseded_version_returns_409_without_writing`; `test_decided_or_stale_version_cannot_be_saved`; page `409` scenario |
 | Serialize competing saves and hold the parent lock until transaction end | `test_simultaneous_saves_have_one_winner_and_one_stale_response`; `test_save_holds_parent_lock_until_the_transaction_finishes` |
@@ -313,6 +315,11 @@ These are focused implementation/regression checks, not completion of #66.
 The save/reload test covers both `draft` and `in_review` and asserts the new version
 preserves that status. The app route test observes `useRoute` directly without
 injecting a hashchange event; the save flow must notify the router itself.
+
+No edited-path metadata is stored. Conflict markers remain before/after save and
+reload because editing does not resolve conflicts. Generation conflict validation
+remains strict and separate from saved-version reads; the boundary is covered by
+`test_generation_conflict_validator_stays_strict_for_reviewer_corrected_values`.
 
 Run with the existing isolated PostgreSQL `*_test` database and locked dependencies:
 
