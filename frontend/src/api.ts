@@ -27,8 +27,14 @@ export type OnboardingJob = {
   intake_document_id: string
   status: 'pending' | 'running' | 'succeeded' | 'failed'
   error: string | null
+  // The draft it made, once succeeded. A link to the draft needs both IDs.
   result_version_id: string | null
+  result_profile_id: string | null
+  // How many runs have started; a pending job with attempts waits for a retry.
+  attempts: number
   created_at: string
+  started_at: string | null
+  finished_at: string | null
 }
 
 // A profile draft waiting for a reviewer. One per profile, so a client can appear twice.
@@ -150,6 +156,17 @@ export async function startOnboardingJob(
       intake_document_id: intakeDocumentId,
     }),
   })
+  if (!response.ok) {
+    throw new ApiError(response.status, await readDetail(response))
+  }
+  return response.json()
+}
+
+// The job's current status, asked again and again while the draft is being made.
+export async function getOnboardingJob(clientId: string, jobId: string): Promise<OnboardingJob> {
+  const response = await fetch(
+    `/api/v1/clients/${encodeURIComponent(clientId)}/onboarding-jobs/${encodeURIComponent(jobId)}`,
+  )
   if (!response.ok) {
     throw new ApiError(response.status, await readDetail(response))
   }
