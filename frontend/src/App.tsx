@@ -83,6 +83,7 @@ function pageFor(
             key={`${profileId}/${versionId}`}
             profileId={profileId}
             versionId={versionId}
+            canReview={currentUser?.role !== 'viewer'}
           />
         ),
       }

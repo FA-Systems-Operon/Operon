@@ -8,17 +8,26 @@ from sqlalchemy import func, literal, select
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session
 
+from src.auth import require_role
 from src.db import get_db
 from src.models import (
     Client,
     ClientProfile,
     ClientProfileVersion,
     ReviewStatus,
+    Role,
     SourceDocument,
+    User,
 )
-from src.review_edits import StaleReviewError, reject_review_draft, save_review_edits
+from src.review_edits import (
+    StaleReviewError,
+    approve_review_draft,
+    reject_review_draft,
+    save_review_edits,
+)
 from src.schemas import (
     ClientProfileVersionOut,
+    ProfileApprovalOut,
     ReviewDraftOut,
     ReviewEditsIn,
     ReviewInboxItemOut,
@@ -28,6 +37,9 @@ from src.schemas import (
 router = APIRouter(prefix="/api/v1/reviews", tags=["reviews"])
 
 DbSession = Annotated[Session, Depends(get_db)]
+# Changing a draft (edit, reject, approve) needs a signed-in reviewer or admin, and
+# the CSRF header (checked by current_auth for every non-GET request).
+Reviewer = Annotated[User, Depends(require_role(Role.REVIEWER, Role.ADMIN))]
 
 
 @router.post(
@@ -41,6 +53,7 @@ def save_draft_edits(
     body: ReviewEditsIn,
     db: DbSession,
     response: Response,
+    _reviewer: Reviewer,
 ) -> ClientProfileVersion:
     """Validate corrections and append a draft, only if the base is still current."""
     try:
@@ -75,10 +88,11 @@ def reject_draft(
     version_id: uuid.UUID,
     body: ReviewRejectIn,
     db: DbSession,
+    reviewer: Reviewer,
 ) -> ClientProfileVersion:
     """Reject the open draft with a short reason; no approved version is created."""
     try:
-        version = reject_review_draft(db, profile_id, version_id, body)
+        version = reject_review_draft(db, profile_id, version_id, body, reviewer.id)
         db.commit()
     except LookupError as error:
         db.rollback()
@@ -91,6 +105,42 @@ def reject_draft(
         raise
     db.refresh(version)
     return version
+
+
+@router.post(
+    "/profiles/{profile_id}/versions/{version_id}/approve",
+    response_model=ProfileApprovalOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def approve_draft(
+    profile_id: uuid.UUID,
+    version_id: uuid.UUID,
+    db: DbSession,
+    reviewer: Reviewer,
+) -> ProfileApprovalOut:
+    """Save the open (possibly edited) draft as a new approved profile version."""
+    try:
+        version, stale = approve_review_draft(db, profile_id, version_id, reviewer.id)
+        db.commit()
+    except LookupError as error:
+        db.rollback()
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(error)) from error
+    except StaleReviewError as error:
+        db.rollback()
+        raise HTTPException(status.HTTP_409_CONFLICT, str(error)) from error
+    except ValueError as error:
+        db.rollback()
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT, str(error)
+        ) from error
+    except Exception:
+        db.rollback()
+        raise
+    db.refresh(version)
+    return ProfileApprovalOut(
+        version=ClientProfileVersionOut.model_validate(version),
+        newly_stale_artifact_version_ids=[a.id for a in stale],
+    )
 
 
 @router.get("", response_model=list[ReviewInboxItemOut])

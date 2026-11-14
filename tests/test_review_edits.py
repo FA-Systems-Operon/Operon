@@ -40,6 +40,12 @@ DRAFT = {
 }
 
 
+@pytest.fixture
+def client(reviewer_client):
+    """Changing a draft needs a signed-in reviewer (#62)."""
+    return reviewer_client
+
+
 def edits_url(version, *, profile_id=None, version_id=None):
     return (
         f"/api/v1/reviews/profiles/{profile_id or version.client_profile_id}"
@@ -413,6 +419,7 @@ def test_simultaneous_saves_have_one_winner_and_one_stale_response(
                     ReviewEditsIn(changes={"name": name}),
                     db,
                     Response(),
+                    None,  # the signed-in reviewer; unused by the save itself
                 )
                 return 201, saved.data["name"]
             except HTTPException as error:
