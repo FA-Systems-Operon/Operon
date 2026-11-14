@@ -135,7 +135,12 @@ function LoadedDraft({ draft, back, saved, onSaved }: {
   const editable = version.status === 'draft' || version.status === 'in_review'
   const pending = Object.keys(pendingFields).length > 0
   const gate = draftSaveGate(version.status, dirty, pending, saveStatus)
-  const historicalEvidence = dirty || version.data.assessment === null
+  const rowEdited = (row: ReviewRow) => Object.keys(session.changes).some(
+    (path) => path === row.key || path.startsWith(`${row.key}/`),
+  )
+  const historicalEvidence = (row: ReviewRow) => rowEdited(row) || version.data.assessment === null
+  const rowFlag = (row: ReviewRow) => row.flag === 'missing' && rowEdited(row)
+    && fieldValue(session.currentData, row.key as EditablePath) != null ? null : row.flag
   // Evidence always comes from the original version, even after a correction.
   const { rows, unsupported } = (editable ? editableReviewRows : reviewRows)(version.data)
   const selected = rows.find((row) => row.key === selectedKey) ?? rows[0]
@@ -182,24 +187,24 @@ function LoadedDraft({ draft, back, saved, onSaved }: {
 
   function sourceTag(row: ReviewRow) {
     const evidence = evidenceFor(row)
-    if (evidence.length > 1) return `${evidence.length} ${historicalEvidence ? 'original sources' : 'sources'}`
+    if (evidence.length > 1) return `${evidence.length} ${historicalEvidence(row) ? 'original sources' : 'sources'}`
     if (evidence.length === 0) return ''
     return documents.find(({ id }) => id === evidence[0].document_id)?.kind ?? 'source'
   }
 
   const originalDisplayValue = (row: ReviewRow) =>
-    historicalEvidence && row.flag === 'conflict' && fieldValue(session.currentData, row.key as EditablePath) == null
+    historicalEvidence(row) && row.flag === 'conflict' && fieldValue(session.currentData, row.key as EditablePath) == null
       ? `Original proposal: ${row.value}` : row.value
 
   function renderEvidence(row: ReviewRow) {
     const evidence = evidenceFor(row)
     return (
       <section className="review-evidence" aria-live="polite" aria-labelledby="evidence-title">
-        {!historicalEvidence && row.flag === 'conflict' && <p className="review-flag">▲ Sources disagree</p>}
-        {!historicalEvidence && row.flag === 'missing' && <p className="review-flag">○ Missing information</p>}
+        {rowFlag(row) === 'conflict' && <p className="review-flag">▲ Sources disagree</p>}
+        {rowFlag(row) === 'missing' && <p className="review-flag">○ Missing information</p>}
         <h2 id="evidence-title">{row.label}</h2>
-        {dirty && <p className="field-note">Original version evidence. These sources do not verify local corrections.</p>}
-        {!dirty && historicalEvidence && <p className="field-note">Original source evidence is retained as history and does not verify reviewer corrections. {(version.data.conflicts?.length ?? 0) > 0 && 'Conflicts remain unresolved.'}</p>}
+        {rowEdited(row) && <p className="field-note">Original version evidence. These sources do not verify local corrections. {row.conflicts.length > 0 && 'Conflicts remain unresolved.'}</p>}
+        {!rowEdited(row) && historicalEvidence(row) && <p className="field-note">Original source evidence is retained as history and does not verify reviewer corrections. {(version.data.conflicts?.length ?? 0) > 0 && 'Conflicts remain unresolved.'}</p>}
         {row.conflicts.map((conflict, index) => (
           <p key={index} className="field-note">
             {conflict.explanation}
@@ -207,7 +212,7 @@ function LoadedDraft({ draft, back, saved, onSaved }: {
         ))}
         {evidence.length === 0 ? (
           <p className="field-note">
-            {!historicalEvidence && row.flag === 'missing'
+            {rowFlag(row) === 'missing'
               ? 'Not found in the transcript or intake answers.'
               : 'No source linked to this field.'}
           </p>
@@ -222,7 +227,7 @@ function LoadedDraft({ draft, back, saved, onSaved }: {
                 </li>
               ))}
             </ul>
-            {!historicalEvidence && row.flag === 'conflict' && (
+            {rowFlag(row) === 'conflict' && !rowEdited(row) && (
               <p className="field-note">
                 Operon won't pick one. A reviewer decides which value to keep.
               </p>
@@ -248,7 +253,7 @@ function LoadedDraft({ draft, back, saved, onSaved }: {
         </p>
       </header>
 
-      {dirty && <p role="status" className="field-note">Unsaved local changes. Information checks apply to the original version.</p>}
+      {dirty && <p role="status" className="field-note">Unsaved local changes. Information checks apply to unchanged fields.</p>}
       {!dirty && saved && saveStatus !== 'error' && saveStatus !== 'stale' && <p role="status" className="field-note">Draft edits saved.</p>}
       {version.data.assessment === null && <p className="field-note">Information checks have not been recomputed for this version.</p>}
       {editable && (
@@ -277,7 +282,7 @@ function LoadedDraft({ draft, back, saved, onSaved }: {
               <li key={row.key}>
                 <div
                   className="review-field review-field-row"
-                  data-flag={!historicalEvidence ? row.flag ?? undefined : undefined}
+                  data-flag={rowFlag(row) ?? undefined}
                   data-selected={row === selected}
                 >
                   <button
@@ -286,8 +291,8 @@ function LoadedDraft({ draft, back, saved, onSaved }: {
                     aria-pressed={row === selected}
                     onClick={() => setSelectedKey(row.key)}
                   >
-                    {!historicalEvidence && row.flag === 'conflict' && <span aria-hidden="true">▲ </span>}
-                    {!historicalEvidence && row.flag === 'missing' && <span aria-hidden="true">○ </span>}
+                    {rowFlag(row) === 'conflict' && <span aria-hidden="true">▲ </span>}
+                    {rowFlag(row) === 'missing' && <span aria-hidden="true">○ </span>}
                     {row.label}
                   </button>
                   {editable && isEditablePath(session.originalData, row.key) ? (
