@@ -181,6 +181,7 @@ def test_start_saves_one_pending_job_for_the_pair(client, demo_client, no_runner
     assert job["transcript_document_id"] == transcript["id"]
     assert job["intake_document_id"] == intake["id"]
     assert job["started_at"] is None and job["result_version_id"] is None
+    assert job["result_profile_id"] is None
     assert get_job(client, demo_client, job)["status"] == "pending"
 
 
@@ -201,6 +202,8 @@ def test_draft_uses_both_files_without_manual_steps(
         assert db_session.get(ExtractedText, uuid.UUID(document["id"])) is not None
     assert len(provider.prompts) == 1
     version = db_session.get(ClientProfileVersion, uuid.UUID(job["result_version_id"]))
+    # The page links to the draft with both IDs.
+    assert job["result_profile_id"] == str(version.client_profile_id)
     assert version.data["name"] == "Maya Chen"
     cited = {ref["document_id"] for ref in version.data["source_references"]}
     assert cited == {transcript["id"], intake["id"]}

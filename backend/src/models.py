@@ -195,6 +195,14 @@ class OnboardingJob(Base):
         DateTime(timezone=True), nullable=True
     )
 
+    result_version: Mapped["ClientProfileVersion | None"] = relationship()
+
+    @property
+    def result_profile_id(self) -> uuid.UUID | None:
+        """The profile the draft belongs to; a link to the draft needs both IDs."""
+        version = self.result_version
+        return version.client_profile_id if version else None
+
 
 class ClientProfile(Base):
     """A profile associated with a client. Versioned — never mutate, always append."""
