@@ -4,6 +4,9 @@ COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts
 COPY index.html vite.config.ts tsconfig.json tsconfig.node.json ./
 COPY src ./src
+# Flags are fixed into the build, so pass them as build args (see frontend/README.md).
+ARG FEATURE_BRAIN=false
+ARG FEATURE_WORKFORCE=false
 RUN npm run build
 
 FROM caddy:2-alpine

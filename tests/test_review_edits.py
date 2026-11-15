@@ -10,11 +10,12 @@ from fastapi import HTTPException, Response
 from sqlalchemy import select, text
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
 
+from src.ai.source_prompt import SourceLinkedProfile, validate_conflicts
 from src.db import SessionLocal
 from src.models import AuditEvent, ClientProfile, ClientProfileVersion, ReviewStatus
 from src.review_edits import save_review_edits
 from src.routers import reviews
-from src.schemas import ReviewEditsIn
+from src.schemas import ClientProfileVersionOut, ReviewEditsIn
 
 DRAFT = {
     "name": "Maya Chen",
@@ -90,7 +91,7 @@ def test_save_appends_draft_and_reload_keeps_corrections_and_original_history(
         "website": None,
         "needs": ["More bookings", "Less paperwork"],
         "goals": ["Fill spring"],
-        "assessment": None,
+        "assessment": original["assessment"],
     }
     detail = client.get(
         f"/api/v1/reviews/profiles/{base.client_profile_id}/versions/{saved['id']}"
@@ -101,6 +102,155 @@ def test_save_appends_draft_and_reload_keeps_corrections_and_original_history(
     assert base.data == original
     assert base.status == status
     assert len(versions(db_session, base.client_profile_id)) == 2
+
+
+def test_save_preserves_untouched_missing_fields_and_conflicts(
+    client, db_session, profile_factory
+):
+    data = {
+        **deepcopy(DRAFT),
+        "assessment": {
+            "rules_version": 1,
+            "missing_fields": ["website", "phone_number"],
+        },
+    }
+    base = profile_factory(data=data)
+    response = client.post(
+        edits_url(base),
+        json={
+            "changes": {"email": "corrected@example.test", "website": "example.test"}
+        },
+    )
+    assert response.status_code == 201
+    assert response.json()["data"]["assessment"] == {
+        "rules_version": 1,
+        "missing_fields": ["phone_number"],
+    }
+    assert response.json()["data"]["conflicts"] == data["conflicts"]
+    db_session.refresh(base)
+    assert base.data == data
+
+
+@pytest.mark.parametrize("changes", [{"name": "Corrected"}, {"website": None}])
+def test_save_does_not_remove_missing_claim_for_an_unchanged_path(
+    client, profile_factory, changes
+):
+    base = profile_factory(data=deepcopy(DRAFT))
+    response = client.post(edits_url(base), json={"changes": changes})
+    assert response.status_code in (200, 201)
+    assert response.json()["data"]["assessment"] == DRAFT["assessment"]
+
+
+@pytest.mark.parametrize("value", [None, "", "   "])
+def test_clearing_a_field_keeps_existing_missing_markers_without_adding_entries(
+    client, profile_factory, value
+):
+    data = {
+        **deepcopy(DRAFT),
+        "website": "old.example.test",
+        "phone_number": "514-555-0100",
+    }
+    base = profile_factory(data=data)
+    response = client.post(
+        edits_url(base), json={"changes": {"website": value, "phone_number": value}}
+    )
+    assert response.status_code == 201
+    saved = response.json()["data"]
+    assert saved["website"] is None
+    assert saved["phone_number"] is None
+    assert (
+        saved["assessment"] == data["assessment"]
+    )  # Website stays; no phone entry added.
+
+
+def test_saved_conflict_correction_passes_read_models_inbox_and_existing_approval(
+    client, db_session, profile_factory, api
+):
+    # Existing source-linked shape; evidence is history after reviewer correction.
+    data = {key: deepcopy(value) for key, value in DRAFT.items() if key != "legacy"}
+    base = profile_factory(data=data)
+    response = client.post(
+        edits_url(base), json={"changes": {"email": "corrected@example.test"}}
+    )
+    assert response.status_code == 201
+    saved = response.json()
+    assert saved["data"]["assessment"] == data["assessment"]
+    assert saved["data"]["conflicts"] == data["conflicts"]
+    assert (
+        SourceLinkedProfile.model_validate(saved["data"]).email
+        == "corrected@example.test"
+    )
+    stored = db_session.get(ClientProfileVersion, uuid.UUID(saved["id"]))
+    assert ClientProfileVersionOut.model_validate(stored).data == saved["data"]
+
+    profile_url = f"/api/v1/client-profiles/{base.client_profile_id}"
+    detail_url = (
+        f"/api/v1/reviews/profiles/{base.client_profile_id}/versions/{saved['id']}"
+    )
+    assert client.get(detail_url).json()["version"] == saved
+    assert client.get(f"{profile_url}/versions").json()[-1] == saved
+    assert any(
+        item["version_id"] == saved["id"]
+        for item in client.get("/api/v1/reviews").json()
+    )
+    assert (
+        client.post(
+            edits_url(base, version_id=saved["id"]), json={"changes": {}}
+        ).json()
+        == saved
+    )
+
+    # The corrected snapshot also remains editable without invoking generation validation.
+    repeated = client.post(
+        edits_url(base, version_id=saved["id"]),
+        json={"changes": {"name": "Corrected name"}},
+    )
+    assert repeated.status_code == 201
+    current = repeated.json()
+    approval = api.approve_profile(base.client_profile_id, current["id"])
+    assert approval.status_code == 200
+    approved = approval.json()["version"]
+    assert approved["data"] == current["data"]
+    assert approved["data"]["email"] == "corrected@example.test"
+    assert approved["data"]["assessment"] == data["assessment"]
+    assert approved["data"]["conflicts"] == data["conflicts"]
+    assert client.get(f"{profile_url}/latest-approved").json() == approved
+    assert (
+        client.get(
+            f"/api/v1/reviews/profiles/{base.client_profile_id}/versions/{approved['id']}"
+        ).json()["version"]
+        == approved
+    )
+    assert api.artifact(base.profile.client_id, approved["id"]).status_code == 201
+
+
+def test_generation_conflict_validator_stays_strict_for_reviewer_corrected_values():
+    data = {key: deepcopy(value) for key, value in DRAFT.items() if key != "legacy"}
+    data["email"] = "corrected@example.test"
+    profile = SourceLinkedProfile.model_validate(data)
+    # This is an ingestion/generation validator, never used by saved-version reads.
+    with pytest.raises(ValueError, match="Conflicted scalar fields must stay null"):
+        validate_conflicts(profile, [], {"email"})
+
+
+@pytest.mark.parametrize(
+    "assessment",
+    [
+        None,
+        {"rules_version": 2, "missing_fields": ["website"]},
+        {
+            "rules_version": 1,
+            "missing_fields": [None, {"unknown": "warning"}, "website"],
+        },
+    ],
+)
+def test_save_preserves_legacy_unknown_and_malformed_assessment_content(
+    client, profile_factory, assessment
+):
+    base = profile_factory(data={**deepcopy(DRAFT), "assessment": assessment})
+    response = client.post(edits_url(base), json={"changes": {"name": "Corrected"}})
+    assert response.status_code == 201
+    assert response.json()["data"]["assessment"] == assessment
 
 
 @pytest.mark.parametrize("value", [None, "", "   "])

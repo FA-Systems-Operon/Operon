@@ -4,6 +4,8 @@ import { defineConfig } from 'vite'
 
 export default defineConfig({
   plugins: [react()],
+  // FEATURE_* are the page flags in src/features.ts; Vite only passes listed prefixes to the app.
+  envPrefix: ['VITE_', 'FEATURE_'],
   server: {
     host: true,
     port: 5173,
@@ -16,6 +18,7 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: './src/setupTests.ts',
     globals: true,
+    unstubEnvs: true,
     coverage: {
       provider: 'v8',
       // lcov paths are relative to the repo root (frontend/src/...) so SonarQube,

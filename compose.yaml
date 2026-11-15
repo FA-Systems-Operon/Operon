@@ -23,8 +23,12 @@ services:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-operon}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-operon}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL}
+      # Raise both on a CPU-only machine (see "Model choice" in backend/README.md).
+      OLLAMA_TIMEOUT_SECONDS: ${OLLAMA_TIMEOUT_SECONDS:-120}
+      JOB_TIMEOUT_SECONDS: ${JOB_TIMEOUT_SECONDS:-600}
       STORAGE_DIR: /code/storage
       MAX_UPLOAD_BYTES: "20971520"
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -41,6 +45,9 @@ services:
     build: ./frontend
     environment:
       API_URL: http://api:8000
+      # Unfinished pages stay hidden unless set to true (see frontend/README.md).
+      FEATURE_BRAIN: ${FEATURE_BRAIN:-false}
+      FEATURE_WORKFORCE: ${FEATURE_WORKFORCE:-false}
     volumes:
       - ./frontend:/app
       - /app/node_modules

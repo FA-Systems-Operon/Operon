@@ -12,6 +12,62 @@ docker compose up --build api db
 The API is served on port 8000 (docs at `/api/v1/docs`). Postgres runs in the
 `db` service (database `operon`, user `operon`, password from `POSTGRES_PASSWORD`).
 
+## Model choice (#155)
+
+The team model is **`qwen2.5:14b`** (Ollama, Q4_K_M, about 9 GB). Pull it with
+`ollama pull qwen2.5:14b`; `.env.example` already sets `OLLAMA_MODEL` to it.
+
+**Why:** it is the most accurate model we tried. The smaller ones miss real
+conflicts or fail most drafts. It isn't perfect: 7 of the 9 regression cases
+pass on a CPU-only laptop (8 of 9 in the Nov 2 run). Bigger models (e.g. 32B,
+about 20 GB) don't fit the team's laptops. We tried the candidates smallest
+first, on the current generation path
+(source-linked prompt, schema-constrained output, one repair attempt, quote
+matching from #156), at temperature 0 and seed 42:
+
+| Model | 9 regression cases | Both pairs ×3 through the app |
+| --- | --- | --- |
+| `llama3.2:3b` (2 GB) | 0/9 drafts passed (#155 comment) | not run |
+| `qwen2.5:7b` (4.7 GB) | 5/9: missed the email conflict twice; 2 timed out at 120 s | not run |
+| `qwen2.5:14b` (9 GB) | 7/9: `phone_conflict_prose` failed validation after the repair attempt, plus the known 9th case | 6/6: both pairs 3/3, each on the first attempt (3 to 9.5 min per job, CPU only) |
+
+- The regression cases are `tests/fixtures/onboarding_flags/` (5 + 4), run with
+  `scripts/evaluate_profile_flags.py`. The pairs are `tests/fixtures/baseline/`
+  `transcript_N` + `intake_N`, each uploaded 3 times through the app.
+- `qwen2.5:7b` failed on accuracy, not just speed: it didn't notice that the
+  transcript and intake give different emails.
+- `qwen2.5:14b` passed `phone_conflict_prose` on Nov 2 (8/9) but failed it on
+  Nov 11, with the same model build (`7cdf5a0187d5`), prompt and schema. Only
+  the machine (CPU only) and the Ollama version (0.40.13 → 0.40.16) differed,
+  so temperature 0 and a fixed seed don't guarantee the same answer on
+  different hardware. A reply that fails validation is never saved as a
+  draft; the job fails with a reason instead.
+- The 9th case (`phone_conflict_without_business_number`) is a **known failure**
+  for every model (see `docs/evaluation/us-3.3-status.md`): the model reports
+  `email` and `business_address` missing although the intake states both. It
+  stays in the set so the gap stays visible.
+- Raw results: `docs/evaluation/m2-qwen2.5-7b.json`, `m2-qwen2.5-14b.json`,
+  `m2-qwen2.5-14b-rerun.json` (the two cases that first timed out, rerun with a
+  30-minute timeout) and `m2-qwen2.5-14b-pairs.tsv` (the app runs).
+
+**Hardware needed:**
+
+| Setup | Time per draft | What to set |
+| --- | --- | --- |
+| The machine used for the US 3.3 evaluation (Nov 2) | 17 to 63 s | defaults (`OLLAMA_TIMEOUT_SECONDS=120`, `JOB_TIMEOUT_SECONDS=600`) |
+| CPU only, 16 GB RAM (Ryzen AI 5 340, integrated GPU; tested Nov 11) | 3.5 to 15 min per model call | `OLLAMA_TIMEOUT_SECONDS=1800`, `JOB_TIMEOUT_SECONDS=3600` |
+
+- The model needs about 9 GB of free memory on top of Docker; close other apps
+  on a 16 GB machine.
+- On CPU only, every model call takes longer than the default 120 s, and a job
+  (up to 2 calls) can take longer than the default 10-minute job limit, so
+  raise both. Compose now passes `OLLAMA_TIMEOUT_SECONDS` and
+  `JOB_TIMEOUT_SECONDS` from `.env` to the API.
+- For the demo, run Ollama on a machine with a dedicated GPU (or Apple
+  Silicon), so a draft finishes in about a minute.
+- Ollama's default context (4096 tokens) is enough: a prompt is about 1,000
+  tokens, about 2,000 with the repair attempt.
+
 ## Dependencies (hashed lock files)
 
 `requirements.txt` (app) and `requirements-dev.txt` (tests) list the direct
@@ -49,6 +105,34 @@ To run the tests locally, install the dev lock into a virtualenv:
 ```bash
 pip install --require-hashes --only-binary=:all: -r backend/requirements-dev.lock
 ```
+
+## Logging
+
+Set `LOG_LEVEL` to `DEBUG`, `INFO` (default), `WARNING`, `ERROR` or `CRITICAL`
+(in `.env` for compose; `compose.prod.yaml` uses `WARNING`). An unknown value
+stops the app at startup. It sets the level for the app's own loggers; uvicorn's
+request and startup lines follow its own `--log-level`.
+
+| Level | What you see |
+|---|---|
+| `DEBUG` | Everything below, plus each model call's duration and prompt/reply sizes, and skipped job claims. |
+| `INFO` | Uploads, extractions and job attempts starting and succeeding (IDs, sizes, durations). |
+| `WARNING` | Retries scheduled, jobs recovered after a crash, lost claims. |
+| `ERROR` | Jobs that failed for good, and failures with their tracebacks. |
+
+**Logs never contain document text.** Log IDs, kinds, counts, sizes, durations
+and error types; never uploaded or extracted text, filenames, prompts, model
+replies or profile values. Use `logging.getLogger(__name__)` and pass values as
+`%s` arguments.
+
+Exception messages are the risk you can't see at the call site (a pydantic
+`ValidationError` quotes the model reply; SQLAlchemy errors quote SQL values),
+so `src/logging_config.py` prints tracebacks with every frame and exception
+type, but withholds the message unless the type is listed in
+`SAFE_MESSAGE_TYPES` (our provider and document errors, whose messages we write).
+Add a type there only if its message can never contain document data.
+`tests/test_logging.py` runs failing jobs with marker text and checks it never
+reaches the logs.
 
 ## Database schema (no migrations yet)
 
@@ -417,7 +501,7 @@ Everything is saved in the existing immutable version JSON; no migration is
 needed. Historical versions without assessment stay unassessed. The generic
 profile update endpoint remains an unvalidated JSON editing endpoint and does not
 recompute completeness or establish conflict-resolution/approval guarantees.
-The review edit endpoint (#60) invalidates assessment after edits (see below).
+The review edit endpoint (#60) preserves untouched assessment entries (see below).
 The source-draft endpoint validates the supplied evidence; it does not scan
 all documents a client owns. The onboarding job compares its exact pinned pair.
 
@@ -517,12 +601,25 @@ this supports retry after reverting local changes. Failure rolls back the save.
 The generic profile PUT now takes the same parent lock (its JSON contract is unchanged).
 Source-draft generation and profile approval already take that lock.
 
-Changed snapshots use the existing nullable `assessment` format: `null` means
-unassessed. Original references and conflict alternatives remain unchanged as
-historical evidence. They do not verify reviewer corrections, and editing a
-conflicted scalar does not resolve the conflict. The source-generation validator
-is unchanged. Prior versions remain intact; no migration is needed. Saving does
-not approve anything, change the latest-approved profile, or mark artifacts stale.
+Changed snapshots keep the original `assessment`. For supported rule version 1,
+only existing `missing_fields` entries for fields actually changed to a non-null
+saved value are removed. Clearing a value retains its existing entry; no new
+missing entries are added. This preserves recorded checks, not a recomputation of
+current completeness. Legacy null/absent or unknown assessments stay as-is.
+
+Original references and conflict alternatives remain unchanged as historical
+evidence. Editing a conflicted scalar does not resolve its conflict. Missing
+markers are computed per row during local editing, with conflict markers always
+retained, including after save/reload. There is no stored edited-path list or
+persistent Reviewer-edited marker. Prior versions remain intact; no migration is
+needed. Saving does not approve anything, change the latest-approved profile, or
+mark artifacts stale.
+
+Saved-version response models accept retained assessment and populated conflicted
+fields; review detail, version history, the inbox and existing approval read those
+snapshots without applying generation validation. The source-generation/evidence
+validator is unchanged and still requires generated conflicted scalars to be null.
+It must not be used to revalidate reviewer-corrected snapshots as generated output.
 
 The review page offers explicit Save, retains local edits on errors, and adopts
 the response's version and URL on success, notifying the hash router immediately.

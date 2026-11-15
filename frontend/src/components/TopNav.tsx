@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 import { listReviews } from '../api'
+import { isEnabled, type Feature } from '../features'
 
 export type Tab = 'command' | 'brain' | 'workforce' | 'reviews'
 
-const TABS: { id: Tab; label: string; href: string }[] = [
+// A tab with a feature only shows when that flag is on (#160).
+const TABS: { id: Tab; label: string; href: string; feature?: Feature }[] = [
   { id: 'command', label: 'Command', href: '#/' },
-  { id: 'brain', label: 'Brain', href: '#/brain' },
-  { id: 'workforce', label: 'Workforce', href: '#/workforce' },
+  { id: 'brain', label: 'Brain', href: '#/brain', feature: 'brain' },
+  { id: 'workforce', label: 'Workforce', href: '#/workforce', feature: 'workforce' },
 ]
 
 
@@ -78,7 +80,7 @@ export default function TopNav({
 
       <nav aria-label="Main">
         <ul className="tabs">
-          {TABS.map((tab) => (
+          {TABS.filter((tab) => !tab.feature || isEnabled(tab.feature)).map((tab) => (
             <li key={tab.id}>
               <a className="tab" href={tab.href} aria-current={current(tab.id)}>
                 {tab.label}
