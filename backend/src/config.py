@@ -8,6 +8,8 @@ class Settings:
 
     def __init__(self):
         self.DEBUG = os.getenv("DEBUG", "true").lower() == "true"
+        # DEBUG, INFO, WARNING, ERROR or CRITICAL. Checked at startup.
+        self.LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").strip().upper()
         self.DATABASE_URL = os.getenv("DATABASE_URL")
         self.AI_PROVIDER = os.getenv("AI_PROVIDER", "ollama")
         self.OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")

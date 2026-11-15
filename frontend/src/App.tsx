@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import './App.css'
 import type { OnboardingJob } from './api'
 import TopNav, { type Tab } from './components/TopNav'
+import { isEnabled, isHiddenPage } from './features'
 import AddSourcesPage from './pages/AddSourcesPage'
 import CommandPage from './pages/CommandPage'
 import DraftProgressPage from './pages/DraftProgressPage'
@@ -33,7 +34,14 @@ function showProgress(job: OnboardingJob) {
   window.location.hash = draftProgressHref(job.client_id, job.id)
 }
 
+// Add sources and draft progress belong to a client's Brain page. While Brain is
+// hidden (#160) they're reached from Command's New intake, so Command is marked.
+function sourcesTab(): Tab {
+  return isEnabled('brain') ? 'brain' : 'command'
+}
+
 // To add a page: add a case here, and a tab in TopNav if it belongs in the menu.
+// An unfinished page also gets a flag in features.ts.
 function pageFor(
   path: string,
   query: URLSearchParams,
@@ -92,7 +100,7 @@ function pageFor(
       const clientId = query.get('client')
 
       return {
-        tab: 'brain',
+        tab: sourcesTab(),
         content: (
           <AddSourcesPage
             key={clientId ?? ''}
@@ -106,7 +114,7 @@ function pageFor(
       const clientId = query.get('client')
       const jobId = query.get('job')
       return {
-        tab: 'brain',
+        tab: sourcesTab(),
         content: <DraftProgressPage key={`${clientId}/${jobId}`} clientId={clientId} jobId={jobId} />,
       }
     }
@@ -216,6 +224,13 @@ export default function App() {
     }
   }, [authStatus, path, query])
 
+  // A page whose feature flag is off goes to Command. replace() keeps the hidden
+  // address out of the history, so Back doesn't land on it again.
+  const hidden = isHiddenPage(path)
+  useEffect(() => {
+    if (hidden) window.location.replace('#/')
+  }, [hidden])
+
   if (isPublicRoute(path)) {
   return pageFor(path, query, handleSignedIn, currentUser).content
 }
@@ -253,6 +268,9 @@ export default function App() {
   ) {
     return null
   }
+
+  // Nothing to show while moving off a hidden page.
+  if (hidden) return null
 
 const page = pageFor(path, query, handleSignedIn, currentUser)
 

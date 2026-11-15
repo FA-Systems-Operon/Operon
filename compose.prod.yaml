@@ -29,6 +29,9 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile.prod
+      args:
+        FEATURE_BRAIN: ${FEATURE_BRAIN:-false}
+        FEATURE_WORKFORCE: ${FEATURE_WORKFORCE:-false}
     container_name: operon_frontend
     depends_on:
       - backend
