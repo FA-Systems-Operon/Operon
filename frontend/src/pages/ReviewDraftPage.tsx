@@ -139,6 +139,7 @@ function LoadedDraft({ draft, back, saved, onSaved }: {
     (path) => path === row.key || path.startsWith(`${row.key}/`),
   )
   const historicalEvidence = (row: ReviewRow) => rowEdited(row) || version.data.assessment === null
+    || (row.flag === 'conflict' && fieldValue(session.currentData, row.key as EditablePath) != null)
   const rowFlag = (row: ReviewRow) => row.flag === 'missing' && rowEdited(row)
     && fieldValue(session.currentData, row.key as EditablePath) != null ? null : row.flag
   // Evidence always comes from the original version, even after a correction.

@@ -164,7 +164,7 @@ test('a quote that is both a source and a conflict side shows once, with its val
   render(<ReviewDraftPage profileId="p1" versionId="v2" />)
 
   expect((await screen.findByRole('button', { name: 'Phone number' })).closest('.review-field')).toHaveTextContent(
-    /2 sources$/,
+    /2 original sources$/,
   )
   await userEvent.click(row('Phone number'))
   expect(evidence().getAllByRole('listitem').map((item) => item.textContent)).toEqual([
@@ -489,6 +489,40 @@ test('a missing marker clears only for its own non-null edit and returns when cl
   expect(evidence().getByText('○ Missing information')).toBeInTheDocument()
 })
 
+test('clearing a missing field to null keeps its marker while another field is edited and after save/reload', async () => {
+  const data = { ...DRAFT.version.data, website: null }
+  const base = { ...DRAFT, version: { ...DRAFT.version, data } }
+  const saved = {
+    ...base.version, id: 'v3', version_number: 3,
+    data: { ...data, name: 'Corrected' },
+  }
+  const fetchMock = mockDraft(
+    reply(200, base), reply(201, saved), reply(200, { ...base, version: saved }),
+  )
+  const view = render(<ReviewDraftPage profileId="p1" versionId="v2" />)
+  await screen.findByRole('heading', { name: 'Plateau Basements' })
+  await edit('Name', 'Corrected')
+  await edit('Website', 'example.test')
+  expect(row('Website').closest('.review-field')).not.toHaveAttribute('data-flag')
+  await edit('Website', '')
+  expect(screen.getByRole('status')).toHaveTextContent('Unsaved local changes')
+  expect(screen.getByRole('button', { name: 'Edit Website' })).toHaveTextContent('Not mentioned')
+  expect(row('Website').closest('.review-field')).toHaveAttribute('data-flag', 'missing')
+  expect(row('Email').closest('.review-field')).toHaveAttribute('data-flag', 'conflict')
+  await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+  await screen.findByText('Version 3')
+  expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ changes: { name: 'Corrected' } })
+  expect(row('Website').closest('.review-field')).toHaveAttribute('data-flag', 'missing')
+  view.unmount()
+  render(<ReviewDraftPage profileId="p1" versionId="v3" />)
+  expect(await screen.findByRole('button', { name: 'Edit Name' })).toHaveTextContent('Corrected')
+  expect(screen.getByRole('button', { name: 'Edit Website' })).toHaveTextContent('Not mentioned')
+  expect(row('Website').closest('.review-field')).toHaveAttribute('data-flag', 'missing')
+  expect(row('Email').closest('.review-field')).toHaveAttribute('data-flag', 'conflict')
+  expect(saved.data.website).toBeNull()
+  expect(saved.data.assessment).toEqual(data.assessment)
+})
+
 test('clearing a field does not invent a missing marker absent from the recorded assessment', async () => {
   const data = { ...DRAFT.version.data, website: 'old.example.test', assessment: { rules_version: 1, missing_fields: [] } }
   mockDraft(reply(200, { ...DRAFT, version: { ...DRAFT.version, data } }))
@@ -497,6 +531,38 @@ test('clearing a field does not invent a missing marker absent from the recorded
   await edit('Website', '')
   expect(row('Website').closest('.review-field')).not.toHaveAttribute('data-flag')
   expect(screen.getByRole('button', { name: 'Edit Website' })).toHaveTextContent('Not mentioned')
+})
+
+test('saved non-null conflict corrections retain historical evidence wording after save and reload', async () => {
+  const saved = {
+    ...DRAFT.version, id: 'v3', version_number: 3,
+    data: { ...DRAFT.version.data, email: 'corrected@example.test' },
+  }
+  mockDraft(reply(200, DRAFT), reply(201, saved), reply(200, { ...DRAFT, version: saved }))
+  const view = render(<ReviewDraftPage profileId="p1" versionId="v2" />)
+  await screen.findByRole('heading', { name: 'Plateau Basements' })
+  await edit('Email', 'corrected@example.test')
+  await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+  await screen.findByText('Version 3')
+  async function expectHistoricalConflict() {
+    await userEvent.click(row('Email'))
+    expect(screen.getByRole('button', { name: 'Edit Email' })).toHaveTextContent('corrected@example.test')
+    expect(row('Email').closest('.review-field')).toHaveAttribute('data-flag', 'conflict')
+    expect(row('Email').closest('.review-field')).toHaveTextContent('2 original sources')
+    expect(evidence().getByText(/Original source evidence is retained as history and does not verify reviewer corrections/)).toHaveTextContent('Conflicts remain unresolved.')
+    expect(evidence().getByText('▲ Sources disagree')).toBeInTheDocument()
+    expect(evidence().getAllByRole('listitem')).toHaveLength(2)
+    expect(evidence().getByText('email me at maya@call.test', { selector: 'q' })).toBeInTheDocument()
+    expect(evidence().getByText('Email: maya@form.test', { selector: 'q' })).toBeInTheDocument()
+    expect(row('Website').closest('.review-field')).toHaveAttribute('data-flag', 'missing')
+  }
+  await expectHistoricalConflict()
+  view.unmount()
+  render(<ReviewDraftPage profileId="p1" versionId="v3" />)
+  await screen.findByRole('heading', { name: 'Plateau Basements' })
+  await expectHistoricalConflict()
+  await userEvent.click(row('Name'))
+  expect(evidence().queryByText(/does not verify reviewer corrections/)).not.toBeInTheDocument()
 })
 
 test('legacy null assessments stay unassessed without hiding unresolved conflict markers', async () => {
