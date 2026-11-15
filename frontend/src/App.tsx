@@ -83,14 +83,15 @@ function pageFor(
     case '/reviews/draft': {
       const profileId = query.get('profile')
       const versionId = query.get('version')
-      // The key starts fresh (no selected field) when the link opens another draft.
+      // Keep this profile's page mounted when a save advances its version.
       return {
         tab: 'reviews',
         content: (
           <ReviewDraftPage
-            key={`${profileId}/${versionId}`}
+            key={profileId ?? ''}
             profileId={profileId}
             versionId={versionId}
+            canReview={currentUser?.role !== 'viewer'}
           />
         ),
       }

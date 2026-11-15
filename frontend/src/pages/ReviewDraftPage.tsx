@@ -1,9 +1,12 @@
-import { useEffect, useState } from 'react'
-import { ApiError, getReviewDraft, type ReviewDraft, type ReviewStatus } from '../api'
+import { useEffect, useRef, useState } from 'react'
+import { ApiError, approveReviewDraft, getReviewDraft, saveReviewEdits, type ProfileVersion, type ReviewDraft, type ReviewStatus } from '../api'
 import { editableReviewRows, reviewRows, type ReviewRow } from '../components/draftSources'
 import InlineDraftField, { type PendingFieldEdit } from '../components/InlineDraftField'
+import RejectDraft from '../components/RejectDraft'
 import { applyEdit, createEditSession, fieldValue, isEditablePath, type EditablePath } from '../draftEdits'
 import { formatGenerated } from './ReviewInboxPage'
+import { draftSaveGate, type SaveStatus } from '../draftSave'
+import { reviewDraftHref } from '../router'
 
 const STATUS_LABELS: Record<ReviewStatus, string> = {
   draft: 'Draft',
@@ -19,6 +22,9 @@ type ReviewDraftPageProps = {
   // From the inbox link; null when the link is missing one.
   profileId: string | null
   versionId: string | null
+  // Viewers can read drafts but not edit, reject or approve them. The API enforces
+  // this too; hiding the controls just avoids offering what would be refused.
+  canReview?: boolean
 }
 
 const quoteKey = ({ document_id, quote }: { document_id: string; quote: string }) =>
@@ -40,20 +46,33 @@ function evidenceFor(row: ReviewRow) {
   )
 }
 
-export default function ReviewDraftPage({ profileId, versionId }: ReviewDraftPageProps) {
+export default function ReviewDraftPage({ profileId, versionId, canReview = true }: ReviewDraftPageProps) {
   const [draft, setDraft] = useState<ReviewDraft | null>(null)
   const [notFound, setNotFound] = useState(!profileId || !versionId)
   const [loadFailed, setLoadFailed] = useState(false)
   // Bumped by Try again to fetch the draft once more.
   const [attempt, setAttempt] = useState(0)
+  const [saved, setSaved] = useState(false)
+  // The loader also accepts the version returned by a successful save.
+  const loadedVersion = useRef<ProfileVersion | null>(null)
 
   useEffect(() => {
+    if (loadedVersion.current?.client_profile_id === profileId
+      && loadedVersion.current.id === versionId) return
+    loadedVersion.current = null
+    setDraft(null)
+    setSaved(false)
+    setNotFound(!profileId || !versionId)
+    setLoadFailed(false)
     if (!profileId || !versionId) return
     // Ignore a reply that arrives after the page has closed.
     let active = true
     getReviewDraft(profileId, versionId)
       .then((loaded) => {
-        if (active) setDraft(loaded)
+        if (active) {
+          loadedVersion.current = loaded.version
+          setDraft(loaded)
+        }
       })
       .catch((error) => {
         if (!active) return
@@ -101,24 +120,120 @@ export default function ReviewDraftPage({ profileId, versionId }: ReviewDraftPag
     )
   }
 
-  return <LoadedDraft key={`${draft.version.client_profile_id}/${draft.version.id}`} draft={draft} back={back} />
+  // Saving and approving both make a new version; the page moves to it.
+  function onSaved(version: ProfileVersion, { approved = false } = {}) {
+    loadedVersion.current = version
+    setSaved(!approved)
+    setDraft((previous) => previous && { ...previous, version })
+    // Replacing avoids leaving a superseded draft as the reload destination.
+    window.history.replaceState(null, '', reviewDraftHref(version.client_profile_id, version.id))
+    // replaceState does not emit hashchange; update the router's snapshot too.
+    window.dispatchEvent(new HashChangeEvent('hashchange'))
+  }
+
+  // Same version, new status: the page stays put and shows it as rejected.
+  function onRejected(version: ProfileVersion) {
+    setSaved(false)
+    setDraft((previous) => previous && { ...previous, version })
+  }
+
+  return <LoadedDraft key={`${draft.version.client_profile_id}/${draft.version.id}`} draft={draft} back={back} saved={saved} onSaved={onSaved} onRejected={onRejected} canReview={canReview} />
 }
 
-function LoadedDraft({ draft, back }: { draft: ReviewDraft; back: React.ReactNode }) {
+function LoadedDraft({ draft, back, saved, onSaved, onRejected, canReview }: {
+  draft: ReviewDraft; back: React.ReactNode; saved: boolean
+  onSaved: (version: ProfileVersion, options?: { approved?: boolean }) => void
+  onRejected: (version: ProfileVersion) => void
+  canReview: boolean
+}) {
   const [session, setSession] = useState(() => createEditSession(draft))
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
   const [pendingFields, setPendingFields] = useState<Partial<Record<EditablePath, PendingFieldEdit>>>({})
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
+  const [saveError, setSaveError] = useState('')
+  const [approveStatus, setApproveStatus] = useState<'idle' | 'approving' | 'error' | 'stale'>('idle')
+  const [approveError, setApproveError] = useState('')
+  // A reject request in flight: Save and Approve wait so its result can't be hidden.
+  const [rejecting, setRejecting] = useState(false)
+  const saving = useRef(false)
+  const approving = useRef(false)
+  const mounted = useRef(true)
+  useEffect(() => {
+    mounted.current = true
+    return () => { mounted.current = false }
+  }, [])
   const dirty = Object.keys(session.changes).length > 0
   const { version, client, documents } = draft
   const editable = version.status === 'draft' || version.status === 'in_review'
+  const pending = Object.keys(pendingFields).length > 0
+  const gate = draftSaveGate(version.status, dirty, pending, saveStatus)
   const rowEdited = (row: ReviewRow) => Object.keys(session.changes).some(
     (path) => path === row.key || path.startsWith(`${row.key}/`),
   )
+  const historicalEvidence = (row: ReviewRow) => rowEdited(row) || version.data.assessment === null
+    || (row.flag === 'conflict' && fieldValue(session.currentData, row.key as EditablePath) != null)
   const rowFlag = (row: ReviewRow) => row.flag === 'missing' && rowEdited(row)
     && fieldValue(session.currentData, row.key as EditablePath) != null ? null : row.flag
   // Evidence always comes from the original version, even after a correction.
   const { rows, unsupported } = (editable ? editableReviewRows : reviewRows)(version.data)
   const selected = rows.find((row) => row.key === selectedKey) ?? rows[0]
+  async function save() {
+    if (!gate.canSave || rejecting || saving.current) return
+    saving.current = true
+    setSaveStatus('saving')
+    setSaveError('')
+    const changes = Object.fromEntries(Object.entries(session.changes).map(([path, change]) => [path, change!.currentValue]))
+    try {
+      const version = await saveReviewEdits(session.base.profileId, session.base.versionId, changes)
+      if (!mounted.current) return
+      setSession(createEditSession({ ...draft, version }))
+      setSaveStatus('saved')
+      onSaved(version)
+    } catch (error) {
+      if (!mounted.current) return
+      const stale = error instanceof ApiError && error.status === 409
+      setSaveStatus(stale ? 'stale' : 'error')
+      setSaveError(stale
+        ? 'This draft changed or is no longer editable. Your edits are still here. Open the latest draft from the review inbox before continuing.'
+        : error instanceof ApiError && error.status === 422
+          ? "Couldn't save these edits. Check the field values and try saving again."
+          : "Couldn't confirm that your edits were saved. Your edits are still here. Try saving again.")
+    } finally {
+      saving.current = false
+    }
+  }
+  async function approve() {
+    if (gate.blocksApproval || rejecting || approving.current || approveStatus === 'stale') return
+    approving.current = true
+    setApproveStatus('approving')
+    setApproveError('')
+    try {
+      const { version: approved } = await approveReviewDraft(version.client_profile_id, version.id)
+      if (!mounted.current) return
+      setApproveStatus('idle')
+      // Open the new approved version, as saving opens the new draft.
+      onSaved(approved, { approved: true })
+    } catch (error) {
+      if (!mounted.current) return
+      const code = error instanceof ApiError ? error.status : 0
+      setApproveStatus(code === 409 ? 'stale' : 'error')
+      setApproveError(code === 409
+        ? 'This draft changed or was already reviewed, so it was not approved. Open the latest draft from the review inbox.'
+        : code === 401 ? 'Your session has ended. Sign in again to approve.'
+          : code === 403 ? 'Your role cannot approve drafts.'
+            : "Couldn't confirm the draft was approved. Try again.")
+    } finally {
+      approving.current = false
+    }
+  }
+  function rejected(version: ProfileVersion) {
+    // Rejecting drops unsaved edits; the rejected version is read-only.
+    setSession(createEditSession({ ...draft, version }))
+    setPendingFields({})
+    setSaveStatus('idle')
+    setSaveError('')
+    onRejected(version)
+  }
   function pendingChange(path: EditablePath, pending: PendingFieldEdit | null) {
     setPendingFields((previous) => {
       const next = { ...previous }
@@ -137,13 +252,13 @@ function LoadedDraft({ draft, back }: { draft: ReviewDraft; back: React.ReactNod
 
   function sourceTag(row: ReviewRow) {
     const evidence = evidenceFor(row)
-    if (evidence.length > 1) return `${evidence.length} ${rowEdited(row) ? 'original sources' : 'sources'}`
+    if (evidence.length > 1) return `${evidence.length} ${historicalEvidence(row) ? 'original sources' : 'sources'}`
     if (evidence.length === 0) return ''
     return documents.find(({ id }) => id === evidence[0].document_id)?.kind ?? 'source'
   }
 
   const originalDisplayValue = (row: ReviewRow) =>
-    rowEdited(row) && row.flag === 'conflict' && fieldValue(session.currentData, row.key as EditablePath) == null
+    historicalEvidence(row) && row.flag === 'conflict' && fieldValue(session.currentData, row.key as EditablePath) == null
       ? `Original proposal: ${row.value}` : row.value
 
   function renderEvidence(row: ReviewRow) {
@@ -154,6 +269,7 @@ function LoadedDraft({ draft, back }: { draft: ReviewDraft; back: React.ReactNod
         {rowFlag(row) === 'missing' && <p className="review-flag">○ Missing information</p>}
         <h2 id="evidence-title">{row.label}</h2>
         {rowEdited(row) && <p className="field-note">Original version evidence. These sources do not verify local corrections. {row.conflicts.length > 0 && 'Conflicts remain unresolved.'}</p>}
+        {!rowEdited(row) && historicalEvidence(row) && <p className="field-note">Original source evidence is retained as history and does not verify reviewer corrections. {(version.data.conflicts?.length ?? 0) > 0 && 'Conflicts remain unresolved.'}</p>}
         {row.conflicts.map((conflict, index) => (
           <p key={index} className="field-note">
             {conflict.explanation}
@@ -188,7 +304,7 @@ function LoadedDraft({ draft, back }: { draft: ReviewDraft; back: React.ReactNod
   }
 
   return (
-    <section className="review-draft">
+    <section className="review-draft" data-approval-blocked={gate.blocksApproval}>
       {back}
       <header className="review-draft-head">
         <div>
@@ -203,6 +319,48 @@ function LoadedDraft({ draft, back }: { draft: ReviewDraft; back: React.ReactNod
       </header>
 
       {dirty && <p role="status" className="field-note">Unsaved local changes. Information checks apply to unchanged fields.</p>}
+      {!dirty && saved && saveStatus !== 'error' && saveStatus !== 'stale' && <p role="status" className="field-note">Draft edits saved.</p>}
+      {version.status === 'approved' && (
+        <div className="review-approved" role="status">
+          <p><strong>Approved</strong>{version.approved_at && <> · <time dateTime={version.approved_at}>{formatGenerated(version.approved_at)}</time></>}</p>
+        </div>
+      )}
+      {version.status === 'rejected' && (
+        <div className="review-rejected" role="status">
+          <p><strong>Rejected</strong>{version.rejected_at && <> · <time dateTime={version.rejected_at}>{formatGenerated(version.rejected_at)}</time></>}</p>
+          {version.rejection_reason && <p className="field-note">Reason: {version.rejection_reason}</p>}
+        </div>
+      )}
+      {version.data.assessment === null && <p className="field-note">Information checks have not been recomputed for this version.</p>}
+      {editable && canReview && (
+        <div className="review-save">
+          <div className="review-actions">
+            <button className="button" type="button" disabled={!gate.canSave || approveStatus === 'approving' || rejecting} onClick={save}>
+              {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'error' ? 'Try saving again' : 'Save changes'}
+            </button>
+            <button
+              className="button button-primary"
+              type="button"
+              disabled={gate.blocksApproval || rejecting || approveStatus === 'approving' || approveStatus === 'stale'}
+              onClick={approve}
+            >
+              {approveStatus === 'approving' ? 'Approving…' : approveStatus === 'error' ? 'Try approving again' : 'Approve'}
+            </button>
+          </div>
+          {pending && <p className="field-note">Finish or cancel the current edit before saving.</p>}
+          {gate.blocksApproval && <p className="field-note">Approval requires saved edits with no pending input or save errors.</p>}
+          {saveError && <p className="field-error" role="alert">{saveError}</p>}
+          {approveError && <p className="field-error" role="alert">{approveError}</p>}
+          <RejectDraft
+            profileId={version.client_profile_id}
+            versionId={version.id}
+            disabled={saveStatus === 'saving' || saveStatus === 'stale' || approveStatus === 'approving' || approveStatus === 'stale'}
+            hasUnsavedEdits={dirty || pending}
+            onRejected={rejected}
+            onRejectingChange={setRejecting}
+          />
+        </div>
+      )}
       {Object.values(pendingFields).some((pending) => pending?.error) && (
         <p className="field-error">Some edits have not been applied. Correct them or press Escape to cancel.</p>
       )}
@@ -232,8 +390,9 @@ function LoadedDraft({ draft, back }: { draft: ReviewDraft; back: React.ReactNod
                     {rowFlag(row) === 'missing' && <span aria-hidden="true">○ </span>}
                     {row.label}
                   </button>
-                  {editable && isEditablePath(session.originalData, row.key) ? (
+                  {editable && canReview && isEditablePath(session.originalData, row.key) ? (
                     <InlineDraftField
+                      disabled={saveStatus === 'saving' || saveStatus === 'stale'}
                       path={row.key}
                       label={row.label}
                       value={fieldValue(session.currentData, row.key)}

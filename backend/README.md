@@ -501,8 +501,8 @@ Everything is saved in the existing immutable version JSON; no migration is
 needed. Historical versions without assessment stay unassessed. The generic
 profile update endpoint remains an unvalidated JSON editing endpoint and does not
 recompute completeness or establish conflict-resolution/approval guarantees.
-The future review/edit integration must invalidate or recompute assessment after
-edits. The source-draft endpoint validates the supplied evidence; it does not scan
+The review edit endpoint (#60) preserves untouched assessment entries (see below).
+The source-draft endpoint validates the supplied evidence; it does not scan
 all documents a client owns. The onboarding job compares its exact pinned pair.
 
 Resolution and approval blocking are follow-up review-flow work, as described in
@@ -574,3 +574,127 @@ opened, not only drafts awaiting review. The version is looked up within the
 profile: a version of another profile, or an unknown profile or version,
 returns `404`. The route is under `/api/v1` already and does not depend on the
 profile routes moving there.
+
+## Save reviewer edits (#60)
+
+`POST /api/v1/reviews/profiles/{profile_id}/versions/{version_id}/edits`
+accepts only a `changes` map, for example:
+
+```json
+{"changes": {"name": "Corrected name", "email": null, "needs/0": "More bookings"}}
+```
+
+The version in the URL is the loaded base. A transaction locks the profile and
+checks that this is still its latest version, in `draft` or `in_review` with no
+approval timestamp. A superseded or decided base returns `409`; a missing or
+mismatched profile/version returns `404`. Unknown fields, non-text values,
+new/noncanonical list indexes, blank/null list items, and a non-object stored base
+return `422`. Scalars
+are trimmed and may be cleared to null; no extra email/URL/phone formats are imposed.
+
+The server copies the stored base, applies only permitted corrections, and inserts
+an immutable, unapproved version preserving the base's `draft` or `in_review`
+status, using the existing version numbering and unique constraint. Success returns
+the saved version (`201`). Empty or unchanged changes
+still check freshness and return the current base (`200`), without another version;
+this supports retry after reverting local changes. Failure rolls back the save.
+The generic profile PUT now takes the same parent lock (its JSON contract is unchanged).
+Source-draft generation and profile approval already take that lock.
+
+Changed snapshots keep the original `assessment`. For supported rule version 1,
+only existing `missing_fields` entries for fields actually changed to a non-null
+saved value are removed. Clearing a value retains its existing entry; no new
+missing entries are added. This preserves recorded checks, not a recomputation of
+current completeness. Legacy null/absent or unknown assessments stay as-is.
+
+Original references and conflict alternatives remain unchanged as historical
+evidence. Editing a conflicted scalar does not resolve its conflict. Missing
+markers are computed per row during local editing, with conflict markers always
+retained, including after save/reload. There is no stored edited-path list or
+persistent Reviewer-edited marker. Prior versions remain intact; no migration is
+needed. Saving does not approve anything, change the latest-approved profile, or
+mark artifacts stale.
+
+Saved-version response models accept retained assessment and populated conflicted
+fields; review detail, version history, the inbox and existing approval read those
+snapshots without applying generation validation. The source-generation/evidence
+validator is unchanged and still requires generated conflicted scalars to be null.
+It must not be used to revalidate reviewer-corrected snapshots as generated output.
+
+The review page offers explicit Save, retains local edits on errors, and adopts
+the response's version and URL on success, notifying the hash router immediately.
+Pending input and an in-flight request
+disable Save; a known stale response also disables it and directs the reviewer to
+the latest draft in the inbox. Failed requests require a successful retry before
+the local save gate clears, even if the edits are reverted.
+
+`draftSaveGate` supplies the save prerequisite for #62: block approval for unsaved
+edits, pending input, saving, save failure, known staleness, or noneditable status.
+It is not an authorization or conflict-resolution decision. There is no Approve
+button or approval-endpoint change in #60. **Approval-time freshness, permissions,
+and conflict/field decisions remain #62 and the wider review workflow.** No
+navigation guard, autosave or browser storage is added; leaving before a successful
+save discards local edits. #66's full acceptance verification remains separate.
+
+## Reject a draft (#63)
+
+`POST /api/v1/reviews/profiles/{profile_id}/versions/{version_id}/reject`
+takes a required reason:
+
+```json
+{"reason": "Intake belongs to a different client"}
+```
+
+The reason is trimmed and must be 1–500 characters (`422` otherwise; unknown keys
+are also `422`). The same freshness check as saving edits applies: the version
+must be the profile's latest, in `draft` or `in_review`, and unapproved, or the
+request returns `409`; a missing or mismatched profile/version returns `404`.
+
+Rejecting updates that version in place: `status` becomes `rejected`, and
+`rejection_reason` and `rejected_at` are stored. No new version is created and no
+approval fields are set, so the latest-approved profile and artifact staleness are
+unchanged. Once set, the reason and time cannot be changed (immutability guard).
+Rejected drafts leave the review inbox, and approving a rejected version returns
+`409`. Since #62 the signed-in reviewer is stored as `rejected_by`.
+
+The review page shows a Reject button beside Save. It opens a reason form, blocks
+an empty reason, warns that unsaved edits will be discarded, and on success shows
+the draft as rejected with its reason. Dedicated rejection tests are #64.
+
+For an existing database, apply
+`backend/migrations/006_add_profile_version_rejection.sql` after 005.
+
+## Approve a draft (#62)
+
+`POST /api/v1/reviews/profiles/{profile_id}/versions/{version_id}/approve` (no
+body) saves the loaded draft, including any saved reviewer edits, as a **new**
+version with `status: approved`, `approved_by` (the signed-in user) and
+`approved_at`. It returns `201` with `{"version": ..., "newly_stale_artifact_version_ids": [...]}`.
+The draft row itself is not rewritten. Artifacts built from older profile versions
+are marked stale in the same transaction.
+
+The version must still be the profile's latest, in `draft` or `in_review`, and
+unapproved; otherwise `409`. A repeated submit or a second reviewer approving at
+the same time therefore gets `409` instead of a second approved copy (the profile
+row lock serialises them). A page that missed a newer save, approval or rejection
+also gets `409`. An empty version (the `{}` placeholder) is `422`; a missing or
+mismatched profile/version is `404`.
+
+**Permissions.** Edit, reject and approve now need a signed-in `reviewer` or
+`admin` and the `X-CSRF-Token` header: `401` when signed out, `403` for a viewer
+or a missing/wrong CSRF token. The frontend sends the session cookie and token on
+these calls and hides the review controls from viewers. Reading drafts and the
+inbox is unchanged.
+
+The review page's Approve button sits next to Save. It is disabled until edits are
+saved with nothing pending (`draftSaveGate`) and while a request is in flight; on
+success the page opens the new approved version.
+
+The older `POST /api/v1/client-profiles/{id}/versions/{vid}/approve` (approves
+in place) has the same checks: a signed-in `reviewer` or `admin` with the CSRF
+header. It records the signed-in user as `approved_by`; an `approved_by` in the
+request body is ignored, and no body is needed. Unresolved source conflicts do not
+block approval; the reviewer decides by editing the field before approving.
+
+For an existing database, apply
+`backend/migrations/007_add_profile_version_rejected_by.sql` after 006.

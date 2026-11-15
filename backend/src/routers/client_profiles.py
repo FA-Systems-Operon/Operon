@@ -9,10 +9,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from src.ai.source_prompt import SourceLinkedProfile
+from src.auth import ReviewerUser
 from src.db import get_db
 from src.models import ClientProfile, ClientProfileVersion, ReviewStatus
 from src.profile_sources import save_source_profile
-from src.schemas import ApproveIn, ClientProfileVersionOut, ProfileApprovalOut
+from src.schemas import ClientProfileVersionOut, ProfileApprovalOut
 from src.staleness import mark_stale_for_client_profile
 from src.versioning import (
     get_latest_approved_client_profile_version,
@@ -49,7 +50,7 @@ def update_client_profile(
     profile_id: uuid.UUID, data: dict, db: DbSession
 ) -> ClientProfileVersion:
     """Create a new immutable version of a client profile instead of overwriting."""
-    profile = db.get(ClientProfile, profile_id)
+    profile = db.get(ClientProfile, profile_id, with_for_update=True)
     if profile is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Client profile not found")
 
@@ -121,12 +122,17 @@ def latest_approved_client_profile(
     "/{profile_id}/versions/{version_id}/approve", response_model=ProfileApprovalOut
 )
 def approve_client_profile_version(
-    profile_id: uuid.UUID, version_id: uuid.UUID, body: ApproveIn, db: DbSession
+    profile_id: uuid.UUID,
+    version_id: uuid.UUID,
+    db: DbSession,
+    reviewer: ReviewerUser,
 ) -> ProfileApprovalOut:
     """Approve one version, then mark artifacts built from older versions stale.
 
     Approval and staleness marking commit in ONE transaction, so there is never
     a moment where a newer profile is approved but old outputs look current.
+    Needs a signed-in reviewer or admin, who is recorded as the approver; an
+    approved_by in the request body is ignored.
     """
     # Same lock the artifact endpoints take; serialises approve vs. create.
     if db.get(ClientProfile, profile_id, with_for_update=True) is None:
@@ -143,9 +149,11 @@ def approve_client_profile_version(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Profile version not found")
     if version.approved_at is not None:
         raise HTTPException(status.HTTP_409_CONFLICT, "Version is already approved")
+    if version.status == ReviewStatus.REJECTED:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Version was rejected")
 
     version.status = ReviewStatus.APPROVED
-    version.approved_by = body.approved_by
+    version.approved_by = reviewer.id
     version.approved_at = datetime.now(timezone.utc)
     db.flush()
 
