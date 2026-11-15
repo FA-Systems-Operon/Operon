@@ -13,8 +13,17 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from src.audit import AuditAction, record_audit_event
+from src.auth import current_user
 from src.db import get_db
-from src.models import Client, DocumentKind, JobStatus, OnboardingJob, SourceDocument
+from src.models import (
+    Client,
+    DocumentKind,
+    JobStatus,
+    OnboardingJob,
+    SourceDocument,
+    User,
+)
 from src.onboarding_jobs import run_onboarding_job
 from src.schemas import OnboardingJobIn, OnboardingJobOut
 from src.storage import DocumentStorage, get_storage
@@ -35,6 +44,7 @@ def start_onboarding_job(
     storage: Storage,
     background_tasks: BackgroundTasks,
     response: Response,
+    actor: Annotated[User, Depends(current_user)],
 ) -> OnboardingJob:
     """Start a draft from one transcript and one intake document of this client.
 
@@ -68,25 +78,40 @@ def start_onboarding_job(
     job = _job_for_pair(db, body)
     if job is None:
         job = OnboardingJob(
+            id=uuid.uuid4(),
             client_id=client_id,
             transcript_document_id=body.transcript_document_id,
             intake_document_id=body.intake_document_id,
+            initiated_by=actor.id,
         )
         db.add(job)
         try:
-            db.commit()
+            db.flush()
         except IntegrityError:
-            # A concurrent request for the same pair won the race.
+            # A concurrent request for the same pair may have won the race.
             db.rollback()
-            job = _job_for_pair(db, body)
+            winner = _job_for_pair(db, body)
+            if winner is None:
+                raise
             response.status_code = status.HTTP_200_OK
-            return job
+            return winner
+        action = AuditAction.JOB_STARTED
     else:
         response.status_code = status.HTTP_200_OK
         if job.status != JobStatus.FAILED:
             return job
         _requeue(job)
-        db.commit()
+        # Attribute the draft to the user who started this attempt.
+        job.initiated_by = actor.id
+        action = AuditAction.JOB_REQUEUED
+    record_audit_event(
+        db,
+        actor_id=actor.id,
+        action=action,
+        object_type="onboarding_job",
+        object_id=job.id,
+    )
+    db.commit()
     db.refresh(job)
     background_tasks.add_task(run_onboarding_job, job.id, storage)
     return job
@@ -109,10 +134,12 @@ def get_onboarding_job(
 
 def _job_for_pair(db: Session, body: OnboardingJobIn) -> OnboardingJob | None:
     return db.scalar(
-        select(OnboardingJob).where(
+        select(OnboardingJob)
+        .where(
             OnboardingJob.transcript_document_id == body.transcript_document_id,
             OnboardingJob.intake_document_id == body.intake_document_id,
         )
+        .with_for_update()
     )
 
 

@@ -5,6 +5,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
+    DDL,
     BigInteger,
     Boolean,
     DateTime,
@@ -157,6 +158,8 @@ class OnboardingJob(Base):
     intake_document_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("source_documents.id"), index=True
     )
+    # Older jobs have no recorded initiator.
+    initiated_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
     status: Mapped[JobStatus] = mapped_column(
         Enum(
             JobStatus,
@@ -496,3 +499,39 @@ def _make_guard(fields: tuple[str, ...]):
 for _model, _fields in _IMMUTABLE.items():
     event.listen(_model, "before_update", _make_guard(_fields))
 # ------Immutability guard  END----------------
+
+
+class AuditEvent(Base):
+    """An append-only record of an attributed workflow action."""
+
+    __tablename__ = "audit_events"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    actor_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    action: Mapped[str] = mapped_column(String(40))
+    object_type: Mapped[str] = mapped_column(String(40))
+    object_id: Mapped[uuid.UUID] = mapped_column(index=True)
+    version_id: Mapped[uuid.UUID | None] = mapped_column()
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+event.listen(
+    AuditEvent.__table__,
+    "after_create",
+    DDL("""
+        CREATE OR REPLACE FUNCTION prevent_audit_event_changes()
+        RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN
+            RAISE EXCEPTION 'Audit events are append-only';
+        END;
+        $$;
+        CREATE TRIGGER audit_events_append_only
+        BEFORE UPDATE OR DELETE ON audit_events
+        FOR EACH ROW EXECUTE FUNCTION prevent_audit_event_changes();
+        CREATE TRIGGER audit_events_no_truncate
+        BEFORE TRUNCATE ON audit_events
+        FOR EACH STATEMENT EXECUTE FUNCTION prevent_audit_event_changes();
+    """).execute_if(dialect="postgresql"),
+)

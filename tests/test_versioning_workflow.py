@@ -31,7 +31,7 @@ def test_edit_approve_and_staleness_preserve_history(
     assert approval.status_code == 200
     artifact_before = approval.json()
 
-    edited = client.put(f"{url}", json={"changed": "Reviewed correction"})
+    edited = api.http.put(f"{url}", json={"changed": "Reviewed correction"})
     assert edited.status_code == 200
     draft = edited.json()
     assert draft["id"] != str(source_id)
@@ -85,7 +85,7 @@ def test_failed_staleness_marking_rolls_back_approval(
         parent_id = original.playbook_id
         path, approve = "/api/v1/playbooks", api.approve_playbook
         target = "src.routers.playbooks.mark_stale_for_playbook"
-    draft = client.put(f"{path}/{parent_id}", json={"changed": True}).json()
+    draft = api.http.put(f"{path}/{parent_id}", json={"changed": True}).json()
 
     def fail_marking(*args):
         raise RuntimeError("simulated marking failure")

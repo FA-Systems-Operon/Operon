@@ -12,7 +12,7 @@ from sqlalchemy.exc import OperationalError, SQLAlchemyError
 
 from src.ai.source_prompt import SourceLinkedProfile, validate_conflicts
 from src.db import SessionLocal
-from src.models import ClientProfile, ClientProfileVersion, ReviewStatus
+from src.models import AuditEvent, ClientProfile, ClientProfileVersion, ReviewStatus
 from src.review_edits import save_review_edits
 from src.routers import reviews
 from src.schemas import ClientProfileVersionOut, ReviewEditsIn
@@ -402,10 +402,11 @@ def test_storage_failure_rolls_back_the_entire_save(
 
 
 def test_simultaneous_saves_have_one_winner_and_one_stale_response(
-    db_session, profile_factory
+    db_session, profile_factory, signed_in_user
 ):
     base = profile_factory(data=deepcopy(DRAFT))
     profile_id, version_id = base.client_profile_id, base.id
+    reviewer_id = signed_in_user.id
     barrier = Barrier(2)
 
     def save(name):
@@ -419,7 +420,7 @@ def test_simultaneous_saves_have_one_winner_and_one_stale_response(
                     ReviewEditsIn(changes={"name": name}),
                     db,
                     Response(),
-                    None,  # the signed-in reviewer; unused by the save itself
+                    db.get(type(signed_in_user), reviewer_id),
                 )
                 return 201, saved.data["name"]
             except HTTPException as error:
@@ -432,6 +433,10 @@ def test_simultaneous_saves_have_one_winner_and_one_stale_response(
     assert len(saved) == 2
     assert saved[-1].data["name"] == next(name for code, name in results if code == 201)
     assert saved[0].data == DRAFT
+    audit = db_session.scalars(select(AuditEvent)).one()
+    assert audit.actor_id == reviewer_id
+    assert audit.action == "edit"
+    assert audit.object_id == profile_id
 
 
 def test_save_holds_parent_lock_until_the_transaction_finishes(

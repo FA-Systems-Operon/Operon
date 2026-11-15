@@ -1,5 +1,6 @@
 """Invite by link: POST /api/v1/users/invite (admin only) and POST /api/v1/auth/accept-invite (public)."""
 
+import pytest
 from fastapi.testclient import TestClient
 
 from src import auth
@@ -33,6 +34,12 @@ def accept(client, token, name="Nina", password=PASSWORD):
 
 
 # --- inviting --------------------------------------------------------------
+
+
+@pytest.fixture
+def client(client, monkeypatch):
+    monkeypatch.delitem(app.dependency_overrides, auth.current_user, raising=False)
+    return client
 
 
 def test_a_generic_invite_gets_the_default_role(client, db_session):

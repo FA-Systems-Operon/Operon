@@ -18,6 +18,7 @@ function response(status: number, body: unknown) {
 }
 
 afterEach(() => {
+  document.cookie = 'operon_csrf=; Max-Age=0'
   vi.unstubAllGlobals()
 })
 
@@ -83,6 +84,7 @@ test('getReviewDraft throws an ApiError with the reason on failure', async () =>
 })
 
 test('uploadDocument posts the file and its kind as a form', async () => {
+  document.cookie = 'operon_csrf=test-token'
   const saved = { id: 'd1', kind: 'intake' }
   const fetchMock = vi.fn().mockResolvedValue(response(201, saved))
   vi.stubGlobal('fetch', fetchMock)
@@ -93,6 +95,8 @@ test('uploadDocument posts the file and its kind as a form', async () => {
   const [url, init] = fetchMock.mock.calls[0]
   expect(url).toBe('/api/v1/clients/c1/documents')
   expect(init.method).toBe('POST')
+  expect(init.credentials).toBe('include')
+  expect(init.headers).toEqual({ 'X-CSRF-Token': 'test-token' })
   expect(init.body.get('kind')).toBe('intake')
   expect((init.body.get('file') as File).name).toBe('answers.txt')
 })
@@ -124,6 +128,7 @@ test('uploadDocument ignores validation details that are not a sentence', async 
 })
 
 test('startOnboardingJob posts both document IDs as JSON', async () => {
+  document.cookie = 'operon_csrf=test-token'
   const job = { id: 'j1', status: 'pending' }
   const fetchMock = vi.fn().mockResolvedValue(response(201, job))
   vi.stubGlobal('fetch', fetchMock)
@@ -133,7 +138,11 @@ test('startOnboardingJob posts both document IDs as JSON', async () => {
   const [url, init] = fetchMock.mock.calls[0]
   expect(url).toBe('/api/v1/clients/c1/onboarding-jobs')
   expect(init.method).toBe('POST')
-  expect(init.headers).toEqual({ 'Content-Type': 'application/json' })
+  expect(init.credentials).toBe('include')
+  expect(init.headers).toEqual({
+    'Content-Type': 'application/json',
+    'X-CSRF-Token': 'test-token',
+  })
   expect(JSON.parse(init.body)).toEqual({ transcript_document_id: 'd1', intake_document_id: 'd2' })
 })
 

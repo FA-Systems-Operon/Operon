@@ -75,8 +75,8 @@ def test_inbox_lists_the_awaiting_draft_with_client_name_and_time(
     client, client_factory, reviewer_client
 ):
     awaiting = client_factory("Plateau Basements")
-    job = generate_draft(client, awaiting)
-    generate_draft(client, client_factory("Acme Plumbing"))
+    job = generate_draft(reviewer_client, awaiting)
+    generate_draft(reviewer_client, client_factory("Acme Plumbing"))
     [acme] = [
         item
         for item in open_inbox(client)
@@ -87,7 +87,7 @@ def test_inbox_lists_the_awaiting_draft_with_client_name_and_time(
     )
     assert approved.status_code == 200, approved.text
     northshore = client_factory("Northshore Kitchens")
-    placeholder = client.post(
+    placeholder = reviewer_client.post(
         "/api/v1/client-profiles", params={"client_id": str(northshore.id)}
     )
     assert placeholder.status_code == 201, placeholder.text
