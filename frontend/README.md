@@ -21,8 +21,10 @@ Only the exact value `true` turns a flag on.
   so pass them as build args (`compose.prod.yaml` does this from `.env`) and rebuild.
 
 **When a page is ready:** remove its flag from `src/features.ts`, the `feature`
-on its tab in `components/TopNav.tsx`, and the setting in `.env.example` and the
-compose files.
+on its tab in `components/TopNav.tsx`, and the setting in `.env.example`, the
+compose files and `Dockerfile.prod`. For Brain, also replace `sourcesTab()` in
+`App.tsx` with `'brain'`: it decides which tab Add sources and draft progress
+mark, and it reads the Brain flag.
 
 The flags only hide pages; they are not access control. The API is unchanged.
 

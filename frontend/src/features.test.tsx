@@ -1,4 +1,5 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import App from './App'
 import { isEnabled, isHiddenPage } from './features'
@@ -123,4 +124,61 @@ test('with Brain on, the pages come back as before', async () => {
 
   const nav = await menu()
   expect(nav.getByRole('link', { name: 'Brain' })).toHaveAttribute('aria-current', 'page')
+})
+
+// --- signed out: the login redirect and the hidden-page redirect together ------
+
+function json(status: number, body: unknown) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
+
+// A signed-out visitor: /api/v1/me answers 401, and login succeeds.
+function signedOut() {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url === '/api/v1/me') return json(401, { detail: 'Not authenticated' })
+      if (url === '/api/v1/auth/login') return json(200, { user: mockUser, csrf_token: 'c' })
+      return json(200, [])
+    }),
+  )
+}
+
+test.each([
+  ['#/brain', 'Brain'],
+  ['#/workforce', 'Workforce'],
+])('signed out, hidden %s goes to login and comes back to Command', async (hash, title) => {
+  signedOut()
+  openAt(hash)
+
+  // The hidden page isn't kept as the place to return to after login.
+  await waitFor(() => expect(window.location.hash).toBe('#/login?next=%2F'))
+  expect(screen.queryByRole('heading', { name: title })).not.toBeInTheDocument()
+
+  const typing = userEvent.setup()
+  await typing.type(screen.getByLabelText('Email address'), 'staff@example.com')
+  await typing.type(screen.getByLabelText('Password'), 'a-long-password-123')
+  await typing.click(screen.getByRole('button', { name: 'Sign in' }))
+
+  expect(await screen.findByRole('heading', { name: 'Command' })).toBeInTheDocument()
+  expect(window.location.hash).toBe('#/')
+  expect(screen.queryByRole('heading', { name: title })).not.toBeInTheDocument()
+})
+
+test('a login link that returns to a hidden page lands on Command instead', async () => {
+  signedOut()
+  openAt('#/login?next=%2Fbrain')
+
+  const typing = userEvent.setup()
+  await typing.type(screen.getByLabelText('Email address'), 'staff@example.com')
+  await typing.type(screen.getByLabelText('Password'), 'a-long-password-123')
+  await typing.click(screen.getByRole('button', { name: 'Sign in' }))
+
+  expect(await screen.findByRole('heading', { name: 'Command' })).toBeInTheDocument()
+  expect(window.location.hash).toBe('#/')
+  expect(screen.queryByRole('heading', { name: 'Brain' })).not.toBeInTheDocument()
 })
