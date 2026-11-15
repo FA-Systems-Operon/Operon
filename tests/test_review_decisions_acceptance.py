@@ -28,7 +28,7 @@ pytestmark = pytest.mark.usefixtures(fake_model.__name__)
 def test_approve_creates_a_new_approved_version_with_saved_content(
     client, reviewer_client, client_factory, db_session
 ):
-    generate_draft(client, client_factory("Plateau Basements"))
+    generate_draft(reviewer_client, client_factory("Plateau Basements"))
     [item] = open_inbox(reviewer_client)
     original = open_draft(reviewer_client, item)["version"]
     draft = db_session.get(ClientProfileVersion, uuid.UUID(item["version_id"]))
@@ -74,7 +74,7 @@ def test_approve_creates_a_new_approved_version_with_saved_content(
 def test_reject_saves_the_reason_and_rejected_draft_without_an_approved_version(
     client, reviewer_client, client_factory, db_session
 ):
-    generate_draft(client, client_factory("Plateau Basements"))
+    generate_draft(reviewer_client, client_factory("Plateau Basements"))
     [item] = open_inbox(reviewer_client)
     draft = db_session.get(ClientProfileVersion, uuid.UUID(item["version_id"]))
     before = {v.id for v in versions(db_session, draft.client_profile_id)}
