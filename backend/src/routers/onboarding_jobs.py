@@ -101,6 +101,7 @@ def start_onboarding_job(
         if job.status != JobStatus.FAILED:
             return job
         _requeue(job)
+        # Attribute the draft to the user who started this attempt.
         job.initiated_by = actor.id
         action = "job_requeued"
     record_audit_event(

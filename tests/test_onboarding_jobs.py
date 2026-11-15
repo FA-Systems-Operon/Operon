@@ -511,3 +511,9 @@ def test_job_status_404_for_unknown_job(client, demo_client):
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Onboarding job not found"
+
+
+def test_signed_in_reviewer_can_upload_and_start_draft(sign_in, demo_client):
+    http, _ = sign_in()
+    _, _, job = start_draft(http, demo_client)
+    assert job["id"]

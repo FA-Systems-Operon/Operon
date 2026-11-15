@@ -232,6 +232,8 @@ def _execute(db: Session, job: OnboardingJob, storage: DocumentStorage) -> None:
                 object_id=profile.id,
                 version_id=version.id,
             )
+        else:
+            log.warning("Onboarding job %s has no recorded initiator for audit", job_id)
         db.commit()
         log.info(
             "Onboarding job %s attempt %s succeeded in %d ms; draft version %s",

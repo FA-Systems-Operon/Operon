@@ -184,6 +184,8 @@ export async function uploadDocument(
 
   const response = await fetch(`/api/v1/clients/${encodeURIComponent(clientId)}/documents`, {
     method: 'POST',
+    credentials: 'include',
+    headers: { 'X-CSRF-Token': getCsrfToken() },
     body,
   })
   if (!response.ok) {
@@ -199,14 +201,10 @@ export async function startOnboardingJob(
   transcriptDocumentId: string,
   intakeDocumentId: string,
 ): Promise<OnboardingJob> {
-  const response = await fetch(`/api/v1/clients/${encodeURIComponent(clientId)}/onboarding-jobs`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      transcript_document_id: transcriptDocumentId,
-      intake_document_id: intakeDocumentId,
-    }),
-  })
+  const response = await fetch(`/api/v1/clients/${encodeURIComponent(clientId)}/onboarding-jobs`, signedInPost({
+    transcript_document_id: transcriptDocumentId,
+    intake_document_id: intakeDocumentId,
+  }))
   if (!response.ok) {
     throw new ApiError(response.status, await readDetail(response))
   }

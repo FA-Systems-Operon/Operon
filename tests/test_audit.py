@@ -1,7 +1,7 @@
 import uuid
 
 import pytest
-from sqlalchemy import delete, update
+from sqlalchemy import delete, text, update
 from sqlalchemy.exc import DBAPIError
 
 from src.audit import record_audit_event
@@ -57,7 +57,7 @@ def test_audit_event_rolls_back_with_action(db_session, actor):
     assert db_session.get(AuditEvent, event_id) is None
 
 
-@pytest.mark.parametrize("operation", ["update", "delete"])
+@pytest.mark.parametrize("operation", ["update", "delete", "truncate"])
 def test_audit_events_are_append_only(db_session, actor, operation):
     event = record_audit_event(
         db_session,
@@ -73,7 +73,12 @@ def test_audit_events_are_append_only(db_session, actor, operation):
         if operation == "update"
         else delete(AuditEvent)
     )
+    statement = (
+        text("TRUNCATE audit_events")
+        if operation == "truncate"
+        else statement.where(AuditEvent.id == event_id)
+    )
     with pytest.raises(DBAPIError, match="append-only"):
-        db_session.execute(statement.where(AuditEvent.id == event_id))
+        db_session.execute(statement)
     db_session.rollback()
     assert db_session.get(AuditEvent, event_id).action == "upload"

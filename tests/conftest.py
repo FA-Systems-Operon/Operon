@@ -91,7 +91,14 @@ def db_session(database):
     # Empty every table so each test starts from a clean database.
     with engine.begin() as conn:
         tables = ", ".join(f'"{table.name}"' for table in Base.metadata.sorted_tables)
+        # The test database is disposable. Keep the trigger enabled during tests.
+        conn.execute(
+            text("ALTER TABLE audit_events DISABLE TRIGGER audit_events_no_truncate")
+        )
         conn.execute(text(f"TRUNCATE {tables}"))
+        conn.execute(
+            text("ALTER TABLE audit_events ENABLE TRIGGER audit_events_no_truncate")
+        )
 
 
 @pytest.fixture
