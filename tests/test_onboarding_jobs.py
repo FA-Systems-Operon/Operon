@@ -16,6 +16,7 @@ from sqlalchemy import func, select
 from src.ai.provider import ModelResponse, ProviderConfigError, ProviderUnavailable
 from src.config import settings
 from src.models import (
+    AuditEvent,
     ClientProfile,
     ClientProfileVersion,
     ExtractedText,
@@ -169,7 +170,9 @@ def test_uploading_files_does_not_start_a_job(client, db_session, demo_client):
 # --- Starting a draft ---------------------------------------------------------
 
 
-def test_start_saves_one_pending_job_for_the_pair(client, demo_client, no_runner):
+def test_start_saves_one_pending_job_for_the_pair(
+    client, db_session, demo_client, no_runner, signed_in_user
+):
     transcript, intake = upload_pair(client, demo_client)
 
     response = start(client, demo_client, transcript, intake)
@@ -183,10 +186,18 @@ def test_start_saves_one_pending_job_for_the_pair(client, demo_client, no_runner
     assert job["started_at"] is None and job["result_version_id"] is None
     assert job["result_profile_id"] is None
     assert get_job(client, demo_client, job)["status"] == "pending"
+    saved_job = db_session.get(OnboardingJob, uuid.UUID(job["id"]))
+    event = db_session.scalars(
+        select(AuditEvent).where(AuditEvent.object_type == "onboarding_job")
+    ).one()
+    assert saved_job.initiated_by == signed_in_user.id
+    assert event.actor_id == signed_in_user.id
+    assert event.object_id == saved_job.id
+    assert event.action == "job_started"
 
 
 def test_draft_uses_both_files_without_manual_steps(
-    client, db_session, demo_client, fake_model
+    client, db_session, demo_client, fake_model, signed_in_user
 ):
     provider = fake_model()
 
@@ -208,6 +219,12 @@ def test_draft_uses_both_files_without_manual_steps(
     cited = {ref["document_id"] for ref in version.data["source_references"]}
     assert cited == {transcript["id"], intake["id"]}
     assert version.status.value == "draft"
+    event = db_session.scalars(
+        select(AuditEvent).where(AuditEvent.action == "draft_created")
+    ).one()
+    assert event.actor_id == signed_in_user.id
+    assert event.object_id == version.client_profile_id
+    assert event.version_id == version.id
 
 
 def test_draft_ignores_the_clients_other_documents(
@@ -237,6 +254,10 @@ def test_starting_the_same_pair_again_returns_the_same_job(
     assert len(provider.prompts) == 1
     assert job_count(db_session) == 1
     assert version_count(db_session) == 1
+    events = db_session.scalars(
+        select(AuditEvent.action).where(AuditEvent.object_type == "onboarding_job")
+    ).all()
+    assert events == ["job_started"]
 
 
 def test_starting_a_failed_pair_again_queues_it_once_more(
@@ -490,3 +511,9 @@ def test_job_status_404_for_unknown_job(client, demo_client):
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Onboarding job not found"
+
+
+def test_signed_in_reviewer_can_upload_and_start_draft(sign_in, demo_client):
+    http, _ = sign_in()
+    _, _, job = start_draft(http, demo_client)
+    assert job["id"]

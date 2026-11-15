@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from tests.sample_data import invalid_upload_samples, make_pdf
 
 from src.config import settings
-from src.models import SourceDocument
+from src.models import AuditEvent, SourceDocument
 from src.pdf_extraction import MAX_PDF_PAGES
 
 
@@ -34,7 +34,14 @@ def stored_files(tmp_path) -> list:
     ],
 )
 def test_upload_succeeds(
-    client, db_session, storage, demo_client, filename, content, content_type
+    client,
+    db_session,
+    storage,
+    demo_client,
+    signed_in_user,
+    filename,
+    content,
+    content_type,
 ):
     response = client.post(
         documents_url(demo_client.id),
@@ -55,6 +62,13 @@ def test_upload_succeeds(
     assert document.client_id == demo_client.id
     # ...and the file is on disk (in tmp_path) with the same contents.
     assert storage.read(document.storage_key) == content
+    event = db_session.scalars(select(AuditEvent)).one()
+    assert (event.action, event.object_type, event.object_id, event.actor_id) == (
+        "upload",
+        "source_document",
+        document.id,
+        signed_in_user.id,
+    )
 
     retrieved = client.get(f"{documents_url(demo_client.id)}/{body['id']}")
     assert retrieved.status_code == 200

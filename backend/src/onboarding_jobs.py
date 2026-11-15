@@ -34,6 +34,7 @@ from sqlalchemy.orm import Session
 
 from src.ai.provider import ProviderConfigError, ProviderError, get_provider
 from src.ai.source_prompt import SourceInput, generate_source_profile
+from src.audit import AuditAction, record_audit_event
 from src.config import settings
 from src.db import SessionLocal
 from src.document_extraction import UnsupportedDocumentTypeError, extract_document
@@ -221,6 +222,18 @@ def _execute(db: Session, job: OnboardingJob, storage: DocumentStorage) -> None:
             db.rollback()
             log.warning("Onboarding job %s lost its claim; draft discarded", job_id)
             return
+        # Jobs queued before audit attribution may have no known actor.
+        if job.initiated_by is not None:
+            record_audit_event(
+                db,
+                actor_id=job.initiated_by,
+                action=AuditAction.DRAFT_CREATED,
+                object_type="client_profile",
+                object_id=profile.id,
+                version_id=version.id,
+            )
+        else:
+            log.warning("Onboarding job %s has no recorded initiator for audit", job_id)
         db.commit()
         log.info(
             "Onboarding job %s attempt %s succeeded in %d ms; draft version %s",

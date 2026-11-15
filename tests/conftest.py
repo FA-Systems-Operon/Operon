@@ -36,7 +36,7 @@ os.environ["BACKGROUND_WORKER_ENABLED"] = "false"
 import pytest
 from fastapi.testclient import TestClient
 
-from src.auth import create_user
+from src.auth import create_user, current_user
 from src.db import Base, SessionLocal, engine, get_db
 from src.main import app
 from src.models import (
@@ -51,6 +51,7 @@ from src.models import (
     ReviewStatus,
     Role,
     SourceDocument,
+    User,
 )
 from src.storage import LocalFileStorage, get_storage
 
@@ -90,7 +91,14 @@ def db_session(database):
     # Empty every table so each test starts from a clean database.
     with engine.begin() as conn:
         tables = ", ".join(f'"{table.name}"' for table in Base.metadata.sorted_tables)
+        # The test database is disposable. Keep the trigger enabled during tests.
+        conn.execute(
+            text("ALTER TABLE audit_events DISABLE TRIGGER audit_events_no_truncate")
+        )
         conn.execute(text(f"TRUNCATE {tables}"))
+        conn.execute(
+            text("ALTER TABLE audit_events ENABLE TRIGGER audit_events_no_truncate")
+        )
 
 
 @pytest.fixture
@@ -100,8 +108,22 @@ def storage(tmp_path):
 
 
 @pytest.fixture
-def client(db_session, storage):
+def signed_in_user(db_session):
+    user = User(
+        email=f"{uuid.uuid4()}@example.test",
+        display_name="Synthetic reviewer",
+        password_hash="unused",
+        role=Role.REVIEWER,
+    )
+    db_session.add(user)
+    db_session.commit()
+    return user
+
+
+@pytest.fixture
+def client(db_session, storage, signed_in_user):
     """HTTP client for the app, with the database and storage swapped for test ones."""
+    app.dependency_overrides[current_user] = lambda: signed_in_user
     app.dependency_overrides[get_db] = lambda: db_session
     app.dependency_overrides[get_storage] = lambda: storage
     # Not using "with TestClient(app)", so the app's startup create_all doesn't
@@ -120,6 +142,9 @@ def sign_in(client, db_session):
     It logs in for real, so the session cookie and CSRF header are both checked;
     the CSRF header is sent on every request. Uses the same test overrides as client.
     """
+
+    # Session tests must exercise the real authentication dependency.
+    app.dependency_overrides.pop(current_user, None)
 
     def as_role(role=Role.REVIEWER):
         user = create_user(

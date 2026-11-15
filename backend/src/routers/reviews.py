@@ -8,6 +8,7 @@ from sqlalchemy import func, literal, select
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session
 
+from src.audit import AuditAction, record_audit_event
 from src.auth import ReviewerUser
 from src.db import get_db
 from src.models import (
@@ -48,11 +49,20 @@ def save_draft_edits(
     body: ReviewEditsIn,
     db: DbSession,
     response: Response,
-    _reviewer: ReviewerUser,
+    reviewer: ReviewerUser,
 ) -> ClientProfileVersion:
     """Validate corrections and append a draft, only if the base is still current."""
     try:
         version = save_review_edits(db, profile_id, version_id, body)
+        if version.id != version_id:
+            record_audit_event(
+                db,
+                actor_id=reviewer.id,
+                action=AuditAction.EDIT,
+                object_type="client_profile",
+                object_id=profile_id,
+                version_id=version.id,
+            )
         db.commit()
     except LookupError as error:
         db.rollback()
@@ -88,6 +98,14 @@ def reject_draft(
     """Reject the open draft with a short reason; no approved version is created."""
     try:
         version = reject_review_draft(db, profile_id, version_id, body, reviewer.id)
+        record_audit_event(
+            db,
+            actor_id=reviewer.id,
+            action=AuditAction.REJECT,
+            object_type="client_profile",
+            object_id=profile_id,
+            version_id=version.id,
+        )
         db.commit()
     except LookupError as error:
         db.rollback()
@@ -116,6 +134,14 @@ def approve_draft(
     """Save the open (possibly edited) draft as a new approved profile version."""
     try:
         version, stale = approve_review_draft(db, profile_id, version_id, reviewer.id)
+        record_audit_event(
+            db,
+            actor_id=reviewer.id,
+            action=AuditAction.APPROVE,
+            object_type="client_profile",
+            object_id=profile_id,
+            version_id=version.id,
+        )
         db.commit()
     except LookupError as error:
         db.rollback()
