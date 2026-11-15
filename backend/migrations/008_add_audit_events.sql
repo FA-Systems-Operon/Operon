@@ -11,6 +11,8 @@ CREATE TABLE IF NOT EXISTS audit_events (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE INDEX IF NOT EXISTS ix_audit_events_object_id ON audit_events (object_id);
+
 CREATE OR REPLACE FUNCTION prevent_audit_event_changes()
 RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN

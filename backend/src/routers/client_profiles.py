@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from src.ai.source_prompt import SourceLinkedProfile
-from src.audit import record_audit_event
+from src.audit import AuditAction, record_audit_event
 from src.auth import ReviewerUser, current_user
 from src.db import get_db
 from src.models import ClientProfile, ClientProfileVersion, ReviewStatus, User
@@ -48,7 +48,7 @@ def create_client_profile(
     record_audit_event(
         db,
         actor_id=actor.id,
-        action="draft_created",
+        action=AuditAction.DRAFT_CREATED,
         object_type="client_profile",
         object_id=profile.id,
         version_id=version.id,
@@ -78,7 +78,7 @@ def update_client_profile(
     record_audit_event(
         db,
         actor_id=actor.id,
-        action="edit",
+        action=AuditAction.EDIT,
         object_type="client_profile",
         object_id=profile_id,
         version_id=version.id,
@@ -102,7 +102,7 @@ def create_source_draft(
         record_audit_event(
             db,
             actor_id=actor.id,
-            action="draft_created",
+            action=AuditAction.DRAFT_CREATED,
             object_type="client_profile",
             object_id=profile_id,
             version_id=version.id,
@@ -191,7 +191,7 @@ def approve_client_profile_version(
     record_audit_event(
         db,
         actor_id=reviewer.id,
-        action="approve",
+        action=AuditAction.APPROVE,
         object_type="client_profile",
         object_id=profile_id,
         version_id=version.id,

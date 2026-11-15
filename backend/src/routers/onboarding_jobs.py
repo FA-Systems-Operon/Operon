@@ -13,7 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from src.audit import record_audit_event
+from src.audit import AuditAction, record_audit_event
 from src.auth import current_user
 from src.db import get_db
 from src.models import (
@@ -95,7 +95,7 @@ def start_onboarding_job(
                 raise
             response.status_code = status.HTTP_200_OK
             return winner
-        action = "job_started"
+        action = AuditAction.JOB_STARTED
     else:
         response.status_code = status.HTTP_200_OK
         if job.status != JobStatus.FAILED:
@@ -103,7 +103,7 @@ def start_onboarding_job(
         _requeue(job)
         # Attribute the draft to the user who started this attempt.
         job.initiated_by = actor.id
-        action = "job_requeued"
+        action = AuditAction.JOB_REQUEUED
     record_audit_event(
         db,
         actor_id=actor.id,

@@ -8,7 +8,7 @@ from sqlalchemy import func, literal, select
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session
 
-from src.audit import record_audit_event
+from src.audit import AuditAction, record_audit_event
 from src.auth import ReviewerUser
 from src.db import get_db
 from src.models import (
@@ -58,7 +58,7 @@ def save_draft_edits(
             record_audit_event(
                 db,
                 actor_id=reviewer.id,
-                action="edit",
+                action=AuditAction.EDIT,
                 object_type="client_profile",
                 object_id=profile_id,
                 version_id=version.id,
@@ -101,7 +101,7 @@ def reject_draft(
         record_audit_event(
             db,
             actor_id=reviewer.id,
-            action="reject",
+            action=AuditAction.REJECT,
             object_type="client_profile",
             object_id=profile_id,
             version_id=version.id,
@@ -137,7 +137,7 @@ def approve_draft(
         record_audit_event(
             db,
             actor_id=reviewer.id,
-            action="approve",
+            action=AuditAction.APPROVE,
             object_type="client_profile",
             object_id=profile_id,
             version_id=version.id,

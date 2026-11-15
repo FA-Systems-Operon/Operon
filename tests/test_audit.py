@@ -4,7 +4,7 @@ import pytest
 from sqlalchemy import delete, text, update
 from sqlalchemy.exc import DBAPIError
 
-from src.audit import record_audit_event
+from src.audit import AuditAction, record_audit_event
 from src.models import AuditEvent, Role, User
 
 
@@ -26,7 +26,7 @@ def test_audit_event_records_attribution_and_version(db_session, actor):
     event = record_audit_event(
         db_session,
         actor_id=actor.id,
-        action="edit",
+        action=AuditAction.EDIT,
         object_type="client_profile",
         object_id=object_id,
         version_id=version_id,
@@ -46,7 +46,7 @@ def test_audit_event_rolls_back_with_action(db_session, actor):
     event = record_audit_event(
         db_session,
         actor_id=actor.id,
-        action="edit",
+        action=AuditAction.EDIT,
         object_type="user",
         object_id=actor.id,
     )
@@ -62,7 +62,7 @@ def test_audit_events_are_append_only(db_session, actor, operation):
     event = record_audit_event(
         db_session,
         actor_id=actor.id,
-        action="upload",
+        action=AuditAction.UPLOAD,
         object_type="source_document",
         object_id=uuid.uuid4(),
     )
@@ -82,3 +82,14 @@ def test_audit_events_are_append_only(db_session, actor, operation):
         db_session.execute(statement)
     db_session.rollback()
     assert db_session.get(AuditEvent, event_id).action == "upload"
+
+
+def test_audit_event_rejects_unknown_action(db_session, actor):
+    with pytest.raises(ValueError, match="not a valid AuditAction"):
+        record_audit_event(
+            db_session,
+            actor_id=actor.id,
+            action="uplod",
+            object_type="source_document",
+            object_id=uuid.uuid4(),
+        )

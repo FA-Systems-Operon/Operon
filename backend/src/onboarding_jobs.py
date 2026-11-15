@@ -34,7 +34,7 @@ from sqlalchemy.orm import Session
 
 from src.ai.provider import ProviderConfigError, ProviderError, get_provider
 from src.ai.source_prompt import SourceInput, generate_source_profile
-from src.audit import record_audit_event
+from src.audit import AuditAction, record_audit_event
 from src.config import settings
 from src.db import SessionLocal
 from src.document_extraction import UnsupportedDocumentTypeError, extract_document
@@ -227,7 +227,7 @@ def _execute(db: Session, job: OnboardingJob, storage: DocumentStorage) -> None:
             record_audit_event(
                 db,
                 actor_id=job.initiated_by,
-                action="draft_created",
+                action=AuditAction.DRAFT_CREATED,
                 object_type="client_profile",
                 object_id=profile.id,
                 version_id=version.id,

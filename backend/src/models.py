@@ -510,7 +510,7 @@ class AuditEvent(Base):
     actor_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
     action: Mapped[str] = mapped_column(String(40))
     object_type: Mapped[str] = mapped_column(String(40))
-    object_id: Mapped[uuid.UUID] = mapped_column()
+    object_id: Mapped[uuid.UUID] = mapped_column(index=True)
     version_id: Mapped[uuid.UUID | None] = mapped_column()
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

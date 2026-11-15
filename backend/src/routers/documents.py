@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Query, UploadFile, 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from src.audit import record_audit_event
+from src.audit import AuditAction, record_audit_event
 from src.auth import current_user
 from src.config import settings
 from src.db import get_db
@@ -98,7 +98,7 @@ def upload_document(
         record_audit_event(
             db,
             actor_id=actor.id,
-            action="upload",
+            action=AuditAction.UPLOAD,
             object_type="source_document",
             object_id=document_id,
         )
