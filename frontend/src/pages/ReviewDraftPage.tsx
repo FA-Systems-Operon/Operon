@@ -53,14 +53,26 @@ export default function ReviewDraftPage({ profileId, versionId, canReview = true
   // Bumped by Try again to fetch the draft once more.
   const [attempt, setAttempt] = useState(0)
   const [saved, setSaved] = useState(false)
+  // The loader also accepts the version returned by a successful save.
+  const loadedVersion = useRef<ProfileVersion | null>(null)
 
   useEffect(() => {
+    if (loadedVersion.current?.client_profile_id === profileId
+      && loadedVersion.current.id === versionId) return
+    loadedVersion.current = null
+    setDraft(null)
+    setSaved(false)
+    setNotFound(!profileId || !versionId)
+    setLoadFailed(false)
     if (!profileId || !versionId) return
     // Ignore a reply that arrives after the page has closed.
     let active = true
     getReviewDraft(profileId, versionId)
       .then((loaded) => {
-        if (active) setDraft(loaded)
+        if (active) {
+          loadedVersion.current = loaded.version
+          setDraft(loaded)
+        }
       })
       .catch((error) => {
         if (!active) return
@@ -110,6 +122,7 @@ export default function ReviewDraftPage({ profileId, versionId, canReview = true
 
   // Saving and approving both make a new version; the page moves to it.
   function onSaved(version: ProfileVersion, { approved = false } = {}) {
+    loadedVersion.current = version
     setSaved(!approved)
     setDraft((previous) => previous && { ...previous, version })
     // Replacing avoids leaving a superseded draft as the reload destination.

@@ -310,11 +310,15 @@ These are focused implementation/regression checks, not completion of #66.
 | Storage failures roll back; frontend network/server/validation errors retain corrections and allow retry | `test_storage_failure_rolls_back_the_entire_save`; page failure/retry scenarios |
 | Pending/invalid typing, saving, failure and known stale state block the local save prerequisite for approval | `draftSave.test.ts`; page pending/saving/failure/stale scenarios |
 | Saved version becomes the next save's base and the reload destination, including in the app's hash router | page second-save scenario; `ReviewDraftSave.test.tsx` |
+| Save confirmation survives the route change without another draft fetch, even when reads are unavailable; opening another version clears the confirmation and prior load errors | `ReviewDraftSave.test.tsx` |
 | Late replies do not navigate after leaving; duplicate submissions are prevented | page late-response and saving scenarios |
 
 The save/reload test covers both `draft` and `in_review` and asserts the new version
 preserves that status. The app route test observes `useRoute` directly without
 injecting a hashchange event; the save flow must notify the router itself.
+The app save test also covers a second save, navigation back to an older version,
+and fresh loading on reopen. A late save reply after opening another version must
+not change that version or its route.
 
 No edited-path metadata is stored. Conflict markers remain before/after save and
 reload because editing does not resolve conflicts. Generation conflict validation
