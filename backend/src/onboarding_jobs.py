@@ -23,6 +23,7 @@ save a second draft.
 
 import logging
 import threading
+import time
 import uuid
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
@@ -194,6 +195,8 @@ def _claim(db: Session, job_id: uuid.UUID) -> OnboardingJob | None:
 def _execute(db: Session, job: OnboardingJob, storage: DocumentStorage) -> None:
     """Run a claimed job and record the outcome of this attempt."""
     job_id, attempt = job.id, job.attempts
+    started = time.perf_counter()
+    log.info("Onboarding job %s attempt %s started", job_id, attempt)
     try:
         for document_id in _document_ids(job):
             # Reuses text that was already extracted.
@@ -219,8 +222,17 @@ def _execute(db: Session, job: OnboardingJob, storage: DocumentStorage) -> None:
             log.warning("Onboarding job %s lost its claim; draft discarded", job_id)
             return
         db.commit()
+        log.info(
+            "Onboarding job %s attempt %s succeeded in %d ms; draft version %s",
+            job_id,
+            attempt,
+            (time.perf_counter() - started) * 1000,
+            version.id,
+        )
     except Exception as error:
         db.rollback()
+        # The traceback's exception messages are withheld by the log formatter
+        # (src.logging_config), since they can quote model output or SQL values.
         log.exception("Onboarding job %s attempt %s failed", job_id, attempt)
         _record_failure(db, job_id, attempt, error)
 
@@ -258,6 +270,21 @@ def _record_failure(
     try:
         if not _finish_attempt(db, job_id, attempt, **values):
             log.warning("Onboarding job %s lost its claim before failing", job_id)
+        elif values["status"] == JobStatus.PENDING:
+            log.warning(
+                "Onboarding job %s attempt %s will retry in %ds (%s)",
+                job_id,
+                attempt,
+                delay.total_seconds(),
+                type(error).__name__,
+            )
+        else:
+            log.error(
+                "Onboarding job %s failed after attempt %s (%s)",
+                job_id,
+                attempt,
+                type(error).__name__,
+            )
         db.commit()
     except Exception:
         # Most likely the database itself is down. The lease will run out and
