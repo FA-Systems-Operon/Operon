@@ -8,6 +8,26 @@
     "created_at": "2026-11-09T14:03:12.511000Z",
     "status": "draft"
   },
+  "review_decisions": {
+    "changes": {"goals/0": "40 bookings per month"},
+    "edited_version": {
+      "id": "5c0f9a1e-0000-4000-8000-000000000006",
+      "version_number": 2
+    },
+    "approved_version": {
+      "id": "5c0f9a1e-0000-4000-8000-000000000007",
+      "version_number": 3,
+      "status": "approved",
+      "approved_by": "5c0f9a1e-0000-4000-8000-000000000008",
+      "approved_at": "2026-11-15T04:00:00Z"
+    },
+    "rejected_version": {
+      "status": "rejected",
+      "rejection_reason": "Wrong client",
+      "rejected_at": "2026-11-15T04:00:00Z",
+      "rejected_by": "5c0f9a1e-0000-4000-8000-000000000008"
+    }
+  },
   "draft": {
     "version": {
       "id": "5c0f9a1e-0000-4000-8000-000000000003",
