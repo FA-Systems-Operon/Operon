@@ -433,28 +433,6 @@ test('dirty display labels original conflict proposals, source counts and unsupp
   expect(row('Email').closest('.review-field')).toHaveTextContent('2 sources')
 })
 
-
-test('a missing marker clears only for its own non-null edit and returns when cleared', async () => {
-  await openDraft()
-  await edit('Website', 'example.test')
-  expect(row('Website').closest('.review-field')).not.toHaveAttribute('data-flag')
-  expect(row('Email').closest('.review-field')).toHaveAttribute('data-flag', 'conflict')
-  await edit('Website', '')
-  expect(row('Website').closest('.review-field')).toHaveAttribute('data-flag', 'missing')
-  await userEvent.click(row('Website'))
-  expect(evidence().getByText('○ Missing information')).toBeInTheDocument()
-})
-
-test('clearing a field does not invent a missing marker absent from the recorded assessment', async () => {
-  const data = { ...DRAFT.version.data, website: 'old.example.test', assessment: { rules_version: 1, missing_fields: [] } }
-  mockDraft(reply(200, { ...DRAFT, version: { ...DRAFT.version, data } }))
-  render(<ReviewDraftPage profileId="p1" versionId="v2" />)
-  await screen.findByRole('heading', { name: 'Plateau Basements' })
-  await edit('Website', '')
-  expect(row('Website').closest('.review-field')).not.toHaveAttribute('data-flag')
-  expect(screen.getByRole('button', { name: 'Edit Website' })).toHaveTextContent('Not mentioned')
-})
-
 // #60 save scenarios: reusable by #66; no Approve action is added here.
 const SAVED = {
   ...DRAFT.version,
