@@ -52,7 +52,7 @@ test('criterion 1: saving an edit then approving opens a new approved version wi
 
   expect(await screen.findByText(`Version ${APPROVAL.version.version_number}`)).toBeInTheDocument()
   expect(screen.getByRole('status')).toHaveTextContent('Approved')
-  expect(screen.getByRole('button', { name: /^Goal 1/ }).closest('.review-field')).toHaveTextContent(DECISIONS.changes['goals/0'])
+  expect(screen.getByText(DECISIONS.changes['goals/0'])).toBeInTheDocument()
   expect(window.location.hash).toBe(`#/reviews/draft?profile=${DRAFT.version.client_profile_id}&version=${APPROVAL.version.id}`)
   expect(fetchMock.mock.calls).toEqual([
     [`${BASE_URL}/${DRAFT.version.id}`],

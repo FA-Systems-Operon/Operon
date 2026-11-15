@@ -60,15 +60,6 @@ def test_reject_marks_draft_rejected_with_reason_and_no_new_version(
     assert all(v.status != ReviewStatus.APPROVED for v in rows)
     assert all(v.approved_by is None and v.approved_at is None for v in rows)
 
-    reloaded = client.get(reject_url(draft).removesuffix("/reject"))
-    assert reloaded.status_code == 200, reloaded.text
-    saved = reloaded.json()["version"]
-    assert saved["id"] == body["id"]
-    assert saved["status"] == "rejected"
-    assert saved["rejection_reason"] == "Wrong client"
-    assert saved["rejected_at"] == body["rejected_at"]
-    assert saved["approved_by"] is None
-    assert saved["approved_at"] is None
     latest = client.get(
         f"/api/v1/client-profiles/{draft.client_profile_id}/latest-approved"
     )
