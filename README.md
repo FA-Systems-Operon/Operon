@@ -397,6 +397,12 @@ The [Operon GitHub Wiki](https://github.com/FA-Systems-Operon/Operon/wiki) holds
 
 ## Equity and diversity
 
-The Operon team is committed to developing software that respects diversity, promotes accessibility and supports inclusive collaboration.
+The Operon team is committed to building software that respects people with different backgrounds, abilities, levels of language proficiency and technical experience, and to working together inclusively.
 
-Because Operon uses AI, its recommendations may be inaccurate or biased. Human review, visible source evidence and controlled access keep automated output accountable. The team aims to build an interface usable by people with different levels of technical expertise, and to evaluate it on varied business scenarios.
+Operon uses AI, so its drafts may be inaccurate or biased. Human review, visible source evidence and controlled access keep automated output accountable: every field links to the text it came from, and a named reviewer can correct or reject any draft. Information should be checked against that evidence, never accepted on assumptions about a person or business. We test outputs with varied examples and business scenarios, and check them for unsupported assumptions.
+
+We aim for an interface that people with any level of technical experience can use. That means clear language, consistent navigation and helpful error messages. It also means readable text, enough colour contrast, keyboard navigation, and status indicators that don't rely on colour alone. We avoid unnecessary jargon and assumptions about names, communication styles or business practices, and we state language limitations clearly. Release 1 is English only.
+
+Within the team, we encourage respectful discussion, shared knowledge and meaningful contributions from every member. We review these commitments throughout development and user testing.
+
+The full statement is on the [Diversity Statement](https://github.com/FA-Systems-Operon/Operon/wiki) wiki page.
