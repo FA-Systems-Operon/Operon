@@ -42,8 +42,9 @@ Release 1 is one complete onboarding workflow, from upload to approval.
 | 4. Flags | Fields the evidence does not support stay empty and are flagged as missing. Fields where the sources disagree are flagged as conflicts. The agent does not guess. |
 | 5. Review | A reviewer opens the draft from the review inbox, corrects fields, and then approves it or rejects it with a reason. |
 | 6. Versions | Nothing is overwritten. Each edit, approval and rejection is stored as a new version of the profile. |
+| 7. Audit | Every upload, job start, draft, edit, approval and rejection is recorded as an audit event that names the signed-in user who did it. Audit events are append-only. |
 
-**Not built yet.** The Brain and Workforce menu tabs are placeholders and are hidden by default. The Launch Preparation, Communication and Early Performance agents are planned for later releases. Audit-event recording is in progress (not on `main` yet).
+**Not built yet.** The Brain and Workforce menu tabs are placeholders and are hidden by default. The Launch Preparation, Communication and Early Performance agents are planned for later releases.
 
 ---
 
@@ -301,7 +302,7 @@ The `backend/migrations/` folder holds hand-applied SQL scripts for upgrading an
 
 Release 1 is built to run on one machine for demonstration and evaluation. Do not expose it to a network or use real client data.
 
-- Some API routes, such as creating clients and uploading documents, do not require sign-in yet. Editing, approving and rejecting drafts, and inviting users, do.
+- Some API routes, such as creating clients, do not require sign-in yet.
 - Only emails and phone numbers are masked before text reaches the model. Names and other details are not, which is why only de-identified data may be used.
 - The web app cannot create clients yet. Use the API as in step 5.
 - Several pages are placeholders (Brain, Workforce) and are hidden unless a feature flag is on.
