@@ -340,3 +340,11 @@ freshness, reviewer permission, conflict decisions and the Approve action remain
 not establish that a version is still current when someone later approves it.
 The old generic PUT remains an arbitrary-JSON interface, now sharing the parent
 lock; it does not acquire this endpoint's validation or expected-version contract.
+
+## Approve or reject drafts (#64, AT 4.3 #67)
+
+`test_review_reject.py` checks persisted rejection state/reason and no approval.
+`test_review_decisions_acceptance.py` and `ReviewDraftDecisions.acceptance.test.tsx`
+cover saved-edit approval as a new version and rejection with a saved reason.
+Run `python -m pytest tests/test_review_reject.py tests/test_review_decisions_acceptance.py -q`
+against the isolated `*_test` PostgreSQL database; then `cd frontend && npm test && npm run build`.

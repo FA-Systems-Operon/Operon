@@ -1,9 +1,9 @@
-"""#63 Reject action smoke checks; the dedicated rejection suite is #64."""
+"""#64 Rejection persists its state and reason without approving a profile."""
 
 import uuid
 
 import pytest
-from sqlalchemy import select
+from tests.test_review_approve import versions
 
 from src.models import ClientProfileVersion, ReviewStatus
 
@@ -40,6 +40,7 @@ def draft(db_session, profile_factory):
 def test_reject_marks_draft_rejected_with_reason_and_no_new_version(
     client, db_session, draft
 ):
+    before = {v.id for v in versions(db_session, draft.client_profile_id)}
     response = client.post(reject_url(draft), json={"reason": "  Wrong client  "})
 
     assert response.status_code == 200
@@ -50,14 +51,15 @@ def test_reject_marks_draft_rejected_with_reason_and_no_new_version(
     assert body["rejected_at"] is not None
     assert body["approved_at"] is None
 
-    db_session.expire_all()
-    versions = db_session.scalars(
-        select(ClientProfileVersion).where(
-            ClientProfileVersion.client_profile_id == draft.client_profile_id
-        )
-    ).all()
-    assert len(versions) == 2
-    assert all(v.approved_at is None for v in versions)
+    rows = versions(db_session, draft.client_profile_id)
+    assert {v.id for v in rows} == before
+    stored = next(v for v in rows if v.id == draft.id)
+    assert stored.status == ReviewStatus.REJECTED
+    assert stored.rejection_reason == "Wrong client"
+    assert stored.rejected_at is not None
+    assert all(v.status != ReviewStatus.APPROVED for v in rows)
+    assert all(v.approved_by is None and v.approved_at is None for v in rows)
+
     latest = client.get(
         f"/api/v1/client-profiles/{draft.client_profile_id}/latest-approved"
     )
