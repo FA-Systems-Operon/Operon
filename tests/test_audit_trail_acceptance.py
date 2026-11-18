@@ -26,7 +26,7 @@ def test_onboarding_and_review_record_audit_events(
     reviewer_http, reviewer = sign_in(Role.REVIEWER)
 
     started_at = datetime.now(timezone.utc)
-    _, _, started = start_draft(uploader_http, demo_client)
+    transcript, intake, started = start_draft(uploader_http, demo_client)
     job = get_job(uploader_http, demo_client, started)
     assert job["status"] == "succeeded", job["error"]
 
@@ -47,7 +47,18 @@ def test_onboarding_and_review_record_audit_events(
         assert decision_version_id == draft_id
     finished_at = datetime.now(timezone.utc)
 
+    upload_events = tuple(
+        (
+            AuditAction.UPLOAD,
+            uploader.id,
+            "source_document",
+            uuid.UUID(document["id"]),
+            None,
+        )
+        for document in (transcript, intake)
+    )
     expected_events = (
+        *upload_events,
         (
             AuditAction.JOB_STARTED,
             uploader.id,
