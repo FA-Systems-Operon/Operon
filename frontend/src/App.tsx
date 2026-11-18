@@ -14,6 +14,7 @@ import StatusPage from './pages/StatusPage'
 import LoginPage from './pages/LoginPage'
 import AcceptInvitePage from './pages/AcceptInvitePage'
 import InviteUserPage from './pages/InviteUserPage'
+import AuditLogPage from './pages/AuditLogPage'
 
 import {
   getCurrentUser,
@@ -121,6 +122,9 @@ function pageFor(
 
     case '/invite':
       return { tab: null, content: <InviteUserPage user={currentUser} /> }
+
+    case '/audit':
+      return { tab: null, content: <AuditLogPage user={currentUser} /> }
 
     case '/status':
       return { tab: null, content: <StatusPage /> }

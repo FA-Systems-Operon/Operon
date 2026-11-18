@@ -112,6 +112,16 @@ export default function TopNav({
     </a>
   )}
 
+  {isAdmin && (
+    <a
+      className="topnav-reviews"
+      href="#/audit"
+      aria-current={path === '/audit' ? 'page' : undefined}
+    >
+      Audit log
+    </a>
+  )}
+
   <button
     type="button"
     className="topnav-logout"

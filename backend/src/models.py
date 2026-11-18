@@ -11,6 +11,7 @@ from sqlalchemy import (
     DateTime,
     Enum,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -505,6 +506,8 @@ class AuditEvent(Base):
     """An append-only record of an attributed workflow action."""
 
     __tablename__ = "audit_events"
+    # The audit log view reads newest first and pages on (created_at, id) (#71).
+    __table_args__ = (Index("ix_audit_events_created_at_id", "created_at", "id"),)
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     actor_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
