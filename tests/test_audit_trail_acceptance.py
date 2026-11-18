@@ -64,6 +64,15 @@ def test_onboarding_and_review_record_audit_events(
         ),
         (decision, reviewer.id, "client_profile", profile_id, decision_version_id),
     )
+    audit_url = "/api/v1/audit-events"
+    admin_http, _ = sign_in(Role.ADMIN)
+    viewer_http, _ = sign_in(Role.VIEWER)
+    history = admin_http.get(audit_url)
+    assert history.status_code == 200, history.text
+    visible_events = {item["id"]: item for item in history.json()["items"]}
+    assert reviewer_http.get(audit_url).status_code == 403
+    assert viewer_http.get(audit_url).status_code == 403
+
     for action, actor_id, object_type, object_id, version_id in expected_events:
         event = db_session.scalars(
             select(AuditEvent).where(
@@ -74,3 +83,7 @@ def test_onboarding_and_review_record_audit_events(
         assert event.object_type == object_type
         assert event.version_id == version_id
         assert started_at <= event.created_at <= finished_at
+        visible = visible_events[str(event.id)]
+        assert visible["action"] == action
+        assert visible["actor_id"] == str(actor_id)
+        assert datetime.fromisoformat(visible["created_at"]) == event.created_at

@@ -353,4 +353,13 @@ resulting draft through the review API.
 - Each event is persisted exactly once for its action and object, with a
   timestamp inside the workflow window.
 
-Audit history view access is pending the history view in #71.
+The audit history API from #71 returns those events to an admin and denies
+access to reviewers and viewers.
+
+## Approve or reject drafts (#64, AT 4.3 #67)
+
+`test_review_reject.py` checks persisted rejection state/reason and no approval.
+`test_review_decisions_acceptance.py` and `ReviewDraftDecisions.acceptance.test.tsx`
+cover saved-edit approval as a new version and rejection with a saved reason.
+Run `python -m pytest tests/test_review_reject.py tests/test_review_decisions_acceptance.py -q`
+against the isolated `*_test` PostgreSQL database; then `cd frontend && npm test && npm run build`.

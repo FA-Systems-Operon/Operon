@@ -243,3 +243,30 @@ class ArtifactVersionOut(BaseModel):
     approved_at: datetime | None = None
     stale_at: datetime | None = None
     stale_reason: str | None = None
+
+
+class AuditEventOut(BaseModel):
+    """One recorded action, with names filled in so an admin can read it (#71)."""
+
+    id: uuid.UUID
+    created_at: datetime
+    action: str
+    actor_id: uuid.UUID
+    actor_name: str
+    actor_email: str
+    object_type: str
+    object_id: uuid.UUID
+    version_id: uuid.UUID | None
+    # Filled in when the object can still be looked up; None otherwise.
+    client_id: uuid.UUID | None
+    client_name: str | None
+    version_number: int | None
+    document_filename: str | None
+
+
+class AuditEventPageOut(BaseModel):
+    """One page of the audit log, newest first."""
+
+    items: list[AuditEventOut]
+    # Pass as ?cursor= to get the next (older) page. None on the last page.
+    next_cursor: str | None

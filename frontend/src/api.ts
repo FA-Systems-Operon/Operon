@@ -221,3 +221,47 @@ export async function getOnboardingJob(clientId: string, jobId: string): Promise
   }
   return response.json()
 }
+
+export type AuditAction =
+  | 'upload'
+  | 'job_started'
+  | 'job_requeued'
+  | 'draft_created'
+  | 'edit'
+  | 'approve'
+  | 'reject'
+
+// One recorded action (#71). The names after object_id are filled in by the API when
+// the object can still be found, and are null otherwise.
+export type AuditEvent = {
+  id: string
+  created_at: string
+  // A string, not AuditAction: an action added later must not break the page.
+  action: string
+  actor_id: string
+  actor_name: string
+  actor_email: string
+  object_type: string
+  object_id: string
+  version_id: string | null
+  client_id: string | null
+  client_name: string | null
+  version_number: number | null
+  document_filename: string | null
+}
+
+export type AuditEventPage = {
+  items: AuditEvent[]
+  // Pass back to get the next, older page. Null on the last page.
+  next_cursor: string | null
+}
+
+// Admins only. Newest first.
+export async function listAuditEvents(cursor?: string | null): Promise<AuditEventPage> {
+  const query = cursor ? `?${new URLSearchParams({ cursor })}` : ''
+  const response = await fetch(`/api/v1/audit-events${query}`)
+  if (!response.ok) {
+    throw new ApiError(response.status, await readDetail(response))
+  }
+  return response.json()
+}
