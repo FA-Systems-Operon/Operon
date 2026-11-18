@@ -698,3 +698,26 @@ block approval; the reviewer decides by editing the field before approving.
 
 For an existing database, apply
 `backend/migrations/007_add_profile_version_rejected_by.sql` after 006.
+
+## Audit log view (#71)
+
+`GET /api/v1/audit-events` lists recorded audit events, newest first. It is
+read-only and **admin only**: `401` when signed out, `403` for a reviewer or viewer.
+
+Query parameters: `limit` (1–100, default 50) and `cursor`. The response is
+`{"items": [...], "next_cursor": "..." | null}`; pass `next_cursor` back as
+`cursor` for the next, older page. Pages are keyed on `(created_at, id)` rather
+than an offset, so events recorded while an admin is reading don't shift pages
+or repeat rows. A malformed cursor is `400`.
+
+Each item has the raw event fields (`action`, `actor_id`, `object_type`,
+`object_id`, `version_id`, `created_at`) plus readable details: `actor_name`,
+`actor_email`, `client_id`/`client_name` (for profiles, documents and jobs),
+`version_number` (when the event names a profile version) and
+`document_filename` (for uploads). A detail is `null` when the object can no
+longer be found.
+
+The frontend page is `#/audit`, linked as **Audit log** in the top bar for admins.
+
+For an existing database, apply
+`backend/migrations/010_add_audit_events_created_at_index.sql` after 008.

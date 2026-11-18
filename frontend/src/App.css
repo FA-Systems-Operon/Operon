@@ -204,9 +204,15 @@
   margin: 0 auto;
 }
 
+.audit-log {
+  max-width: 60rem;
+  margin: 0 auto;
+}
+
 .add-sources h1,
 .review-inbox h1,
-.review-draft h1 {
+.review-draft h1,
+.audit-log h1 {
   margin: 0 0 1rem;
   font-size: 3rem;
   letter-spacing: -0.03em;
@@ -729,6 +735,61 @@
   font-size: 0.8rem;
 }
 
+/* ---- Audit log ---- */
+
+.audit-card {
+  overflow-x: auto;
+}
+
+.audit-table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.audit-table th {
+  padding: 0.5rem;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  text-align: left;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.audit-table td {
+  padding: 0.65rem 0.5rem;
+  border-top: 1px solid var(--border);
+  vertical-align: baseline;
+  overflow-wrap: anywhere;
+}
+
+.audit-action {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.audit-action[data-action='approve'] {
+  color: var(--accent);
+}
+
+.audit-action[data-action='reject'] {
+  color: var(--danger);
+}
+
+.audit-id {
+  margin-left: 0.5rem;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  color: var(--faint);
+}
+
+.audit-more {
+  margin-top: 1rem;
+}
+
 /* ---- Small screens ---- */
 
 @media (max-width: 720px) {
@@ -754,8 +815,30 @@
 
   .add-sources h1,
   .review-inbox h1,
-  .review-draft h1 {
+  .review-draft h1,
+  .audit-log h1 {
     font-size: 2.25rem;
+  }
+
+  /* Each event becomes a small stacked card; the column headers go. */
+  .audit-table thead {
+    display: none;
+  }
+
+  .audit-table tr {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0.25rem 1rem;
+    padding: 0.75rem 0;
+  }
+
+  .audit-table td {
+    padding: 0;
+    border: 0;
+  }
+
+  .audit-table tr + tr {
+    border-top: 1px solid var(--border);
   }
 
   .review-head {

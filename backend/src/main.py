@@ -19,6 +19,7 @@ from src.logging_config import configure_logging
 from src.onboarding_jobs import start_worker
 from src.routers import (
     artifacts,
+    audit_events,
     auth,
     client_profiles,
     clients,
@@ -68,6 +69,7 @@ app.include_router(onboarding_jobs.router)
 app.include_router(client_profiles.router)
 app.include_router(playbooks.router)
 app.include_router(reviews.router)
+app.include_router(audit_events.router)
 
 
 @app.get("/health")
