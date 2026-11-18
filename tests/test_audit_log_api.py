@@ -1,5 +1,6 @@
 """GET /api/v1/audit-events: the admin audit log view (#71)."""
 
+import base64
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -192,7 +193,16 @@ def test_limit_is_bounded(admin, limit):
     assert signed_in.get(URL, params={"limit": limit}).status_code == 422
 
 
-@pytest.mark.parametrize("cursor", ["not-base64!", "bm8tc2VwYXJhdG9y", "Zm9vfGJhcg=="])
+# The last one is a valid time and id, but the time has no time zone.
+NAIVE_TIME_CURSOR = base64.urlsafe_b64encode(
+    f"2026-11-18T10:00:00|{uuid.uuid4()}".encode()
+).decode()
+
+
+@pytest.mark.parametrize(
+    "cursor",
+    ["not-base64!", "bm8tc2VwYXJhdG9y", "Zm9vfGJhcg==", NAIVE_TIME_CURSOR],
+)
 def test_malformed_cursor_is_400(admin, cursor):
     signed_in, _ = admin
     response = signed_in.get(URL, params={"cursor": cursor})
