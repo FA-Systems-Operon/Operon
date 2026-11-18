@@ -10,6 +10,11 @@ Operon is an internal web application that helps a small agency onboard clients.
 
 Nothing the agent writes becomes an approved profile without a named human reviewer approving it.
 
+## Release Demos 
+
+[Release 1 Demo](https://liveconcordia-my.sharepoint.com/:f:/g/personal/ri_chara_live_concordia_ca/IgCt6DdqgyBgQZ3cXZ8aAZ7KAVkxgoVNcnpJhTi6vlg3_Ro?e=oHBccQ)
+
+
 ---
 
 ## Contents
