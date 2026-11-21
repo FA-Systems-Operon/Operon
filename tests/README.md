@@ -341,6 +341,21 @@ not establish that a version is still current when someone later approves it.
 The old generic PUT remains an arbitrary-JSON interface, now sharing the parent
 lock; it does not acquire this endpoint's validation or expected-version contract.
 
+## Audit trail logging (AT 4.4, #72)
+
+`test_audit_trail_acceptance.py` signs in two distinct users, uploads synthetic
+source files, runs onboarding with a fake model, and approves or rejects the
+resulting draft through the review API.
+
+- Job start and draft creation are attributed to the signed-in uploader.
+- Approval records the reviewer and the new approved version.
+- Rejection records the reviewer and the rejected draft version.
+- Each event is persisted exactly once for its action and object, with a
+  timestamp inside the workflow window.
+
+The audit history API from #71 returns those events to an admin and denies
+access to reviewers and viewers.
+
 ## Approve or reject drafts (#64, AT 4.3 #67)
 
 `test_review_reject.py` checks persisted rejection state/reason and no approval.
