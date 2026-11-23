@@ -397,6 +397,22 @@ class User(Base):
     )
 
 
+class ClientAccess(Base):
+    """An explicit assignment giving one user access to one client."""
+
+    __tablename__ = "client_access"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    client_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("clients.id", ondelete="CASCADE"), primary_key=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
 class Invitation(Base):
     """A one-time invite. Whoever holds the link can create the account, once, until it expires."""
 
