@@ -6,6 +6,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict
+from sqlalchemy import delete
 from sqlalchemy.dialects.postgresql import insert
 
 from src.auth import DbSession, require_role
@@ -48,3 +49,25 @@ def grant_client_access(
         db.rollback()
         raise
     return assignment
+
+
+@router.delete("/{user_id}/clients/{client_id}", status_code=status.HTTP_204_NO_CONTENT)
+def revoke_client_access(
+    user_id: uuid.UUID, client_id: uuid.UUID, db: DbSession, _admin: AdminUser
+) -> None:
+    """Revoke an assignment. Repeated revokes succeed for existing users and clients."""
+    if db.get(User, user_id) is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+    if db.get(Client, client_id) is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Client not found")
+
+    try:
+        db.execute(
+            delete(ClientAccess).where(
+                ClientAccess.user_id == user_id, ClientAccess.client_id == client_id
+            )
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
