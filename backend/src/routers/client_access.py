@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy import delete
 from sqlalchemy.dialects.postgresql import insert
 
+from src.audit import AuditAction, record_audit_event
 from src.auth import DbSession, require_role
 from src.models import Client, ClientAccess, Role, User
 
@@ -26,7 +27,7 @@ class ClientAccessOut(BaseModel):
 
 @router.put("/{user_id}/clients/{client_id}", response_model=ClientAccessOut)
 def grant_client_access(
-    user_id: uuid.UUID, client_id: uuid.UUID, db: DbSession, _admin: AdminUser
+    user_id: uuid.UUID, client_id: uuid.UUID, db: DbSession, admin: AdminUser
 ) -> ClientAccess:
     """Grant access, returning the existing assignment when already granted."""
     if db.get(User, user_id) is None:
@@ -35,13 +36,23 @@ def grant_client_access(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Client not found")
 
     try:
-        db.execute(
+        granted = db.execute(
             insert(ClientAccess)
             .values(user_id=user_id, client_id=client_id)
             .on_conflict_do_nothing(
                 index_elements=[ClientAccess.user_id, ClientAccess.client_id]
             )
-        )
+            .returning(ClientAccess.user_id)
+        ).scalar_one_or_none()
+        if granted is not None:
+            record_audit_event(
+                db,
+                actor_id=admin.id,
+                action=AuditAction.CLIENT_ACCESS_GRANTED,
+                object_type="client",
+                object_id=client_id,
+                target_user_id=user_id,
+            )
         assignment = db.get(ClientAccess, (user_id, client_id))
         db.commit()
         db.refresh(assignment)
@@ -53,7 +64,7 @@ def grant_client_access(
 
 @router.delete("/{user_id}/clients/{client_id}", status_code=status.HTTP_204_NO_CONTENT)
 def revoke_client_access(
-    user_id: uuid.UUID, client_id: uuid.UUID, db: DbSession, _admin: AdminUser
+    user_id: uuid.UUID, client_id: uuid.UUID, db: DbSession, admin: AdminUser
 ) -> None:
     """Revoke an assignment. Repeated revokes succeed for existing users and clients."""
     if db.get(User, user_id) is None:
@@ -62,11 +73,20 @@ def revoke_client_access(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Client not found")
 
     try:
-        db.execute(
-            delete(ClientAccess).where(
-                ClientAccess.user_id == user_id, ClientAccess.client_id == client_id
+        revoked = db.execute(
+            delete(ClientAccess)
+            .where(ClientAccess.user_id == user_id, ClientAccess.client_id == client_id)
+            .returning(ClientAccess.user_id)
+        ).scalar_one_or_none()
+        if revoked is not None:
+            record_audit_event(
+                db,
+                actor_id=admin.id,
+                action=AuditAction.CLIENT_ACCESS_REVOKED,
+                object_type="client",
+                object_id=client_id,
+                target_user_id=user_id,
             )
-        )
         db.commit()
     except Exception:
         db.rollback()

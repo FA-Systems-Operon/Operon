@@ -2,13 +2,15 @@
 
 import uuid
 from datetime import datetime
+from pathlib import Path
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 
+from src.audit import AuditAction
 from src.auth import current_user
 from src.main import app
-from src.models import Client, ClientAccess, Role
+from src.models import AuditEvent, Client, ClientAccess, Role
 
 
 def grant_url(user_id, client_id):
@@ -166,3 +168,83 @@ def test_revoke_commit_failure_preserves_assignment(
         http.delete(url)
 
     assert db_session.get(ClientAccess, (admin.id, demo_client.id)) is not None
+
+
+def test_access_changes_record_admin_client_and_target_user(
+    sign_in, db_session, demo_client
+):
+    http, admin = sign_in(Role.ADMIN)
+    _, target = sign_in(Role.REVIEWER)
+    url = grant_url(target.id, demo_client.id)
+
+    assert http.put(url).status_code == 200
+    assert http.put(url).status_code == 200
+    assert http.delete(url).status_code == 204
+    assert http.delete(url).status_code == 204
+
+    events = db_session.scalars(select(AuditEvent)).all()
+    assert len(events) == 2
+    assert {event.action for event in events} == {
+        AuditAction.CLIENT_ACCESS_GRANTED,
+        AuditAction.CLIENT_ACCESS_REVOKED,
+    }
+    history = http.get("/api/v1/audit-events")
+    assert history.status_code == 200
+    visible = {item["id"]: item for item in history.json()["items"]}
+    for event in events:
+        assert event.actor_id == admin.id
+        assert event.target_user_id == target.id
+        assert event.object_type == "client"
+        assert event.object_id == demo_client.id
+        assert event.version_id is None
+        assert event.created_at.tzinfo is not None
+        item = visible[str(event.id)]
+        assert item["target_user_id"] == str(target.id)
+        assert item["client_id"] == str(demo_client.id)
+        assert item["client_name"] == demo_client.name
+
+
+@pytest.mark.parametrize("method", ["put", "delete"])
+def test_failed_access_change_rolls_back_audit_event(
+    sign_in, db_session, demo_client, monkeypatch, method
+):
+    http, admin = sign_in(Role.ADMIN)
+    url = grant_url(admin.id, demo_client.id)
+    if method == "delete":
+        assert http.put(url).status_code == 200
+    before = db_session.scalar(select(func.count()).select_from(AuditEvent))
+
+    def fail_commit():
+        db_session.flush()
+        raise RuntimeError("Simulated commit failure")
+
+    monkeypatch.setattr(db_session, "commit", fail_commit)
+    with pytest.raises(RuntimeError, match="Simulated commit failure"):
+        getattr(http, method)(url)
+
+    assert db_session.scalar(select(func.count()).select_from(AuditEvent)) == before
+    stored = db_session.get(ClientAccess, (admin.id, demo_client.id))
+    assert (stored is not None) == (method == "delete")
+
+
+def test_target_user_migration_can_be_reapplied(db_session, sign_in):
+    _, admin = sign_in(Role.ADMIN)
+    event = AuditEvent(
+        actor_id=admin.id, action="edit", object_type="user", object_id=admin.id
+    )
+    db_session.add(event)
+    db_session.commit()
+    event_id = event.id
+    migration = (
+        Path(__file__).resolve().parents[1]
+        / "backend/migrations/012_add_audit_event_target_user.sql"
+    ).read_text()
+    db_session.execute(text("ALTER TABLE audit_events DROP COLUMN target_user_id"))
+    db_session.execute(text(migration))
+    db_session.execute(text(migration))
+    db_session.commit()
+    db_session.expire_all()
+
+    stored = db_session.get(AuditEvent, event_id)
+    assert stored.target_user_id is None
+    assert stored.actor_id == admin.id
