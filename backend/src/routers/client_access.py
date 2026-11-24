@@ -6,12 +6,14 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import delete
+from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert
 
 from src.audit import AuditAction, record_audit_event
 from src.auth import DbSession, require_role
 from src.models import Client, ClientAccess, Role, User
+from src.routers.auth import UserOut
+from src.schemas import ClientOut
 
 router = APIRouter(prefix="/api/v1/users", tags=["client access"])
 AdminUser = Annotated[User, Depends(require_role(Role.ADMIN))]
@@ -23,6 +25,28 @@ class ClientAccessOut(BaseModel):
     user_id: uuid.UUID
     client_id: uuid.UUID
     created_at: datetime
+
+
+@router.get("", response_model=list[UserOut])
+def list_access_users(db: DbSession, _admin: AdminUser) -> list[User]:
+    """List users for the admin's client-assignment screen."""
+    return list(db.scalars(select(User).order_by(User.email, User.id)))
+
+
+@router.get("/{user_id}/clients", response_model=list[ClientOut])
+def list_user_clients(
+    user_id: uuid.UUID, db: DbSession, _admin: AdminUser
+) -> list[Client]:
+    """List a user's explicit assignments, including an empty list."""
+    if db.get(User, user_id) is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+    query = (
+        select(Client)
+        .join(ClientAccess, ClientAccess.client_id == Client.id)
+        .where(ClientAccess.user_id == user_id)
+        .order_by(func.lower(Client.name), Client.id)
+    )
+    return list(db.scalars(query))
 
 
 @router.put("/{user_id}/clients/{client_id}", response_model=ClientAccessOut)

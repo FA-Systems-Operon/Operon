@@ -248,3 +248,76 @@ def test_target_user_migration_can_be_reapplied(db_session, sign_in):
     stored = db_session.get(AuditEvent, event_id)
     assert stored.target_user_id is None
     assert stored.actor_id == admin.id
+
+
+def test_admin_lists_users_without_credentials(sign_in):
+    http, admin = sign_in(Role.ADMIN)
+    _, reviewer = sign_in(Role.REVIEWER)
+    _, viewer = sign_in(Role.VIEWER)
+
+    response = http.get("/api/v1/users")
+
+    assert response.status_code == 200
+    users = response.json()
+    assert {str(admin.id), str(reviewer.id), str(viewer.id)} <= {
+        item["id"] for item in users
+    }
+    assert [item["email"] for item in users] == sorted(item["email"] for item in users)
+    assert all(set(item) == {"id", "email", "display_name", "role"} for item in users)
+
+
+def test_admin_lists_only_requested_users_assignments(sign_in, db_session, demo_client):
+    http, admin = sign_in(Role.ADMIN)
+    _, target = sign_in(Role.REVIEWER)
+    first = Client(name="aaa client")
+    unrelated = Client(name="Unrelated client")
+    db_session.add_all([first, unrelated])
+    db_session.flush()
+    db_session.add_all(
+        [
+            ClientAccess(user_id=target.id, client_id=demo_client.id),
+            ClientAccess(user_id=target.id, client_id=first.id),
+            ClientAccess(user_id=admin.id, client_id=unrelated.id),
+        ]
+    )
+    db_session.commit()
+    url = f"/api/v1/users/{target.id}/clients"
+
+    response = http.get(url)
+
+    assert response.status_code == 200
+    expected = sorted(
+        [first, demo_client], key=lambda item: (item.name.lower(), item.id)
+    )
+    assert [item["id"] for item in response.json()] == [
+        str(item.id) for item in expected
+    ]
+    assert http.delete(grant_url(target.id, first.id)).status_code == 204
+    assert [item["id"] for item in http.get(url).json()] == [str(demo_client.id)]
+
+
+def test_user_without_assignments_has_empty_list(sign_in):
+    http, admin = sign_in(Role.ADMIN)
+
+    assert http.get(f"/api/v1/users/{admin.id}/clients").json() == []
+
+
+def test_list_assignments_for_missing_user_returns_404(sign_in):
+    http, _ = sign_in(Role.ADMIN)
+
+    assert http.get(f"/api/v1/users/{uuid.uuid4()}/clients").status_code == 404
+
+
+@pytest.mark.parametrize("role", [Role.REVIEWER, Role.VIEWER])
+def test_access_lists_are_admin_only(sign_in, role):
+    http, user = sign_in(role)
+
+    assert http.get("/api/v1/users").status_code == 403
+    assert http.get(f"/api/v1/users/{user.id}/clients").status_code == 403
+
+
+def test_access_lists_require_sign_in(client, signed_in_user):
+    app.dependency_overrides.pop(current_user, None)
+
+    assert client.get("/api/v1/users").status_code == 401
+    assert client.get(f"/api/v1/users/{signed_in_user.id}/clients").status_code == 401
