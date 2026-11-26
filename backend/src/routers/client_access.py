@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.exc import IntegrityError
 
 from src.audit import AuditAction, record_audit_event
 from src.auth import DbSession, require_role
@@ -80,6 +81,13 @@ def grant_client_access(
         assignment = db.get(ClientAccess, (user_id, client_id))
         db.commit()
         db.refresh(assignment)
+    except IntegrityError as error:
+        db.rollback()
+        if getattr(error.orig, "sqlstate", None) == "23503":
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND, "User or client not found"
+            ) from error
+        raise
     except Exception:
         db.rollback()
         raise
@@ -112,6 +120,13 @@ def revoke_client_access(
                 target_user_id=user_id,
             )
         db.commit()
+    except IntegrityError as error:
+        db.rollback()
+        if getattr(error.orig, "sqlstate", None) == "23503":
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND, "User or client not found"
+            ) from error
+        raise
     except Exception:
         db.rollback()
         raise

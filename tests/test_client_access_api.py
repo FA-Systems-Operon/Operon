@@ -5,12 +5,12 @@ from datetime import datetime
 from pathlib import Path
 
 import pytest
-from sqlalchemy import func, select, text
+from sqlalchemy import delete, func, select, text
 
 from src.audit import AuditAction
 from src.auth import current_user
 from src.main import app
-from src.models import AuditEvent, Client, ClientAccess, Role
+from src.models import AuditEvent, Client, ClientAccess, Role, User
 
 
 def grant_url(user_id, client_id):
@@ -321,3 +321,29 @@ def test_access_lists_require_sign_in(client, signed_in_user):
 
     assert client.get("/api/v1/users").status_code == 401
     assert client.get(f"/api/v1/users/{signed_in_user.id}/clients").status_code == 401
+
+
+@pytest.mark.parametrize("missing", ["user", "client"])
+def test_grant_record_removed_after_lookup_returns_404(
+    sign_in, db_session, demo_client, monkeypatch, missing
+):
+    http, _ = sign_in(Role.ADMIN)
+    _, target = sign_in(Role.REVIEWER)
+    user_id, client_id = target.id, demo_client.id
+    original_execute = db_session.execute
+
+    def remove_before_insert(statement, *args, **kwargs):
+        if getattr(statement, "is_insert", False):
+            model, record_id = (
+                (User, user_id) if missing == "user" else (Client, client_id)
+            )
+            original_execute(delete(model).where(model.id == record_id))
+        return original_execute(statement, *args, **kwargs)
+
+    monkeypatch.setattr(db_session, "execute", remove_before_insert)
+    response = http.put(grant_url(user_id, client_id))
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "User or client not found"}
+    assert db_session.scalar(select(func.count()).select_from(ClientAccess)) == 0
+    assert db_session.scalar(select(func.count()).select_from(AuditEvent)) == 0
