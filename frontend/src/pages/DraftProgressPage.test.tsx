@@ -163,8 +163,12 @@ test('shows the files and queue times, and a running timer while drafting', asyn
 
   await waitFor(() => expect(step('Drafting')).toHaveAttribute('aria-current', 'step'))
   expect(within(step('Drafting')).getByText('0:38')).toBeInTheDocument()
-  act(() => vi.advanceTimersByTime(1000))
-  expect(within(step('Drafting')).getByText('0:39')).toBeInTheDocument()
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1000)
+  })
+  await waitFor(() =>
+    expect(within(step('Drafting')).getByText('0:39')).toBeInTheDocument(),
+  )
   for (const title of ['Files saved', 'Queued']) {
     expect(within(step(title)).getByText(clockTime(PENDING.created_at))).toHaveAttribute(
       'datetime',

@@ -5,7 +5,9 @@ from datetime import datetime
 from pathlib import Path
 
 import pytest
+from psycopg.errors import CheckViolation, ForeignKeyViolation
 from sqlalchemy import delete, func, select, text
+from sqlalchemy.exc import IntegrityError
 
 from src.audit import AuditAction
 from src.auth import current_user
@@ -347,3 +349,36 @@ def test_grant_record_removed_after_lookup_returns_404(
     assert response.json() == {"detail": "User or client not found"}
     assert db_session.scalar(select(func.count()).select_from(ClientAccess)) == 0
     assert db_session.scalar(select(func.count()).select_from(AuditEvent)) == 0
+
+
+@pytest.mark.parametrize("method", ["put", "delete"])
+@pytest.mark.parametrize("foreign_key", [True, False])
+def test_integrity_failure_rolls_back_access_change(
+    sign_in, db_session, demo_client, monkeypatch, method, foreign_key
+):
+    http, admin = sign_in(Role.ADMIN)
+    user_id, client_id = admin.id, demo_client.id
+    url = grant_url(user_id, client_id)
+    if method == "delete":
+        assert http.put(url).status_code == 200
+    before = db_session.scalar(select(func.count()).select_from(AuditEvent))
+    original = ForeignKeyViolation() if foreign_key else CheckViolation()
+    error = IntegrityError("simulated constraint failure", {}, original)
+
+    def fail_commit():
+        db_session.flush()
+        raise error
+
+    monkeypatch.setattr(db_session, "commit", fail_commit)
+    if foreign_key:
+        response = getattr(http, method)(url)
+        assert response.status_code == 404
+        assert response.json() == {"detail": "User or client not found"}
+    else:
+        with pytest.raises(IntegrityError) as raised:
+            getattr(http, method)(url)
+        assert raised.value is error
+    assert db_session.scalar(select(func.count()).select_from(AuditEvent)) == before
+    assert (db_session.get(ClientAccess, (user_id, client_id)) is not None) == (
+        method == "delete"
+    )
