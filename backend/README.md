@@ -721,3 +721,46 @@ The frontend page is `#/audit`, linked as **Audit log** in the top bar for admin
 
 For an existing database, apply
 `backend/migrations/010_add_audit_events_created_at_index.sql` after 008.
+
+## Client access administration (#148)
+
+All four endpoints require a signed-in admin. Signed-out requests receive 401;
+reviewers and viewers receive 403. PUT and DELETE also require the existing
+session cookie and matching X-CSRF-Token header.
+
+| Method | Path | Successful response |
+| --- | --- | --- |
+| GET | /api/v1/users | 200 with a list of users |
+| GET | /api/v1/users/{user_id}/clients | 200 with a list of explicitly assigned clients |
+| PUT | /api/v1/users/{user_id}/clients/{client_id} | 200 with the assignment |
+| DELETE | /api/v1/users/{user_id}/clients/{client_id} | 204 with an empty body |
+
+GET users returns id, email, display_name and role, ordered by email then ID.
+It excludes password hashes and session credentials. GET assigned clients returns
+the existing ClientOut fields (id, name, created_at), ordered by case-insensitive
+name then ID. A user without assignments has an empty list. Admins' explicit
+assignments are listed in the same way as other users' assignments.
+
+PUT and DELETE have no request body. PUT returns user_id, client_id and created_at;
+a repeated grant returns the original assignment and creation timestamp. DELETE
+also succeeds when the assignment is already absent. An unknown user or client
+returns 404, and a malformed UUID returns 422.
+
+Each new grant records client_access_granted; each actual removal records
+client_access_revoked. The event and assignment change commit together, so a
+failure rolls both back. Repeated requests that leave the assignment unchanged
+create no additional events. Access events have object_type client, object_id
+equal to the client ID, actor_id equal to the acting admin, and target_user_id
+equal to the affected user. The audit API returns target_user_id and resolves the
+client's name. Existing event categories have target_user_id null.
+
+Apply 011_add_client_access.sql followed by 012_add_audit_event_target_user.sql
+to an existing database before running the updated backend. New databases use
+the ORM schema. The composite primary key on client_access is (user_id, client_id);
+deleting either referenced record removes its assignments.
+
+These endpoints provide the records and API for the admin screen in #227.
+Client-scoped route enforcement is tracked in #149. The shared permission check
+can query ClientAccess by user_id and client_id. The admin screen can use GET
+users, GET assigned clients and the existing GET clients endpoint, then refresh
+assignments after PUT or DELETE.

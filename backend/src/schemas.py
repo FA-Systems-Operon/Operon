@@ -254,6 +254,7 @@ class AuditEventOut(BaseModel):
     actor_id: uuid.UUID
     actor_name: str
     actor_email: str
+    target_user_id: uuid.UUID | None = None
     object_type: str
     object_id: uuid.UUID
     version_id: uuid.UUID | None

@@ -363,3 +363,17 @@ access to reviewers and viewers.
 cover saved-edit approval as a new version and rejection with a saved reason.
 Run `python -m pytest tests/test_review_reject.py tests/test_review_decisions_acceptance.py -q`
 against the isolated `*_test` PostgreSQL database; then `cd frontend && npm test && npm run build`.
+
+## Client access administration (#148)
+
+Run the focused database and API checks against the configured test database.
+
+```bash
+python -m pytest -q tests/test_client_access.py tests/test_client_access_api.py
+```
+
+The database tests cover unique user/client pairs, foreign keys, timestamps,
+cascade cleanup and rerunnable migration 011. API tests use real sign-in and
+CSRF checks for admin grants, revokes and listing. They verify repeated requests,
+missing records, isolation between assignments, transaction rollback and audit
+attribution, plus migration 012 with an existing event.

@@ -21,6 +21,7 @@ from src.routers import (
     artifacts,
     audit_events,
     auth,
+    client_access,
     client_profiles,
     clients,
     documents,
@@ -62,6 +63,7 @@ log.info(
     settings.LOG_LEVEL,
 )
 app.include_router(auth.router)
+app.include_router(client_access.router)
 app.include_router(artifacts.router)
 app.include_router(clients.router)
 app.include_router(documents.router)

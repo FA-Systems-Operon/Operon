@@ -16,6 +16,8 @@ class AuditAction(StrEnum):
     EDIT = "edit"
     APPROVE = "approve"
     REJECT = "reject"
+    CLIENT_ACCESS_GRANTED = "client_access_granted"
+    CLIENT_ACCESS_REVOKED = "client_access_revoked"
 
 
 def record_audit_event(
@@ -26,10 +28,12 @@ def record_audit_event(
     object_type: str,
     object_id: uuid.UUID,
     version_id: uuid.UUID | None = None,
+    target_user_id: uuid.UUID | None = None,
 ) -> AuditEvent:
     """Stage an event. The caller commits or rolls back the action and event together."""
     event = AuditEvent(
         actor_id=actor_id,
+        target_user_id=target_user_id,
         action=AuditAction(action).value,
         object_type=object_type,
         object_id=object_id,

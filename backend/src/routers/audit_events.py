@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, select, tuple_
+from sqlalchemy import case, func, select, tuple_
 
 from src.auth import DbSession, require_role
 from src.models import (
@@ -71,7 +71,10 @@ def list_audit_events(
     job = select(OnboardingJob.id, OnboardingJob.client_id).subquery("job")
 
     client_id = func.coalesce(
-        profile_client.c.client_id, document.c.client_id, job.c.client_id
+        profile_client.c.client_id,
+        document.c.client_id,
+        job.c.client_id,
+        case((AuditEvent.object_type == "client", AuditEvent.object_id)),
     )
     query = (
         select(
@@ -79,6 +82,7 @@ def list_audit_events(
             AuditEvent.created_at,
             AuditEvent.action,
             AuditEvent.actor_id,
+            AuditEvent.target_user_id,
             User.display_name.label("actor_name"),
             User.email.label("actor_email"),
             AuditEvent.object_type,
